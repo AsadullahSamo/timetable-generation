@@ -1,0 +1,38 @@
+.periodsContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    overflow: hidden;
+    width: fit-content;
+    margin: 20px auto;
+  }
+  
+  .dayItem {
+    flex: 1;
+    text-align: center;
+    padding: 15px 20px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    border-right: 1px solid #ccc;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .dayItem:last-child {
+    border-right: none;
+  }
+  
+  .dayItem:hover {
+    background-color: #f0f0f0;
+  }
+  
+  .dayItem.selected {
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+  }
+  
