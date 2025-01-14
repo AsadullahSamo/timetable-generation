@@ -19,7 +19,7 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setErrMsg(''); // Reset error message before attempting login
+    setErrMsg(''); 
     
 
     try {
@@ -37,7 +37,6 @@ export default function Login() {
     }
   };
 
-  // Handle Firebase Errors
   useEffect(() => {
     if (error) {
       switch (error.code) {
@@ -55,7 +54,7 @@ export default function Login() {
           break;
       }
     }
-  }, [error]); // Run when `error` changes
+  }, [error]);
 
   return (
     <>
@@ -69,7 +68,6 @@ export default function Login() {
             <div className={styles.formStyle}>
               <h3 className={styles.headingStyle}>Login to Your Account</h3>
 
-              {/* Email Input */}
               <div className={styles.formWrapper}>
                 <label className={styles.labelStyle}>
                   <i className="fas fa-envelope"></i> Email
@@ -83,7 +81,6 @@ export default function Login() {
                 />
               </div>
 
-              {/* Password Input */}
               <div className={styles.formWrapper}>
                 <label className={styles.labelStyle}>
                   <i className="fas fa-lock"></i> Password
@@ -97,14 +94,12 @@ export default function Login() {
                 />
               </div>
 
-              {/* Forgot Password Link */}
               <div className={styles.forgotPassword}>
                 <Link href="/forgot-password">
                   Forgot password?
                 </Link>
               </div>
 
-              {/* Login Button */}
               <button className={styles.buttonStyle} disabled={loading} onClick={handleLogin}>
                 {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-sign-in-alt"></i>} Login
               </button>
@@ -117,19 +112,16 @@ export default function Login() {
 
             {loading && <p className={styles.loadingText}>Loading...</p>}
             
-              {/* Separator */}
               <div className={styles.separator}>
                 <span className={styles.separatorText}>OR</span>
               </div>
 
-              {/* Google Sign In Button */}
               <div className={styles.googleButton}>
                 <button className={styles.googleButtonStyle}>
                   <i className="fab fa-google"></i> Sign In with Google
                 </button>
               </div>
 
-              {/* Register Link */}
               <p className={styles.registerText}>
                 Don’t have an account? <Link href="/components/Signup" className={styles.linkText}>Sign Up</Link>
               </p>

@@ -8,7 +8,7 @@ export default function GenerateTimetable() {
   const handleGenerateTimetable = () => {
     setLoading(true);
 
-    // Simulate a backend API call
+    
     setTimeout(() => {
       setLoading(false);
       alert('Timetable generated successfully!');
@@ -23,7 +23,6 @@ export default function GenerateTimetable() {
       </p>
 
       <div className={styles.form}>
-        {/* Fixed Classes */}
         <div className={styles.formGroup}>
           <label htmlFor="fixed-classes" className={styles.label}>
             Fixed Classes
@@ -35,7 +34,6 @@ export default function GenerateTimetable() {
           />
         </div>
 
-        {/* Teacher Preferences */}
         <div className={styles.formGroup}>
           <label htmlFor="teacher-preferences" className={styles.label}>
             Teacher Preferences
@@ -47,7 +45,6 @@ export default function GenerateTimetable() {
           />
         </div>
 
-        {/* Room Availability */}
         <div className={styles.formGroup}>
           <label htmlFor="room-availability" className={styles.label}>
             Room Availability
@@ -59,7 +56,6 @@ export default function GenerateTimetable() {
           />
         </div>
 
-        {/* Generate Button */}
         <button
           className={styles.button}
           onClick={handleGenerateTimetable}

@@ -16,7 +16,6 @@ export default function Signup() {
   const [createUserWithEmailAndPassword, user, loading, error] =
     useCreateUserWithEmailAndPassword(auth);
 
-  // Firebase error codes mapped to user-friendly messages
   const firebaseErrorMessages = {
     'auth/email-already-in-use': 'This email address is already in use. Please try logging in.',
     'auth/weak-password': 'Password should be at least 6 characters long.',
@@ -27,23 +26,20 @@ export default function Signup() {
   const handleSignUp = async (e) => {
     e.preventDefault();
 
-    // Check for password match before proceeding
     if (password !== confirmPassword) {
       setErrMsg('Passwords do not match.');
       return;
     }
 
     try {
-      // Attempt to create the user
       await createUserWithEmailAndPassword(email, password);
 
-      // Reset fields if successful
       setFirstName('');
       setLastName('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
-      setErrMsg(''); // Clear error messages
+      setErrMsg('');
     } catch (err) {
       console.error('Unexpected Error:', err.message);
     }
@@ -59,7 +55,6 @@ export default function Signup() {
     }
   };
 
-  // Update error message when Firebase hook error occurs
   useEffect(() => {
     if (error) {
       const errorMessage =

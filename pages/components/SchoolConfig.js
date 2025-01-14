@@ -3,42 +3,56 @@ import styles from "./SchoolConfig.module.css";
 
 const SchoolConfig = () => {
   const [schoolName, setSchoolName] = useState("");
-  const [periods, setPeriods] = useState([]);
+  const [numPeriods, setNumPeriods] = useState(0);
+  const [startTime, setStartTime] = useState("08:00");
+  const [days, setDays] = useState(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  const [lessonDuration, setLessonDuration] = useState(60);
+  const [periodsGrid, setPeriodsGrid] = useState([]);
 
-  const handleAddPeriod = () => {
-    setPeriods([...periods, { day: "Monday", start: "", end: "" }]);
+  const generatePeriods = () => {
+    const grid = [];
+    let currentTime = startTime;
+    for (let i = 0; i < numPeriods; i++) {
+      const row = days.map((day) => ({
+        day,
+        time: currentTime,
+        period: i + 1,
+      }));
+      grid.push(row);
+      currentTime = incrementTime(currentTime, lessonDuration);
+    }
+    setPeriodsGrid(grid);
   };
 
-  const handlePeriodChange = (index, field, value) => {
-    const updatedPeriods = [...periods];
-    updatedPeriods[index][field] = value;
-    setPeriods(updatedPeriods);
+  const incrementTime = (time, duration) => {
+    let [hours, minutes] = time.split(":").map(Number);
+    minutes += duration;  
+    
+    while (minutes >= 60) {
+      minutes -= 60;
+      hours += 1;
+    }
+  
+    if (hours >= 24) {
+      hours = hours % 24;
+    }
+    
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   };
+  
+  
+  
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Submit logic here
-    console.log({ schoolName, periods });
+    console.log({ schoolName, periodsGrid });
   };
 
   return (
     <div className={styles.container}>
-      {/* Progress Steps */}
-      <div className={styles.progress}>
-        <span className={styles.step}>1. School Config</span>
-        <span className={styles.step}>2. Classes</span>
-        <span className={styles.step}>3. Divisions</span>
-        <span className={styles.step}>4. Subjects</span>
-        <span className={styles.step}>5. Teachers</span>
-        <span className={styles.step}>6. Lessons</span>
-        <span className={styles.step}>7. Timetable Constraints</span>
-      </div>
-
-      {/* School Config Form */}
       <form onSubmit={handleSubmit} className={styles.form}>
         <h2 className={styles.heading}>School Configuration</h2>
 
-        {/* School Name */}
         <div className={styles.fieldGroup}>
           <label htmlFor="schoolName" className={styles.label}>
             School Name
@@ -52,63 +66,79 @@ const SchoolConfig = () => {
             placeholder="Enter your school name"
             required
           />
-          <p className={styles.helperText}>
-            The name of the school will be displayed on printed schedules.
-          </p>
         </div>
 
-        {/* Periods */}
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Periods</label>
-          <div className={styles.periodsContainer}>
-            {periods.map((period, index) => (
-              <div key={index} className={styles.periodRow}>
-                <select
-                  value={period.day}
-                  onChange={(e) =>
-                    handlePeriodChange(index, "day", e.target.value)
-                  }
-                  className={styles.select}
-                >
-                  <option value="Monday">Monday</option>
-                  <option value="Tuesday">Tuesday</option>
-                  <option value="Wednesday">Wednesday</option>
-                  <option value="Thursday">Thursday</option>
-                  <option value="Friday">Friday</option>
-                </select>
-                <input
-                  type="time"
-                  value={period.start}
-                  onChange={(e) =>
-                    handlePeriodChange(index, "start", e.target.value)
-                  }
-                  className={styles.input}
-                  placeholder="Start Time"
-                  required
-                />
-                <input
-                  type="time"
-                  value={period.end}
-                  onChange={(e) =>
-                    handlePeriodChange(index, "end", e.target.value)
-                  }
-                  className={styles.input}
-                  placeholder="End Time"
-                  required
-                />
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={handleAddPeriod}
-          >
-            + Add Period
+          <label htmlFor="numPeriods" className={styles.label}>
+            Number of Periods
+          </label>
+          <input
+            type="number"
+            id="numPeriods"
+            value={numPeriods}
+            onChange={(e) => setNumPeriods(e.target.value)}
+            className={styles.input}
+            min="1"
+          />
+        </div>
+
+        <div className={styles.fieldGroup}>
+          <label htmlFor="startTime" className={styles.label}>
+            Starting Time
+          </label>
+          <input
+            type="time"
+            id="startTime"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className={styles.input}
+          />
+        </div>
+
+        <div className={styles.fieldGroup}>
+          <label htmlFor="lessonDuration" className={styles.label}>
+            Lesson Duration (minutes)
+          </label>
+          <input
+            type="number"
+            id="lessonDuration"
+            value={lessonDuration}
+            onChange={(e) => setLessonDuration(e.target.value)}
+            className={styles.input}
+            max={60}
+            min={60}
+          />
+        </div>
+
+        <div className={styles.fieldGroup}>
+          <button type="button" onClick={generatePeriods} className={styles.generateButton}>
+            Generate Periods
           </button>
         </div>
 
-        {/* Navigation Buttons */}
+        {periodsGrid.length > 0 && (
+          <div className={styles.gridContainer}>
+            <div className={styles.gridHeader}>
+              {days.map((day, index) => (
+                <div key={index} className={styles.gridHeaderCell}>
+                  {day}
+                </div>
+              ))}
+            </div>
+            <div className={styles.gridBody}>
+              {periodsGrid.map((row, rowIndex) => (
+                <div key={rowIndex} className={styles.gridRow}>
+                  {row.map((cell, cellIndex) => (
+                    <div key={cellIndex} className={styles.gridCell}>
+                      {cell.time}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className={styles.navigation}>
           <button type="button" className={styles.button}>
             Previous Step

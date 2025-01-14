@@ -1,11 +1,9 @@
-/* Login.module.css */
-
 .loginBody {
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100vh;
-    background: linear-gradient(to right, #ffffff, #f5f5f5, #e0e0e0); /* Light gradient background */
+    background: linear-gradient(to right, #ffffff, #f5f5f5, #e0e0e0);
     margin: 0;
     padding: 0;
   }
@@ -19,7 +17,7 @@
   
   .inner {
     width: 100%;
-    max-width: 450px; /* Increased width */
+    max-width: 450px;
     background-color: #fff;
     padding: 40px 30px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
@@ -87,7 +85,7 @@
     position: relative;
     overflow: hidden;
     transition: background-color 0.3s ease;
-    z-index: 1; /* Ensures text stays on top */
+    z-index: 1;
   }
   
   .buttonStyle i {
@@ -109,7 +107,7 @@
     transform: scaleX(0);
     transform-origin: 0 50%;
     transition: transform 0.5s ease-out;
-    z-index: -1; /* Ensures the text stays on top */
+    z-index: -1;
   }
   
   .buttonStyle:hover:before {
@@ -199,7 +197,7 @@
     .loadingText {
     font-size: 16px;
     font-weight: bold;
-    color: #007bff; /* Blue color for the text */
+    color: #007bff;
     text-align: center;
     margin: 10px 0;
     animation: fadeIn 1.5s infinite ease-in-out;

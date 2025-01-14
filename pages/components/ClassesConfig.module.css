@@ -1,0 +1,96 @@
+
+body {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+.classesConfigContainer {
+  width: 80%;
+  margin: 0 auto;
+  background-color: #1f1f1f;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #ff9900;
+}
+
+.inputContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.label {
+  font-size: 16px;
+  color: #e0e0e0;
+}
+
+.input {
+  padding: 8px;
+  font-size: 16px;
+  margin-top: 5px;
+  background-color: #333;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+.input:focus {
+  border-color: #ff9900;
+  outline: none;
+}
+
+.addButton {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background-color: #ff7f00;
+}
+
+.outputContainer {
+  margin-top: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  background-color: #222;
+}
+
+.table th,
+.table td {
+  padding: 10px;
+  text-align: left;
+  border: 1px solid #444;
+  color: #e0e0e0;
+}
+
+.table th {
+  background-color: #333;
+}
+
+.iconButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  margin-left: 10px;
+  color: #ff9900;
+}
+
+.iconButton:hover {
+  color: #ff7f00;
+}

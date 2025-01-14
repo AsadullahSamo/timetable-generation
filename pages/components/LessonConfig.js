@@ -3,10 +3,10 @@ import PeriodsGrid from './PeriodsGrid';
 
 const LessonConfig = () => {
   const [isTimetableGenerated, setIsTimetableGenerated] = useState(false);
-  const [selectedDays, setSelectedDays] = useState(['Monday', 'Tuesday']); // Default selected days
-  const [startTime, setStartTime] = useState('08:00'); // Default start time
-  const [lessonDuration, setLessonDuration] = useState(60); // Default lesson duration
-  const [periods, setPeriods] = useState(6); // Default number of periods
+  const [selectedDays, setSelectedDays] = useState(['Monday', 'Tuesday']); 
+  const [startTime, setStartTime] = useState('08:00'); 
+  const [lessonDuration, setLessonDuration] = useState(60); 
+  const [periods, setPeriods] = useState(6); 
 
   const generateTimetable = () => {
     setIsTimetableGenerated(true);

@@ -5,7 +5,7 @@ import styles from './Dashboard.module.css';
 export default function Dashboard() {
   return (
     <div className={styles.dashboardContainer}>
-      {/* Hero Section */}
+      
       <header className={styles.heroSection}>
         <div className={styles.heroContent}>
           <h1>Welcome to Your Academic Scheduler</h1>
@@ -13,10 +13,9 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Main Section */}
+      
       <main className={styles.main}>
-        <section className={styles.cardContainer}>
-          {/* Generate Timetable */}
+        <section className={styles.cardContainer}>          
           <div className={`${styles.card} ${styles.cardPrimary}`}>
             <i className="fas fa-calendar-alt"></i>
             <h3>Generate Timetable</h3>
@@ -26,7 +25,6 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {/* Manage Teachers */}
           <div className={`${styles.card} ${styles.cardSecondary}`}>
             <i className="fas fa-chalkboard-teacher"></i>
             <h3>Manage Teachers</h3>
@@ -36,7 +34,6 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {/* Manage Rooms */}
           <div className={`${styles.card} ${styles.cardTertiary}`}>
             <i className="fas fa-door-open"></i>
             <h3>Manage Rooms</h3>
@@ -46,7 +43,6 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {/* View Reports */}
           <div className={`${styles.card} ${styles.cardQuaternary}`}>
             <i className="fas fa-chart-bar"></i>
             <h3>View Reports</h3>

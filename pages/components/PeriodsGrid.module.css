@@ -30,7 +30,7 @@
   
   .slot {
     width: 100%;
-    aspect-ratio: 1; /* Makes squares */
+    aspect-ratio: 1;
     border: 1px solid #ddd;
     cursor: pointer;
     background-color: #fff;

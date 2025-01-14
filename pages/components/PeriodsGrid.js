@@ -55,7 +55,6 @@ const PeriodsGrid = ({ selectedDays, startTime, lessonDuration, periods }) => {
 
       {isGenerated && (
         <div className={styles.grid}>
-          {/* Header Row */}
           <div className={styles.header}></div>
           {timeSlots.map((slot, idx) => (
             <div key={`header-${idx}`} className={styles.header}>
@@ -63,7 +62,6 @@ const PeriodsGrid = ({ selectedDays, startTime, lessonDuration, periods }) => {
             </div>
           ))}
 
-          {/* Days Rows */}
           {selectedDays.map((day) => (
             <React.Fragment key={day}>
               <div className={styles.dayLabel}>{day}</div>
