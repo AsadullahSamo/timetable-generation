@@ -1,0 +1,178 @@
+/* Entire Page Dark Mode */
+body {
+    background-color: #1e1e1e; /* Dark background for the entire page */
+    color: #fff; /* Light text color */
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Subject Configuration Container */
+  .subjectConfigContainer {
+    background-color: #2c2f38; /* Dark background for container */
+    color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    width: 50%; /* Container width */
+    margin: 0 auto; /* Center the container horizontally */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Vertically center container */
+  }
+  
+  .header {
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+  }
+  
+  .inputContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  .label {
+    font-size: 16px;
+    color: #aaa; /* Lighter label text */
+  }
+  
+  .input {
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #444;
+    color: #fff;
+    text-align: left; /* Align input text to the left */
+    width: 100%;
+  }
+  
+  .addButton {
+    background-color: #ff9900;
+    padding: 12px 20px;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    align-self: center;
+  }
+  
+  .addButton:hover {
+    background-color: #e68a00;
+  }
+  
+  .deleteSelectedContainer {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  
+  .deleteSelectedButton {
+    background-color: #e60000;
+    padding: 12px 20px;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  
+  .deleteSelectedButton:hover {
+    background-color: #cc0000;
+  }
+  
+  .outputContainer {
+    margin-top: 20px;
+    overflow-x: auto;
+    width: 100%;
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    margin-top: 20px;
+  }
+  
+  .table th, .table td {
+    padding: 10px;
+    border: 1px solid #555;
+  }
+  
+  .iconButton {
+    background: none;
+    border: none;
+    color: #ff9900;
+    cursor: pointer;
+    font-size: 20px;
+    margin-right: 10px;
+  }
+  
+  .iconButton:hover {
+    color: #e68a00;
+  }
+  
+  .checkbox {
+    margin-right: 10px; /* Adds space between the checkbox and the subject text */
+  }
+  
+  .subjectCell {
+    display: flex;
+    align-items: center;
+    padding-right: 20px; /* Adds padding to the right side of the subject name */
+  }
+  
+  .subjectName {
+    margin-left: 8px; /* Adds some space between the checkbox and the subject name */
+  }
+  
+  
+  
+  .checkbox + label {
+    position: relative;
+    padding-left: 30px; /* Space for custom checkbox */
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    font-size: 16px; /* Ensure proper text size */
+  }
+  
+  .checkbox + label:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    background-color: #333;
+    transform: translateY(-50%); /* Fix vertical centering */
+    transition: background-color 0.3s, border-color 0.3s;
+  }
+  
+  .checkbox:checked + label:before {
+    background-color: #ff9900;
+    border-color: #ff9900;
+  }
+  
+  .checkbox:checked + label:after {
+    content: '\f00c'; /* FontAwesome check mark */
+    font-family: 'FontAwesome';
+    color: #fff;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%); /* Center the checkmark */
+    font-size: 14px; /* Adjust size of checkmark */
+  }
+  
+  
+  
