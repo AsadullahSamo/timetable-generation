@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import styles from './PeriodGrid.module.css';
+import styles from './PeriodsGrid.module.css';
 
 const PeriodsGrid = ({ selectedDays, startTime, lessonDuration, periods }) => {
   
