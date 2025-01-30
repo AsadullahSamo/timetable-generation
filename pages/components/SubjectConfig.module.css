@@ -1,10 +1,9 @@
-/* Body Styles */
+
 body {
     background-color: #121212;
     color: #e0e0e0;
   }
   
-  /* Main Container */
   .subjectConfigContainer {
     width: 80%;
     margin: 0 auto;
@@ -14,28 +13,28 @@ body {
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   }
   
-  /* Header */
+ 
   .header {
     text-align: center;
     margin-bottom: 20px;
     color: #ff9900;
   }
   
-  /* Input Container */
+ 
   .inputContainer {
     display: flex;
     flex-direction: column;
-    gap: 20px; /* Increased gap for spacing between fields */
+    gap: 20px;
   }
   
-  /* Label Styling */
+ 
   .label {
     font-size: 16px;
     color: #e0e0e0;
-    margin-bottom: 5px; /* Space between label and input */
+    margin-bottom: 5px;
   }
   
-  /* Input Styling */
+ 
   .input {
     padding: 10px;
     font-size: 16px;
@@ -43,29 +42,29 @@ body {
     color: #e0e0e0;
     border: 1px solid #444;
     border-radius: 4px;
-    width: 90%; /* 90% width */
+    width: 90%;
     margin-top: 5px;
   }
   
-  /* Time Input Styling */
+ 
   .input[type="time"] {
-    width: 90%; /* Time inputs should have the same width */
+    width: 90%;
   }
   
-  /* Classes Input Styling */
+ 
   .input[type="text"] {
-    width: 100%; /* Ensure classes field also takes 90% width */
+    width: 100%;
     margin-top: 5px;
     display: block;
   }
   
-  /* Input Focus Styling */
+ 
   .input:focus {
     border-color: #ff9900;
     outline: none;
   }
   
-  /* Add Button Styling */
+ 
   .addButton {
     padding: 10px 20px;
     background-color: #007bff;
@@ -80,7 +79,7 @@ body {
     background-color: #ff7f00;
   }
   
-  /* Table Styling */
+ 
   .table {
     width: 100%;
     border-collapse: collapse;
@@ -100,7 +99,7 @@ body {
     background-color: #333;
   }
   
-  /* Icon Button Styling */
+ 
   .iconButton {
     background: none;
     border: none;

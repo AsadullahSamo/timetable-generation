@@ -1,11 +1,11 @@
-/* General Container */
+
 .container {
     padding: 20px;
     background-color: #181818;
     color: #f1f1f1;
   }
   
-  /* Header */
+ 
   .headerContainer {
     display: flex;
     justify-content: space-between;
@@ -31,7 +31,7 @@
     background-color: #45a049;
   }
   
-  /* Search Section */
+ 
   .searchContainer {
     display: flex;
     gap: 10px;
@@ -60,7 +60,7 @@
     background-color: #45a049;
   }
   
-  /* Teacher List */
+ 
   .listContainer {
     display: flex;
     flex-direction: column;
@@ -107,7 +107,7 @@
     color: #f44336;
   }
   
-  /* No Teachers Section */
+ 
   .noTeachersContainer {
     text-align: center;
     margin-top: 50px;

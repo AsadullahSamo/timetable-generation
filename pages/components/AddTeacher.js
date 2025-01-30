@@ -6,10 +6,10 @@ const AddTeacher = () => {
   const [teacherName, setTeacherName] = useState("");
   const [mandatoryPeriods, setMandatoryPeriods] = useState({});
   const [preferablePeriods, setPreferablePeriods] = useState({});
-  const [isMandatory, setIsMandatory] = useState(false); // Track mandatory checkbox
-  const [isPreferable, setIsPreferable] = useState(false); // Track preferable checkbox
+  const [isMandatory, setIsMandatory] = useState(false); 
+  const [isPreferable, setIsPreferable] = useState(false); 
   const router = useRouter();
-  const { teacher, index } = router.query; // Get teacher data for editing
+  const { teacher, index } = router.query; 
 
   useEffect(() => {
     if (teacher) {
@@ -24,18 +24,18 @@ const AddTeacher = () => {
     const key = `${day}-${period}`;
     
     if (isMandatory) {
-      // Toggle mandatory period
+      
       setMandatoryPeriods((prev) => ({
         ...prev,
-        [key]: prev[key] ? null : "mandatory", // Toggle on/off
+        [key]: prev[key] ? null : "mandatory", 
       }));
     }
     
     if (isPreferable) {
-      // Toggle preferable period
+      
       setPreferablePeriods((prev) => ({
         ...prev,
-        [key]: prev[key] ? null : "preferable", // Toggle on/off
+        [key]: prev[key] ? null : "preferable", 
       }));
     }
   };
@@ -55,9 +55,9 @@ const AddTeacher = () => {
     const teachers = JSON.parse(localStorage.getItem("teachers")) || [];
     
     if (index !== undefined) {
-      teachers[index] = teacherData; // Update existing teacher
+      teachers[index] = teacherData; 
     } else {
-      teachers.push(teacherData); // Add new teacher
+      teachers.push(teacherData); 
     }
 
     localStorage.setItem("teachers", JSON.stringify(teachers));
@@ -78,7 +78,6 @@ const AddTeacher = () => {
         className={styles.inputField}
       />
       
-      {/* Two custom checkboxes: Mandatory and Preferable */}
       <div className={styles.checkboxContainer}>
         <label className={styles.checkboxLabel}>
           <input
@@ -86,7 +85,7 @@ const AddTeacher = () => {
             checked={isMandatory}
             onChange={() => {
               setIsMandatory(!isMandatory);
-              setIsPreferable(false); // Uncheck Preferable if Mandatory is selected
+              setIsPreferable(false); 
             }}
             className={styles.checkbox}
           />
@@ -99,7 +98,7 @@ const AddTeacher = () => {
             checked={isPreferable}
             onChange={() => {
               setIsPreferable(!isPreferable);
-              setIsMandatory(false); // Uncheck Mandatory if Preferable is selected
+              setIsMandatory(false); 
             }}
             className={styles.checkbox}
           />

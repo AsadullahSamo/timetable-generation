@@ -1,68 +1,56 @@
 .container {
-    padding: 20px;
-    max-width: 1000px;
-    margin: 0 auto;
-    font-family: 'Roboto', sans-serif;
-  }
-  
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .row {
-    display: flex;
-    justify-content: space-between;
-    gap: 40px;
-  }
-  
-  .fieldGroup {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .label {
-    font-size: 16px;
-    font-weight: 500;
-    margin-bottom: 8px;
-    color: #333;
-  }
-  
-  .input {
-    padding: 10px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  
-  .input:focus {
-    border-color: #007BFF;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-    outline: none;
-  }
-  
-  .error {
-    font-size: 12px;
-    color: red;
-    margin-top: 5px;
-  }
-  
-  .submitButton {
-    padding: 12px 20px;
-    background-color: #007BFF;
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
-  
-  .submitButton:hover {
-    background-color: #0056b3;
-  }
-  
+  background-color: #121212;
+  color: #e0e0e0;
+  padding: 20px;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.addButton {
+  background-color: #1e88e5;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background-color: #1565c0;
+}
+
+.lessonsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.lessonCard {
+  background-color: #1e1e1e;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+}
+
+.lessonCard h2 {
+  margin: 0;
+  color: #90caf9;
+}
+
+.lessonCard p {
+  margin-top: 10px;
+  color: #b0bec5;
+}
+
+.noLessons {
+  text-align: center;
+  font-size: 18px;
+  color: #757575;
+}

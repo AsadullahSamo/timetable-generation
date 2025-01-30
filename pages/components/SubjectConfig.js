@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import styles from "./SubjectConfig.module.css"; // Assuming this is the .module.css file for styling
+import styles from "./SubjectConfig.module.css"; 
 import Head from "next/head";
 
 const SubjectConfig = () => {
@@ -7,8 +7,8 @@ const SubjectConfig = () => {
   const [subjectData, setSubjectData] = useState({
     subjectName: "",
   });
-  const [searchQuery, setSearchQuery] = useState(""); // State to hold search query
-  const [editingIndex, setEditingIndex] = useState(null); // Track which subject is being edited
+  const [searchQuery, setSearchQuery] = useState(""); 
+  const [editingIndex, setEditingIndex] = useState(null); 
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -22,17 +22,17 @@ const SubjectConfig = () => {
     }
 
     if (editingIndex !== null) {
-      // Update the subject
+      
       const updatedSubjects = [...subjects];
       updatedSubjects[editingIndex] = subjectData.subjectName;
       setSubjects(updatedSubjects);
-      setEditingIndex(null); // Reset editing mode
+      setEditingIndex(null); 
     } else {
-      // Add a new subject
+      
       setSubjects([...subjects, subjectData.subjectName]);
     }
 
-    // Reset the subjectData to clear the input field
+    
     setSubjectData({ subjectName: "" });
   };
 
@@ -42,14 +42,13 @@ const SubjectConfig = () => {
 
   const handleEditSubject = (index) => {
     setSubjectData({ subjectName: subjects[index] });
-    setEditingIndex(index); // Set the index for editing mode
+    setEditingIndex(index); 
   };
 
   const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value); // Update search query state
+    setSearchQuery(e.target.value);
   };
 
-  // Filter subjects based on search query
   const filteredSubjects = subjects.filter((subject) =>
     subject.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -66,7 +65,6 @@ const SubjectConfig = () => {
       <div className={styles.subjectConfigContainer}>
         <h2 className={styles.header}>Subject Configuration</h2>
 
-        {/* Search Section */}
         <div class={styles.searchBox}>
             <label className={styles.label}>
                 <button class={styles.btnSearch}><i class="fas fa-search"></i></button>
@@ -80,7 +78,6 @@ const SubjectConfig = () => {
             </label>
         </div>
 
-        {/* Input Section */}
         <div className={styles.inputContainer}>
           <label className={styles.label}>
             Subject Name:
@@ -98,7 +95,6 @@ const SubjectConfig = () => {
           </button>
         </div>
 
-        {/* Output Section */}
         <div className={styles.outputContainer}>
           <table className={styles.table}>
             <thead>
@@ -116,13 +112,13 @@ const SubjectConfig = () => {
                       onClick={() => handleEditSubject(index)}
                       className={styles.iconButton}
                     >
-                      <i className="fas fa-edit"></i> {/* Edit Icon */}
+                    
                     </button>
                     <button
                       onClick={() => handleDeleteSubject(index)}
                       className={styles.iconButton}
                     >
-                      <i className="fas fa-trash"></i> {/* Trash Icon */}
+                    
                     </button>
                   </td>
                 </tr>

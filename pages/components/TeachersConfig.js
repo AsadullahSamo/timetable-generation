@@ -5,7 +5,7 @@ import { useRouter } from "next/router"; // For routing
 import Head from "next/head";
 
 const TeachersConfig = () => {
-  const [searchQuery, setSearchQuery] = useState(""); // State to hold search query
+  const [searchQuery, setSearchQuery] = useState("");
   const [teachers, setTeachers] = useState([]);
   const router = useRouter();
 
@@ -30,10 +30,10 @@ const TeachersConfig = () => {
   };
 
   const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value); // Update search query state
+    setSearchQuery(e.target.value); 
   };
 
-  // Filter teachers based on the search query
+  
   const filteredTeachers = teachers.filter((teacher) =>
     teacher.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -74,7 +74,7 @@ const TeachersConfig = () => {
           {filteredTeachers.length === 0 ? (
             <div className={styles.noTeachersContainer}>
               <img
-                src="/images/no-teachers.svg" // Replace with your image asset
+                src="/images/no-teachers.svg" 
                 alt="No Teachers"
                 className={styles.noTeachersImage}
               />

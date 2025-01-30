@@ -1,4 +1,4 @@
-/* General Container */
+
 .container {
     padding: 20px;
     background-color: #181818;
@@ -22,7 +22,7 @@
     border-radius: 5px;
 }
 
-/* Custom Checkbox Section */
+
 .checkboxContainer {
     display: flex;
     gap: 20px;
@@ -52,11 +52,9 @@
 }
 
 .checkbox:checked {
-    background-color: #4caf50; /* Green when checked */
+    background-color: #4caf50;
 }
 
-
-/* When the checkbox is selected, we can change the label color */
 .checkboxText {
     font-weight: bold;
 }
@@ -65,7 +63,7 @@
     color: #4caf50;
 }
 
-/* Grid */
+
 .gridContainer {
     display: flex;
     gap: 20px;
