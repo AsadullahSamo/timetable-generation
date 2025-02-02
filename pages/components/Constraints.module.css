@@ -164,3 +164,40 @@
     border-color: #8b5cf6;
     color: #8b5cf6;
   }
+
+  .importanceSelector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .importanceDropdown {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background-color: #1f2937;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .importanceDropdown:hover {
+    border-color: #8b5cf6;
+  }
+  
+  .importanceDropdown.VeryImportant {
+    border-color: #8b5cf6;
+  }
+  
+  .importanceDropdown.Important {
+    border-color: #3b82f6;
+  }
+  
+  .importanceDropdown.LessImportant {
+    border-color: #ef4444;
+  }
+  
+  .importanceIcon {
+    display: flex;
+    gap: 0.25rem;
+  }
