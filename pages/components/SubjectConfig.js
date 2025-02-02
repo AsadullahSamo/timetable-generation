@@ -1,14 +1,15 @@
 import React, { useState } from "react";
-import styles from "./SubjectConfig.module.css"; 
+import styles from "./SubjectConfig.module.css";
 import Head from "next/head";
+import Navbar from "./Navbar";
 
 const SubjectConfig = () => {
   const [subjects, setSubjects] = useState([]);
   const [subjectData, setSubjectData] = useState({
     subjectName: "",
   });
-  const [searchQuery, setSearchQuery] = useState(""); 
-  const [editingIndex, setEditingIndex] = useState(null); 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [editingIndex, setEditingIndex] = useState(null);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -17,22 +18,19 @@ const SubjectConfig = () => {
 
   const handleAddOrUpdateSubject = () => {
     if (subjectData.subjectName.trim() === "") {
-      alert("Please enter a subject name.");
+      console.error("Please enter a subject name.");
       return;
     }
 
     if (editingIndex !== null) {
-      
       const updatedSubjects = [...subjects];
       updatedSubjects[editingIndex] = subjectData.subjectName;
       setSubjects(updatedSubjects);
-      setEditingIndex(null); 
+      setEditingIndex(null);
     } else {
-      
       setSubjects([...subjects, subjectData.subjectName]);
     }
 
-    
     setSubjectData({ subjectName: "" });
   };
 
@@ -42,7 +40,7 @@ const SubjectConfig = () => {
 
   const handleEditSubject = (index) => {
     setSubjectData({ subjectName: subjects[index] });
-    setEditingIndex(index); 
+    setEditingIndex(index);
   };
 
   const handleSearchChange = (e) => {
@@ -62,25 +60,26 @@ const SubjectConfig = () => {
         />
       </Head>
 
-      <div className={styles.subjectConfigContainer}>
-        <h2 className={styles.header}>Subject Configuration</h2>
+      <div className={styles.container}>
+        <Navbar number={4} />
 
-        <div class={styles.searchBox}>
-            <label className={styles.label}>
-                <button class={styles.btnSearch}><i class="fas fa-search"></i></button>
-                <input
-                type="text"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                placeholder="Search Subject Name"
-                className={styles.inputSearch}
-                />
-            </label>
-        </div>
+        <div className={styles.mainContent}>
+          <h2 className={styles.mainHeading}>Subject Configuration</h2>
 
-        <div className={styles.inputContainer}>
-          <label className={styles.label}>
-            Subject Name:
+          <div className={styles.searchBox}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              placeholder="Search Subject Name"
+              className={styles.inputSearch}
+            />
+            <button className={styles.btnSearch}>
+              <i className="fas fa-search"></i>
+            </button>
+          </div>
+
+          <div className={styles.inputContainer}>
             <input
               type="text"
               name="subjectName"
@@ -89,42 +88,42 @@ const SubjectConfig = () => {
               placeholder="Enter Subject Name"
               className={styles.input}
             />
-          </label>
-          <button onClick={handleAddOrUpdateSubject} className={styles.addButton}>
-            {editingIndex !== null ? "Update Subject" : "Add Subject"}
-          </button>
-        </div>
+            <button onClick={handleAddOrUpdateSubject} className={styles.primaryButton}>
+              {editingIndex !== null ? "Update Subject" : "Add Subject"}
+            </button>
+          </div>
 
-        <div className={styles.outputContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Subject Name</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSubjects.map((subject, index) => (
-                <tr key={index}>
-                  <td>{subject}</td>
-                  <td>
-                    <button
-                      onClick={() => handleEditSubject(index)}
-                      className={styles.iconButton}
-                    >
-                    
-                    </button>
-                    <button
-                      onClick={() => handleDeleteSubject(index)}
-                      className={styles.iconButton}
-                    >
-                    
-                    </button>
-                  </td>
+          <div className={styles.outputContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Subject Name</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredSubjects.map((subject, index) => (
+                  <tr key={index}>
+                    <td>{subject}</td>
+                    <td>
+                      <button
+                        onClick={() => handleEditSubject(index)}
+                        className={styles.iconButton}
+                      >
+                        <i className="fas fa-edit"></i>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubject(index)}
+                        className={styles.iconButton}
+                      >
+                        <i className="fas fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </>

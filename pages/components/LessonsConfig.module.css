@@ -1,0 +1,276 @@
+.container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #111827;
+    color: #e5e7eb;
+    font-family: 'Inter', sans-serif;
+  }
+  
+  .sidebar {
+    width: 280px;
+    background-color: #1f2937;
+    padding: 2rem 1.5rem;
+    border-right: 1px solid #374151;
+  }
+  
+  .menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .menuItem {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #9ca3af;
+  }
+  
+  .menuItem:hover {
+    background-color: #374151;
+  }
+  
+  .active {
+    background-color: #6d28d9;
+    color: white;
+  }
+  
+  .mainContent {
+    flex: 1;
+    padding: 2rem 3rem;
+  }
+  
+  .mainHeading {
+    font-size: 2rem;
+    color: #f9fafb;
+    margin-bottom: 2rem;
+  }
+  
+  .section {
+    background-color: #1f2937;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border: 1px solid #374151;
+  }
+  
+  .sectionHeading {
+    color: #8b5cf6;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .formGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+  
+  .formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .label {
+    color: #9ca3af;
+    font-size: 0.875rem;
+  }
+  
+  .input {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: #111827;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+  }
+  
+  .input:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+  }
+  
+  .radioGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .radioLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .buttonGroup {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+  }
+  
+  .primaryButton {
+    background-color: #6d28d9;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .primaryButton:hover {
+    background-color: #5b21b6;
+  }
+  
+  .secondaryButton {
+    background: none;
+    border: 1px solid #374151;
+    color: #9ca3af;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  
+  .secondaryButton:hover {
+    border-color: #8b5cf6;
+    color: #8b5cf6;
+  }
+  
+  .tableContainer {
+    overflow-x: auto;
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #1f2937;
+  }
+  
+  .table th,
+  .table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #374151;
+  }
+  
+  .table th {
+    background-color: #111827;
+  }
+  
+  .iconButton {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0.5rem;
+  }
+  
+  .iconButton:hover {
+    color: #6d28d9;
+  }
+  
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #1f2937;
+    border-radius: 6px;
+  }
+  
+  .navButton {
+    background-color: #6d28d9;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .navButton:hover {
+    background-color: #5b21b6;
+    color: white;
+  }
+  
+  .navButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .importanceCell {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+  
+  .checkboxLabel input {
+    margin: 0;
+  }
+  
+  .radioGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .radioLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+  
+  .radioLabel input {
+    margin: 0;
+  }
+
+  /* Add this to your existing CSS */
+.importanceCell {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+  
+  .checkboxLabel input {
+    margin: 0;
+  }
+  
+  .radioGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .radioLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+  
+  .radioLabel input {
+    margin: 0;
+  }

@@ -1,8 +1,10 @@
+// TeachersConfig.js
 import Link from "next/link";
 import styles from "./TeachersConfig.module.css";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/router"; // For routing
+import { useRouter } from "next/router";
 import Head from "next/head";
+import Navbar from "./Navbar";
 
 const TeachersConfig = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -15,105 +17,93 @@ const TeachersConfig = () => {
   }, []);
 
   const handleDelete = (index) => {
-    const updatedTeachers = [...teachers];
-    updatedTeachers.splice(index, 1);
+    const updatedTeachers = teachers.filter((_, i) => i !== index);
     setTeachers(updatedTeachers);
     localStorage.setItem("teachers", JSON.stringify(updatedTeachers));
   };
 
-  const handleEdit = (teacherIndex) => {
-    const teacherToEdit = teachers[teacherIndex];
-    router.push({
-      pathname: "/components/AddTeacher",
-      query: { teacher: JSON.stringify(teacherToEdit), index: teacherIndex },
-    });
+  const handleEdit = (index) => {
+    router.push(`/components/AddTeacher?index=${index}`);
   };
 
-  const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value); 
-  };
-
-  
-  const filteredTeachers = teachers.filter((teacher) =>
+  const filteredTeachers = teachers.filter(teacher =>
     teacher.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <>
+    <div className={styles.container}>
       <Head>
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-        />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
       </Head>
+      
+      <Navbar number={5}/>
 
-      <div className={styles.container}>
-        <div className={styles.headerContainer}>
-          <h1 className={styles.header}>Teachers</h1>
-          <Link href="/components/AddTeacher" passHref>
-            <button className={styles.newTeacherButton}>+ New Teacher</button>
+      <div className={styles.mainContent}>
+        <div className={styles.header}>
+          <h1>Teachers</h1>
+          <Link href="/components/AddTeacher">
+            <button className={styles.primaryButton}>+ New Teacher</button>
           </Link>
         </div>
 
-        <div className={styles.searchBox}>
-          <label className={styles.label}>
-            <button className={styles.btnSearch}>
-              <i className="fas fa-search"></i>
-            </button>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              placeholder="Search Teacher Name"
-              className={styles.inputSearch}
-            />
-          </label>
+        <div className={styles.searchContainer}>
+          <input
+            type="text"
+            placeholder="Search teacher..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={styles.searchInput}
+          />
         </div>
 
-        <div className={styles.listContainer}>
-          {filteredTeachers.length === 0 ? (
-            <div className={styles.noTeachersContainer}>
-              <img
-                src="/images/no-teachers.svg" 
-                alt="No Teachers"
-                className={styles.noTeachersImage}
-              />
-              <p className={styles.noTeachersText}>
-                You have not yet added any teachers.
-              </p>
+        <div className={styles.tableContainer}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Teacher Name</th>
+                <th>Constraints</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTeachers.map((teacher, index) => (
+                <tr key={index}>
+                  <td>{teacher.name}</td>
+                  <td>
+                    {Object.keys(teacher.mandatory || {}).length > 0 && 'Mandatory '}
+                    {Object.keys(teacher.preferable || {}).length > 0 && 'Preferable'}
+                  </td>
+                  <td>
+                    <button onClick={() => handleEdit(index)} className={styles.iconButton}>
+                      <i className="fas fa-edit" />
+                    </button>
+                    <button onClick={() => handleDelete(index)} className={styles.iconButton}>
+                      <i className="fas fa-trash" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {teachers.length === 0 && (
+            <div className={styles.emptyState}>
+              <i className="fas fa-chalkboard-teacher" />
+              <p>You have not yet added any teachers</p>
             </div>
-          ) : (
-            filteredTeachers.map((teacher, index) => (
-              <div key={index} className={styles.teacherCard}>
-                <div className={styles.teacherDetails}>
-                  <span className={styles.teacherName}>{teacher.name}</span>
-                  <span className={styles.teacherConstraints}>
-                    {Object.keys(teacher.unavailability || {}).length > 0
-                      ? "Constraints added"
-                      : "-"}
-                  </span>
-                </div>
-                <div className={styles.actionButtons}>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => handleEdit(index)}
-                  >
-                    <i className="fas fa-pencil-alt"></i>
-                  </button>
-                  <button
-										style={{ marginLeft: "20px" }}
-                    className={styles.deleteButton}
-                    onClick={() => handleDelete(index)}
-                  >
-                    <i className="fas fa-trash-alt"></i>
-                  </button>
-                </div>
-              </div>
-            ))
           )}
         </div>
+
+        <div className={styles.pagination}>
+          <span>Items per page: 10</span>
+          <div className={styles.pageControls}>
+            <button className={styles.navButton}>Previous</button>
+            <span>1-1 of 1</span>
+            <button className={styles.navButton}>Next</button>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 

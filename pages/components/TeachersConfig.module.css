@@ -1,180 +1,150 @@
-
 .container {
-    padding: 20px;
-    background-color: #181818;
-    color: #f1f1f1;
-  }
-  
- 
-  .headerContainer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-  
-  .header {
-    font-size: 24px;
-    font-weight: bold;
-  }
-  
-  .newTeacherButton {
-    background-color: #4caf50;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    cursor: pointer;
-    border-radius: 5px;
-  }
-  
-  .newTeacherButton:hover {
-    background-color: #45a049;
-  }
-  
- 
-  .searchContainer {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-  }
-  
-  .searchInput {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #444;
-    background-color: #333;
-    color: #f1f1f1;
-    border-radius: 5px;
-  }
-  
-  .searchButton {
-    padding: 10px 20px;
-    background-color: #4caf50;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  
-  .searchButton:hover {
-    background-color: #45a049;
-  }
-  
- 
-  .listContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .teacherCard {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #333;
-    padding: 10px;
-    border-radius: 5px;
-    border: 1px solid #444;
-  }
-  
-  .teacherDetails {
-    display: flex;
-    gap: 20px;
-  }
-  
-  .teacherName {
-    font-weight: bold;
-  }
-  
-  .teacherConstraints {
-    color: #ccc;
-  }
-  
-  .actionButtons button {
-    margin-left: 10px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #f1f1f1;
-    font-size: 16px;
-  }
-  
-  .editButton:hover {
-    color: #ffc107;
-  }
-  
-  .deleteButton:hover {
-    color: #f44336;
-  }
-  
- 
-  .noTeachersContainer {
-    text-align: center;
-    margin-top: 50px;
-  }
-  
-  .noTeachersImage {
-    width: 200px;
-    margin-bottom: 20px;
-  }
-  
-  .noTeachersText {
-    font-size: 18px;
-    color: #aaa;
-  }
+  display: flex;
+  min-height: 100vh;
+  background-color: #111827;
+  color: #e5e7eb;
+  font-family: 'Inter', sans-serif;
+}
 
-  .searchBox{
-    width: fit-content;
-    height: fit-content;
-    position: relative;
-    margin: 25px 0;
-  }
-  .inputSearch{
-    height: 50px;
-    width: 50px;
-    border-style: none;
-    padding: 10px;
-    font-size: 18px;
-    letter-spacing: 2px;
-    outline: none;
-    border-radius: 25px;
-    transition: all .5s ease-in-out;
-    background-color: #22a6b3;
-    padding-right: 40px;
-    color:#fff;
-  }
-  .inputSearch::placeholder{
-    color:rgba(255,255,255,.5);
-    font-size: 18px;
-    letter-spacing: 2px;
-    font-weight: 100;
-  }
-  .btnSearch{
-    width: 50px;
-    height: 50px;
-    border-style: none;
-    font-size: 20px;
-    font-weight: bold;
-    outline: none;
-    cursor: pointer;
-    border-radius: 50%;
-    position: absolute;
-    right: 0px;
-    color:#ffffff ;
-    background-color:transparent;
-    pointer-events: painted;  
-  }
-  .btnSearch:focus ~ .inputSearch{
-    width: 300px;
-    border-radius: 0px;
-    background-color: transparent;
-    border-bottom:1px solid rgba(255,255,255,.5);
-    transition: all 500ms cubic-bezier(0, 0.110, 0.35, 2);
-  }
-  .inputSearch:focus{
-    width: 300px;
-    border-radius: 0px;
-    background-color: transparent;
-    border-bottom:1px solid rgba(255,255,255,.5);
-    transition: all 500ms cubic-bezier(0, 0.110, 0.35, 2);
-  }
+.sidebar {
+  width: 280px;
+  background-color: #1f2937;
+  padding: 2rem 1.5rem;
+  border-right: 1px solid #374151;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.menuItem {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #9ca3af;
+}
+
+.menuItem:hover {
+  background-color: #374151;
+}
+
+.active {
+  background-color: #6d28d9;
+  color: white;
+}
+
+.mainContent {
+  flex: 1;
+  padding: 2rem 3rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.primaryButton {
+  background-color: #6d28d9;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.primaryButton:hover {
+  background-color: #5b21b6;
+}
+
+.searchContainer {
+  margin-bottom: 2rem;
+}
+
+.searchInput {
+  width: 300px;
+  padding: 0.75rem;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  color: #e5e7eb;
+}
+
+.tableContainer {
+  background-color: #1f2937;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid #374151;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #374151;
+}
+
+.table th {
+  background-color: #111827;
+}
+
+.iconButton {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  margin: 0 0.5rem;
+}
+
+.iconButton:hover {
+  color: #6d28d9;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 4rem;
+  color: #6b7280;
+}
+
+.emptyState i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  color: #9ca3af;
+}
+
+.pageControls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.navButton {
+  background: none;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.navButton:hover {
+  border-color: #6d28d9;
+  color: #6d28d9;
+}
