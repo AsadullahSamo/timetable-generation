@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup
 
 class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,4 +43,9 @@ class ConfigSerializer(serializers.ModelSerializer):
      
     class Meta:
         model = Config
+        fields = '__all__'
+
+class ClassGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClassGroup
         fields = '__all__'

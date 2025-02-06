@@ -3,19 +3,21 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     SubjectViewSet,
     TeacherViewSet,
-    ClassroomViewSet,
+    # ClassroomViewSet,
     ScheduleConfigViewSet,
     TimetableViewSet,
     TimetableView,
     TaskStatusView,
-    ConfigViewSet
+    ConfigViewSet,
+    ClassRoomViewSet
 )
 
 router = DefaultRouter()
 
 router.register(r'subjects', SubjectViewSet)
 router.register(r'teachers', TeacherViewSet)
-router.register(r'classrooms', ClassroomViewSet)
+# router.register(r'classrooms', ClassroomViewSet)
+router.register(r'class-groups', ClassRoomViewSet)
 router.register(r'schedule-configs', ScheduleConfigViewSet)  # Changed prefix
 router.register(r'timetableviewset', TimetableViewSet)
 router.register(r'configs', ConfigViewSet, basename='config')  # Unique prefix

@@ -46,3 +46,14 @@ class Config(models.Model):
 
     def __str__(self):
         return self.name
+    
+class ClassGroup(models.Model):
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    latest_start_time = models.TimeField()
+    min_lessons = models.PositiveIntegerField()
+    max_lessons = models.PositiveIntegerField()
+    class_groups = models.JSONField()
+
+    def __str__(self):
+        return ".".join(self.class_groups) or "No class groups"

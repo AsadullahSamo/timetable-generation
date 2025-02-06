@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import ScheduleConfig, TimetableEntry
@@ -15,7 +15,8 @@ from .serializers import (
     ScheduleConfigSerializer,
     TimetableEntrySerializer,
     TimetableSerializer,
-    ConfigSerializer
+    ConfigSerializer,
+    ClassGroupSerializer
 )
 
 
@@ -85,3 +86,7 @@ class ConfigViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Save failed: {str(e)}")
             raise
+
+class ClassRoomViewSet(viewsets.ModelViewSet):
+    queryset = ClassGroup.objects.all()
+    serializer_class = ClassGroupSerializer
