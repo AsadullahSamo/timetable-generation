@@ -1,0 +1,113 @@
+.container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #111827;
+    color: #e5e7eb;
+    font-family: 'Inter', sans-serif;
+}
+
+.mainContent {
+    flex: 1;
+    padding: 2rem 3rem;
+}
+
+.mainHeading {
+    font-size: 2rem;
+    color: #f9fafb;
+    margin-bottom: 2rem;
+}
+
+.timetableGrid {
+    display: grid;
+    grid-template-columns: 120px repeat(5, 1fr);
+    gap: 1px;
+    background-color: #374151;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.gridHeader {
+    display: contents;
+    background-color: #1f2937;
+}
+
+.dayHeader {
+    padding: 1rem;
+    text-align: center;
+    background-color: #1f2937;
+    font-weight: 600;
+    border-bottom: 2px solid #8b5cf6;
+}
+
+.timeColumn {
+    background-color: #1f2937;
+    padding: 1rem;
+    text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+
+.gridRow {
+    display: contents;
+}
+
+.gridRow:nth-child(even) .gridCell {
+    background-color: #1f2937;
+}
+
+.timeSlot {
+    background-color: #1f2937;
+    padding: 1rem;
+    text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+
+.gridCell {
+    padding: 1rem;
+    background-color: #111827;
+    min-height: 80px;
+    border: 1px solid #374151;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+.subject {
+    font-weight: 500;
+    color: #8b5cf6;
+}
+
+.teacher {
+    font-size: 0.875rem;
+    color: #3b82f6;
+}
+
+.classroom {
+    font-size: 0.75rem;
+    color: #10b981;
+}
+
+.navigation {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.secondaryButton {
+    background: none;
+    border: 1px solid #374151;
+    color: #9ca3af;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.secondaryButton:hover {
+    border-color: #8b5cf6;
+    color: #8b5cf6;
+}

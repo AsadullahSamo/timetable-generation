@@ -1,0 +1,156 @@
+.container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #111827;
+  color: #e5e7eb;
+  font-family: 'Inter', sans-serif;
+}
+
+.sidebar {
+  width: 280px;
+  background-color: #1f2937;
+  padding: 2rem 1.5rem;
+  border-right: 1px solid #374151;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.menuItem {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #9ca3af;
+}
+
+.menuItem:hover {
+  background-color: #374151;
+}
+
+.active {
+  background-color: #6d28d9;
+  color: white;
+}
+
+.mainContent {
+  flex: 1;
+  padding: 2rem 3rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.primaryButton {
+  background-color: #6d28d9;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.primaryButton:hover {
+  background-color: #5b21b6;
+}
+
+.searchContainer {
+  margin-bottom: 2rem;
+}
+
+.searchInput {
+  width: 300px;
+  padding: 0.75rem;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  color: #e5e7eb;
+}
+
+.tableContainer {
+  background-color: #1f2937;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid #374151;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #374151;
+}
+
+.table th {
+  background-color: #111827;
+}
+
+.iconButton {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  margin: 0 0.5rem;
+}
+
+.iconButton:hover {
+  color: #6d28d9;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 4rem;
+  color: #6b7280;
+}
+
+.emptyState i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  color: #9ca3af;
+}
+
+.pageControls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.navButton {
+  background: none;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.navButton:hover {
+  border-color: #6d28d9;
+  color: #6d28d9;
+}
+
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
+}

@@ -1,0 +1,134 @@
+.container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #111827;
+  color: #e5e7eb;
+  font-family: 'Inter', sans-serif;
+}
+
+.mainContent {
+  flex: 1;
+  padding: 2rem 3rem;
+  max-width: 1200px;
+}
+
+.mainHeading {
+  font-size: 2rem;
+  color: #f9fafb;
+  margin-bottom: 2rem;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.inputSearch {
+  padding: 0.75rem;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  color: #e5e7eb;
+  flex: 1;
+  margin-right: 0.5rem;
+}
+
+.inputSearch:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.btnSearch {
+  background-color: #6d28d9;
+  color: white;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btnSearch:hover {
+  background-color: #5b21b6;
+}
+
+.inputContainer {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.input {
+  padding: 0.75rem;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  color: #e5e7eb;
+  flex: 1;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.primaryButton {
+  background-color: #6d28d9;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.primaryButton:hover {
+  background-color: #5b21b6;
+}
+
+.outputContainer {
+  margin-top: 1.5rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #1f2937;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table th,
+.table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #374151;
+}
+
+.table th {
+  background-color: #1f2937;
+  color: #8b5cf6;
+  font-weight: 600;
+}
+
+.iconButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  margin-left: 10px;
+  color: #8b5cf6;
+}
+
+.iconButton:hover {
+  color: #6d28d9;
+}
+
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
+}
