@@ -132,3 +132,19 @@
   justify-content: space-between;
   margin-top: 2rem;
 }
+
+.errorAlert {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #f5c6cb;
+}
+
+.loading {
+  padding: 20px;
+  text-align: center;
+  color: #8b5cf6;
+  font-style: italic;
+}

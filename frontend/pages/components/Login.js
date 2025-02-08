@@ -24,7 +24,7 @@ export default function Login() {
 
     try {
       const res = await signInWithEmailAndPassword(auth, email, password);  
-      router.push('/components/Dashboard');
+      router.push('/components/SchoolConfig');
     }
     catch (e) {
       if(e.message === 'Firebase: Error (auth/missing-password).') {

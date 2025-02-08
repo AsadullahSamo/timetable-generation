@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'users',
     'django_celery_results',
     'debug_toolbar',
+    'firebase_admin',
 ]
 
 MIDDLEWARE = [
@@ -66,7 +67,7 @@ CORS_ORIGIN_ALLOW_ALL = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'timetable.authentication.FirebaseAuthentication',
     )
 }
 

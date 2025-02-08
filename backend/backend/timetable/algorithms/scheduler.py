@@ -1,4 +1,3 @@
-# timetable/algorithms/scheduler.py
 from datetime import datetime, timedelta
 from django.utils import timezone
 from ..models import TimetableEntry, Subject, Teacher, Classroom

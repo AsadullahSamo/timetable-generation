@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from .models import ScheduleConfig, TimetableEntry
 from celery.result import AsyncResult
 from datetime import datetime, timedelta
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 import logging
 
 from .serializers import (
@@ -90,3 +90,20 @@ class ConfigViewSet(viewsets.ModelViewSet):
 class ClassRoomViewSet(viewsets.ModelViewSet):
     queryset = ClassGroup.objects.all()
     serializer_class = ClassGroupSerializer
+
+
+class SubjectViewSet(viewsets.ModelViewSet):
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer
+    # permission_classes = [IsAuthenticated]
+    filterset_fields = ['code', 'name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(code__icontains=search)
+            )
+        return queryset

@@ -6,6 +6,9 @@ class Subject(models.Model):
     code = models.CharField(max_length=20, unique=True)
     credits = models.PositiveIntegerField()
 
+    def __str__(self):
+        return self.name
+
 class Teacher(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     subjects = models.ManyToManyField(Subject)
@@ -19,7 +22,7 @@ class Classroom(models.Model):
 
 class ScheduleConfig(models.Model):
     name = models.CharField(max_length=100)
-    days = models.JSONField(default=['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
+    days = models.JSONField(default=list)
     periods = models.JSONField()
     start_time = models.TimeField()
     lesson_duration = models.PositiveIntegerField()
