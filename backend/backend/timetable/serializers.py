@@ -1,5 +1,22 @@
 from rest_framework import serializers
+from users.models import User
 from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup
+# from users.serializers import UserSerializer
+
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'first_name', 'last_name']
+
+class NestedUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'first_name', 'last_name', 'password']
+
 
 class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -7,9 +24,28 @@ class SubjectSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class TeacherSerializer(serializers.ModelSerializer):
+    # Accept subjects as an array of IDs on input
+    subjects = serializers.PrimaryKeyRelatedField(
+        queryset=Subject.objects.all(), many=True, required=False
+    )
+    # Add a read-only field to display subject names
+    subject_names = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Teacher
-        fields = '__all__'
+        fields = [
+            'id',
+            'name',
+            'email',
+            'subjects',
+            'subject_names',
+            'max_lessons_per_day',
+            'unavailable_periods'
+        ]
+
+    def get_subject_names(self, obj):
+        return [subject.name for subject in obj.subjects.all()]
+        
 
 class ClassroomSerializer(serializers.ModelSerializer):
     class Meta:

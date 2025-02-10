@@ -1,4 +1,9 @@
-/* AddTeacher.module.css */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+
 .container {
     display: flex;
     min-height: 100vh;
@@ -36,26 +41,6 @@
     color: #e5e7eb;
   }
   
-  .modeSelector {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-  
-  .modeButton {
-    padding: 0.75rem 1.5rem;
-    background-color: #111827;
-    border: 1px solid #374151;
-    border-radius: 6px;
-    color: #9ca3af;
-    cursor: pointer;
-  }
-  
-  .modeButton.active {
-    background-color: #6d28d9;
-    border-color: #6d28d9;
-    color: white;
-  }
   
   .scheduleGrid {
     overflow-x: auto;
@@ -76,19 +61,6 @@
   .dayLabel {
     background-color: #111827;
     font-weight: 500;
-  }
-  
-  .timeCell {
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  
-  .timeCell.mandatory {
-    background-color: #dc2626;
-  }
-  
-  .timeCell.preferable {
-    background-color: #d97706;
   }
   
   .buttonGroup {
@@ -139,3 +111,144 @@
   .error i {
     font-size: 1.2rem;
   }
+
+
+  .loadingContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 40px;
+    font-size: 1.2rem;
+    color: #666;
+  }
+  
+  .loading i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    animation: spin 1s linear infinite;
+  }
+  
+  .errorAlert {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 12px;
+    border-radius: 4px;
+    margin: 1rem 0;
+    border: 1px solid #ffcdd2;
+  }
+  
+  .inputGroup {
+    margin-bottom: 1.5rem;
+  }
+  
+  .inputGroup label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #333;
+  }
+  
+  .subjectsSection {
+    margin: 2rem 0;
+  }
+  
+  .subjectsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .subjectCard {
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  
+  .subjectCard.selected {
+    background-color: #8b5cf6;
+    color: white;
+    border-color: #7c3aed;
+  }
+  
+  .availabilitySection {
+    margin: 2rem 0;
+  }
+  
+  .scheduleGrid {
+    overflow-x: auto;
+    margin-top: 1rem;
+  }
+  
+  .scheduleGrid table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .scheduleGrid th,
+  .scheduleGrid td {
+    padding: 8px;
+    text-align: center;
+  }
+  
+  .dayLabel {
+    font-weight: bold;
+    color: #333;
+  }
+  
+  .modeSelector {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  
+  .modeButton {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #f5f5f5;
+    transition: all 0.2s;
+  }
+  
+  .modeButton.active {
+    background-color: #8b5cf6;
+    color: white;
+    border-color: #7c3aed;
+  }
+  
+  .timeCell {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.2s;
+  }
+  
+  .timeCell.preferable {
+    background-color: yellowgreen;
+    border-color: #ffe0b2;
+  }
+  
+  .timeCell.mandatory {
+    background-color: red;
+    border-color: #ffcdd2;
+  }
+  
+  /* Optional: label inside the cell to indicate state */
+  .cellStateLabel {
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: white;
+    margin-top: 4px;
+  }
+  

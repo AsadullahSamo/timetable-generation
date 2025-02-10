@@ -154,3 +154,35 @@
   justify-content: space-between;
   margin-top: 2rem;
 }
+
+.errorAlert {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 1rem 0;
+  border: 1px solid #ffcdd2;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.loading i {
+  margin-right: 10px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.emptyState i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: #8b5cf6;
+}

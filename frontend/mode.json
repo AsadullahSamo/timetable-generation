@@ -1,0 +1,11 @@
+{
+    "mandatory": {
+        "Wed": ["8:00 AM"],
+        "Thu": ["8:00 AM"],
+        "Fri": ["8:00 AM"]
+    },
+    "preferable": {
+        "Mon": ["8:00 AM"],
+        "Tue": ["8:00 AM"]
+    }
+}
