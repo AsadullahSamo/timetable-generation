@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import styles from "./AddTeacher.module.css";
 import api from "../utils/api";
 
 const AddTeacher = () => {
@@ -29,11 +28,11 @@ const AddTeacher = () => {
   useEffect(() => {
     const fetchConfigAndSubjects = async () => {
       try {
-        const configRes = await api.get("/timetable/configs/");
+        const configRes = await api.get("/api/timetable/configs/");
         if (configRes.data.length > 0) {
           setTimetableConfig(configRes.data[0]);
         }
-        const subjectsRes = await api.get("/timetable/subjects/");
+        const subjectsRes = await api.get("/api/timetable/subjects/");
         setAllSubjects(subjectsRes.data);
       } catch (err) {
         setError("Failed to load configuration or subjects.");
@@ -44,50 +43,74 @@ const AddTeacher = () => {
     fetchConfigAndSubjects();
   }, []);
 
-  // If editing, fetch teacher data once configuration is loaded.
+  // Fetch teacher data if editing
   useEffect(() => {
-    if (!id || configLoading || !timetableConfig) return;
-    const fetchTeacherData = async () => {
-      setTeacherLoading(true);
+    const fetchTeacher = async () => {
+      if (!id) return;
       try {
-        const teacherRes = await api.get(`/timetable/teachers/${id}/`);
-        const teacher = teacherRes.data;
-        setName(teacher.name);
-        setEmail(teacher.email);
-        setSubjects(teacher.subjects);
-        setMaxLessons(teacher.max_lessons_per_day);
-        // Convert stored unavailable_periods (expected as arrays) to internal availabilityState.
-        // Our final data structure in the backend is expected as:
-        // { mandatory: { "Mon": [ "8:00 AM", "9:00 AM" ], ... }, preferable: { "Tue": [ "8:00 AM" ], ... } }
-        // We'll convert that into an object: { day: { periodIndex: mode, ... }, ... }
-        const internal = {};
-        if (teacher.unavailable_periods && timetableConfig.generated_periods) {
-          ["mandatory", "preferable"].forEach(mode => {
-            if (teacher.unavailable_periods[mode]) {
-              Object.entries(teacher.unavailable_periods[mode]).forEach(([day, times]) => {
-                // Ensure times is an array (if it's not, wrap it into an array)
-                const timesArray = Array.isArray(times) ? times : [times];
-                timesArray.forEach(time => {
-                  const dayPeriods = timetableConfig.generated_periods[day] || [];
-                  const index = dayPeriods.indexOf(time);
-                  if (index !== -1) {
-                    if (!internal[day]) internal[day] = {};
-                    internal[day][index] = mode;
-                  }
-                });
+        const { data } = await api.get(`/api/timetable/teachers/${id}/`);
+        setName(data.name);
+        setEmail(data.email);
+        setSubjects(data.subjects || []);
+        setMaxLessons(data.max_lessons_per_day);
+        // Convert availability data to internal state
+        const newState = {};
+        if (data.unavailable_periods) {
+          // Handle both mandatory and preferable slots
+          for (const mode of ['mandatory', 'preferable']) {
+            const dayData = data.unavailable_periods[mode] || {};
+            for (const [day, times] of Object.entries(dayData)) {
+              if (!newState[day]) newState[day] = {};
+              times.forEach(time => {
+                const periodIndex = timetableConfig?.generated_periods[day]?.findIndex(p => p === time);
+                if (periodIndex !== -1) {
+                  newState[day][periodIndex] = mode;
+                }
               });
             }
-          });
+          }
         }
-        setAvailabilityState(internal);
+        setAvailabilityState(newState);
       } catch (err) {
         setError("Failed to load teacher data.");
-      } finally {
-        setTeacherLoading(false);
       }
     };
-    fetchTeacherData();
-  }, [id, configLoading, timetableConfig]);
+    fetchTeacher();
+  }, [id, timetableConfig]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setTeacherLoading(true);
+
+    try {
+      const availability = convertAvailability();
+      const teacherData = {
+        name,
+        email,
+        subjects,
+        max_lessons_per_day: maxLessons,
+        unavailable_periods: availability
+      };
+      
+      console.log('Sending teacher data:', teacherData);
+      console.log('Availability structure:', JSON.stringify(availability, null, 2));
+
+      if (id) {
+        const response = await api.put(`/api/timetable/teachers/${id}/`, teacherData);
+        console.log('Update response:', response.data);
+      } else {
+        const response = await api.post("/api/timetable/teachers/", teacherData);
+        console.log('Create response:', response.data);
+      }
+      router.push("/components/TeachersConfig");
+    } catch (err) {
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.detail || "Failed to save teacher.");
+    } finally {
+      setTeacherLoading(false);
+    }
+  };
 
   // Combine loading states for rendering:
   const isLoading = configLoading || teacherLoading;
@@ -122,6 +145,8 @@ const AddTeacher = () => {
   const convertAvailability = () => {
     const result = { mandatory: {}, preferable: {} };
     if (!timetableConfig || !timetableConfig.generated_periods) return result;
+    
+    // Then populate the times
     for (const [day, periodsObj] of Object.entries(availabilityState)) {
       for (const [periodIndexStr, cellMode] of Object.entries(periodsObj)) {
         const periodIndex = parseInt(periodIndexStr, 10);
@@ -135,100 +160,88 @@ const AddTeacher = () => {
         }
       }
     }
-    return result;
-  };
 
-  const handleSave = async () => {
-    if (!name || !email) {
-      setError("Name and email are required");
-      return;
-    }
-    const formattedAvailability = convertAvailability();
-    const teacherData = {
-      name,
-      email,
-      subjects,
-      max_lessons_per_day: maxLessons,
-      unavailable_periods: formattedAvailability,
-    };
-    try {
-      if (id) {
-        await api.patch(`/timetable/teachers/${id}/`, teacherData);
-      } else {
-        await api.post("/timetable/teachers/", teacherData);
-      }
-      router.push("/components/TeachersConfig");
-    } catch (err) {
-      console.error("Save error:", err.response?.data);
-      setError(err.response?.data?.detail || "Failed to save teacher.");
-    }
+    return result;
   };
 
   if (isLoading) {
     return (
-      <div className={styles.loadingContainer}>
-        <i className="fas fa-spinner fa-spin"></i>
-        <p>Loading teacher data...</p>
+      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
+        <div className="flex-1 p-8 max-w-7xl mx-auto">
+          <div className="flex justify-center items-center h-full">
+            <div className="text-center text-purple-400 italic">
+              <i className="fas fa-spinner fa-spin text-4xl mb-4"></i>
+              <p>Loading...</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.sidebar}>
-        <div className={styles.menu}>
-          <div className={styles.menuItem}>School Config</div>
-          <div className={styles.menuItem}>Classes</div>
-          <div className={`${styles.menuItem} ${styles.active}`}>Teachers</div>
-          <div className={styles.menuItem}>Subjects</div>
-          <div className={styles.menuItem}>Timetable</div>
-        </div>
-      </div>
+    <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
+      <div className="flex-1 p-8 max-w-7xl mx-auto">
+        <h2 className="text-3xl text-gray-50 mb-8">
+          {id ? "Edit Teacher" : "Add New Teacher"}
+        </h2>
 
-      <div className={styles.mainContent}>
-        <h1>{id ? "Edit Teacher" : "New Teacher"}</h1>
-        {error && <div className={styles.errorAlert}>{error}</div>}
+        {error && (
+          <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
 
-        <div className={styles.formSection}>
-          <div className={styles.inputGroup}>
-            <input
-              type="text"
-              placeholder="Teacher name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={styles.inputField}
-            />
-            <input
-              type="email"
-              placeholder="Teacher email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={styles.inputField}
-            />
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h3 className="text-xl text-purple-400 mb-4">Basic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Name*</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Email*</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Max Lessons per Day*</label>
+                <input
+                  type="number"
+                  value={maxLessons}
+                  onChange={(e) => setMaxLessons(Math.max(1, parseInt(e.target.value) || 1))}
+                  min="1"
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                  required
+                />
+              </div>
+            </div>
           </div>
 
-          <div className={styles.inputGroup}>
-            <label>Max Lessons Per Day</label>
-            <input
-              type="number"
-              min="1"
-              max="8"
-              value={maxLessons}
-              onChange={(e) => setMaxLessons(parseInt(e.target.value, 10))}
-              className={styles.inputField}
-            />
-          </div>
-
-          <div className={styles.subjectsSection}>
-            <h3>Assigned Subjects</h3>
-            <div className={styles.subjectsGrid}>
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h3 className="text-xl text-purple-400 mb-4">Assigned Subjects</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {allSubjects.map((subject) => (
                 <div
                   key={subject.id}
-                  className={`${styles.subjectCard} ${
-                    subjects.includes(subject.id) ? styles.selected : ""
-                  }`}
                   onClick={() => handleSubjectChange(subject.id)}
+                  className={`p-4 text-center rounded-lg border cursor-pointer transition-colors ${
+                    subjects.includes(subject.id)
+                      ? "bg-purple-600 text-white border-purple-500"
+                      : "bg-gray-900 border-gray-700 hover:border-purple-500"
+                  }`}
                 >
                   {subject.name}
                 </div>
@@ -236,110 +249,94 @@ const AddTeacher = () => {
             </div>
           </div>
 
-          {/* Mode selector buttons */}
-          <div className={styles.modeSelector}>
-            <button
-              className={`${styles.modeButton} ${
-                activeMode === "preferable" ? styles.active : ""
-              }`}
-              onClick={() => setActiveMode("preferable")}
-            >
-              Preferable
-            </button>
-            <button
-              className={`${styles.modeButton} ${
-                activeMode === "mandatory" ? styles.active : ""
-              }`}
-              onClick={() => setActiveMode("mandatory")}
-            >
-              Mandatory
-            </button>
-          </div>
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h3 className="text-xl text-purple-400 mb-4">Availability</h3>
+            
+            <div className="flex gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => setActiveMode("preferable")}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  activeMode === "preferable"
+                    ? "bg-purple-600 text-white"
+                    : "bg-gray-900 text-gray-400 hover:text-purple-400"
+                }`}
+              >
+                Preferable
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMode("mandatory")}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  activeMode === "mandatory"
+                    ? "bg-purple-600 text-white"
+                    : "bg-gray-900 text-gray-400 hover:text-purple-400"
+                }`}
+              >
+                Mandatory
+              </button>
+            </div>
 
-          {/* Availability Grid */}
-          <div className={styles.availabilitySection}>
-            <h3>Unavailability</h3>
-            {timetableConfig?.generated_periods ? (
-              <div className={styles.scheduleGrid}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th></th>
-                      {Object.values(timetableConfig.generated_periods)[0].map(
-                        (_, index) => (
-                          <th key={index}>Period {index + 1}</th>
-                        )
-                      )}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-900">
+                    <th className="px-4 py-3 text-left border border-gray-700">Time</th>
+                    {timetableConfig?.days.map((day) => (
+                      <th key={day} className="px-4 py-3 text-left border border-gray-700">
+                        {day}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {timetableConfig?.generated_periods[timetableConfig?.days[0]]?.map((period, periodIndex) => (
+                    <tr key={periodIndex} className="hover:bg-gray-700/50">
+                      <td className="px-4 py-3 border border-gray-700">{period}</td>
+                      {timetableConfig.days.map((day) => (
+                        <td
+                          key={day}
+                          className="px-4 py-3 border border-gray-700 cursor-pointer"
+                          onClick={() => toggleTimeSlot(day, periodIndex)}
+                        >
+                          <div
+                            className={`w-6 h-6 rounded-full ${
+                              availabilityState[day]?.[periodIndex] === activeMode
+                                ? "bg-purple-600"
+                                : "bg-gray-700"
+                            }`}
+                          ></div>
+                        </td>
+                      ))}
                     </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(timetableConfig.generated_periods).map(
-                      ([day, periods]) => (
-                        <tr key={day}>
-                          <td className={styles.dayLabel}>{day}</td>
-                          {periods.map((time, periodIndex) => {
-                            const key = `${day}-${periodIndex}`;
-                            // Look up the mode for this cell in availabilityState.
-                            const cellMode =
-                              availabilityState[day] && availabilityState[day][periodIndex]
-                                ? availabilityState[day][periodIndex]
-                                : "none";
-                            return (
-                              <td
-                                key={key}
-                                className={`${styles.timeCell} ${
-                                  cellMode === "preferable"
-                                    ? styles.preferable
-                                    : cellMode === "mandatory"
-                                    ? styles.mandatory
-                                    : ""
-                                }`}
-                                onClick={() => toggleTimeSlot(day, periodIndex)}
-                              >
-                                {time}
-                                {/* {cellMode !== "none" && (
-                                  <div className={styles.cellStateLabel}>
-                                    {cellMode}
-                                  </div>
-                                )} */}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className={styles.error}>
-                <i className="fas fa-exclamation-triangle" />
-                <p>
-                  Valid timetable configuration not found. Please configure periods first.
-                </p>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className={styles.buttonGroup}>
+          <div className="flex justify-between">
             <button
-              className={styles.secondaryButton}
+              type="button"
               onClick={() => router.push("/components/TeachersConfig")}
+              className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
             >
               Cancel
             </button>
             <button
-              className={styles.primaryButton}
-              onClick={handleSave}
-              disabled={!timetableConfig?.generated_periods}
+              type="submit"
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={teacherLoading}
             >
-              {id ? "Update Teacher" : "Add Teacher"}
+              {teacherLoading ? "Saving..." : id ? "Update Teacher" : "Add Teacher"}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
 };
 
 export default AddTeacher;
+
+

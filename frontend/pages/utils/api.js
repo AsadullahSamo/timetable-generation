@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { getAuth } from 'firebase/auth';
+import { auth } from '../firebase/config';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -10,7 +10,6 @@ const api = axios.create({
 
 // Add Firebase token to all requests
 api.interceptors.request.use(async config => {
-  const auth = getAuth();
   const user = auth.currentUser;
   
   if (user) {

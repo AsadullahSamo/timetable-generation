@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import styles from './Signup.module.css';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useCreateUserWithEmailAndPassword } from 'react-firebase-hooks/auth';
@@ -72,32 +71,34 @@ export default function Signup() {
         />
       </Head>
 
-      <div className={styles.signupBody}>
-        <div className={styles.wrapper}>
-          <div className={styles.inner}>
-            <form className={styles.formStyle} onSubmit={handleSignUp}>
-              <h3 className={styles.headingStyle}>Registration Form</h3>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-r from-white via-gray-50 to-gray-200 p-0 m-0">
+        <div className="w-full flex justify-center items-center">
+          <div className="w-full max-w-2xl bg-white p-8 rounded-lg shadow-md">
+            <form onSubmit={handleSignUp} className="space-y-6">
+              <h3 className="text-2xl text-center text-gray-800 font-bold uppercase tracking-wider mb-8">
+                Registration Form
+              </h3>
 
-              <div className={styles.formGroup}>
-                <div className={styles.formWrapper}>
-                  <label className={styles.labelStyle}>
-                    <i className="fas fa-user"></i> First Name
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    <i className="fas fa-user text-red-600 mr-2"></i> First Name
                   </label>
                   <input
                     type="text"
-                    className={`${styles.inputStyle} ${styles.formControl}`}
+                    className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
                     placeholder="Enter your first name"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                   />
                 </div>
-                <div className={styles.formWrapper}>
-                  <label className={styles.labelStyle}>
-                    <i className="fas fa-user"></i> Last Name
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    <i className="fas fa-user text-red-600 mr-2"></i> Last Name
                   </label>
                   <input
                     type="text"
-                    className={`${styles.inputStyle} ${styles.formControl}`}
+                    className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
                     placeholder="Enter your last name"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
@@ -105,77 +106,85 @@ export default function Signup() {
                 </div>
               </div>
 
-              <div className={styles.formWrapper}>
-                <label className={styles.labelStyle}>
-                  <i className="fas fa-envelope"></i> Email
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  <i className="fas fa-envelope text-red-600 mr-2"></i> Email
                 </label>
                 <input
                   type="email"
-                  className={`${styles.inputStyle} ${styles.formControl}`}
+                  className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
 
-              <div className={styles.formWrapper}>
-                <label className={styles.labelStyle}>
-                  <i className="fas fa-lock"></i> Password
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  <i className="fas fa-lock text-red-600 mr-2"></i> Password
                 </label>
                 <input
                   type="password"
-                  className={`${styles.inputStyle} ${styles.formControl}`}
+                  className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
 
-              <div className={styles.formWrapper}>
-                <label className={styles.labelStyle}>
-                  <i className="fas fa-lock"></i> Confirm Password
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  <i className="fas fa-lock text-red-600 mr-2"></i> Confirm Password
                 </label>
                 <input
                   type="password"
-                  className={`${styles.inputStyle} ${styles.formControl}`}
+                  className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
                   placeholder="Confirm your password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
 
-              <button type="submit" className={styles.buttonStyle}>
-                <i className="fas fa-paper-plane"></i> Register Now
-              </button>
+              <div className="flex justify-center">
+                <button
+                  type="submit"
+                  className="w-[30%] py-3 px-6 bg-red-600 text-white rounded-full font-semibold flex items-center justify-center hover:bg-red-700 transition-colors duration-300 transform hover:scale-105"
+                >
+                  <i className="fas fa-paper-plane mr-2"></i> Register Now
+                </button>
+              </div>
             </form>
 
             {errMsg && (
-                <div className={styles.errorBox}>
-                  <p>{errMsg}</p>
-                </div>
-              )}
+              <div className="mt-4 bg-red-50 text-red-600 p-4 rounded-lg text-center font-semibold">
+                <p>{errMsg}</p>
+              </div>
+            )}
 
-            {loading && <p className={styles.loadingText}>Loading...</p>}
+            {loading && (
+              <p className="mt-4 text-blue-600 text-center font-semibold animate-pulse">
+                Loading...
+              </p>
+            )}
 
-
-            <div className={styles.separator}>
-              <span className={styles.separatorLine}></span>
-              <span className={styles.separatorText}>OR</span>
-              <span className={styles.separatorLine}></span>
+            <div className="flex items-center justify-center my-6">
+              <div className="flex-1 border-t border-gray-300"></div>
+              <span className="px-4 text-sm font-bold text-gray-700">OR</span>
+              <div className="flex-1 border-t border-gray-300"></div>
             </div>
 
-            <div className={styles.googleButton}>
+            <div className="flex justify-center">
               <button
-                className={styles.googleButtonStyle}
                 onClick={handleGoogleSignIn}
+                className="w-full py-3 px-4 bg-red-500 text-white rounded-lg font-semibold flex items-center justify-center hover:bg-red-600 transition-colors duration-300"
               >
-                <i className="fab fa-google"></i> Sign Up with Google
+                <i className="fab fa-google mr-2"></i> Sign Up with Google
               </button>
             </div>
 
-            <p className={styles.alreadyAccount}>
+            <p className="text-center text-sm text-gray-600 mt-4">
               Already have an account?{' '}
-              <Link href="/components/Login" className={styles.linkText}>
+              <Link href="/components/Login" className="text-red-600 hover:underline">
                 Login
               </Link>
             </p>
