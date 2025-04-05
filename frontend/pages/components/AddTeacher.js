@@ -1,6 +1,26 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import api from "../utils/api";
+import Head from "next/head";
+import Link from "next/link";
+import { 
+  User, 
+  Mail, 
+  Clock, 
+  BookOpen, 
+  Save, 
+  X, 
+  AlertCircle, 
+  Loader2, 
+  CalendarClock,
+  BookMarked,
+  Info,
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle
+} from 'lucide-react';
+import Navbar from "./Navbar";
 
 const AddTeacher = () => {
   const router = useRouter();
@@ -20,9 +40,11 @@ const AddTeacher = () => {
   const [configLoading, setConfigLoading] = useState(true);
   const [teacherLoading, setTeacherLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showTooltip, setShowTooltip] = useState("");
   
   // Active mode selector: "preferable" or "mandatory"
   const [activeMode, setActiveMode] = useState("preferable");
+  const [formErrors, setFormErrors] = useState({});
 
   // Fetch configuration and subjects once on mount.
   useEffect(() => {
@@ -63,7 +85,7 @@ const AddTeacher = () => {
               if (!newState[day]) newState[day] = {};
               times.forEach(time => {
                 const periodIndex = timetableConfig?.generated_periods[day]?.findIndex(p => p === time);
-                if (periodIndex !== -1) {
+                if (periodIndex !== -1 && periodIndex !== undefined) {
                   newState[day][periodIndex] = mode;
                 }
               });
@@ -75,12 +97,46 @@ const AddTeacher = () => {
         setError("Failed to load teacher data.");
       }
     };
-    fetchTeacher();
+    if (timetableConfig) {
+      fetchTeacher();
+    }
   }, [id, timetableConfig]);
+
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!name.trim()) {
+      errors.name = "Teacher name is required";
+    }
+    
+    if (!email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    
+    if (maxLessons < 1) {
+      errors.maxLessons = "Must be at least 1 lesson per day";
+    }
+    
+    if (subjects.length === 0) {
+      errors.subjects = "Please select at least one subject";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    
+    if (!validateForm()) {
+      // Scroll to the top to show errors
+      window.scrollTo(0, 0);
+      return;
+    }
+    
     setTeacherLoading(true);
 
     try {
@@ -92,21 +148,17 @@ const AddTeacher = () => {
         max_lessons_per_day: maxLessons,
         unavailable_periods: availability
       };
-      
-      console.log('Sending teacher data:', teacherData);
-      console.log('Availability structure:', JSON.stringify(availability, null, 2));
 
       if (id) {
-        const response = await api.put(`/api/timetable/teachers/${id}/`, teacherData);
-        console.log('Update response:', response.data);
+        await api.put(`/api/timetable/teachers/${id}/`, teacherData);
       } else {
-        const response = await api.post("/api/timetable/teachers/", teacherData);
-        console.log('Create response:', response.data);
+        await api.post("/api/timetable/teachers/", teacherData);
       }
-      router.push("/components/TeachersConfig");
+      router.push("/components/Teachers");
     } catch (err) {
       console.error('Error response:', err.response?.data);
       setError(err.response?.data?.detail || "Failed to save teacher.");
+      window.scrollTo(0, 0);
     } finally {
       setTeacherLoading(false);
     }
@@ -121,6 +173,14 @@ const AddTeacher = () => {
         ? prev.filter((id) => id !== subjectId)
         : [...prev, subjectId]
     );
+    
+    // Clear subject error when selection changes
+    if (formErrors.subjects) {
+      setFormErrors(prev => ({
+        ...prev,
+        subjects: undefined
+      }));
+    }
   };
 
   // Toggle the state for a given day and period index.
@@ -164,176 +224,320 @@ const AddTeacher = () => {
     return result;
   };
 
+  // Get time slot class based on its status
+  const getTimeSlotClass = (day, periodIndex) => {
+    const mode = availabilityState[day]?.[periodIndex];
+    
+    if (!mode) {
+      return "bg-background/80 border border-border hover:border-accent-cyan/30";
+    }
+    
+    if (mode === "mandatory") {
+      return "bg-red-500/20 border border-red-500/30 text-red-500";
+    }
+    
+    if (mode === "preferable") {
+      return "bg-amber-500/20 border border-amber-500/30 text-amber-500";
+    }
+    
+    return "bg-background/80 border border-border";
+  };
+
   if (isLoading) {
     return (
-      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
-        <div className="flex-1 p-8 max-w-7xl mx-auto">
-          <div className="flex justify-center items-center h-full">
-            <div className="text-center text-purple-400 italic">
-              <i className="fas fa-spinner fa-spin text-4xl mb-4"></i>
-              <p>Loading...</p>
+      <>
+        <Head>
+          <title>{id ? "Edit Teacher" : "Add New Teacher"}</title>
+        </Head>
+        <div className="flex min-h-screen bg-background text-primary font-sans">
+          <Navbar number={4} />
+          <div className="flex-1 p-8 max-w-7xl mx-auto">
+            <div className="flex justify-center items-center h-full">
+              <div className="text-center">
+                <Loader2 className="h-12 w-12 animate-spin text-accent-cyan mx-auto mb-4" />
+                <p className="text-secondary">Loading...</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
-      <div className="flex-1 p-8 max-w-7xl mx-auto">
-        <h2 className="text-3xl text-gray-50 mb-8">
-          {id ? "Edit Teacher" : "Add New Teacher"}
-        </h2>
-
-        {error && (
-          <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
-            {error}
+    <>
+      <Head>
+        <title>{id ? "Edit Teacher" : "Add New Teacher"}</title>
+      </Head>
+      <div className="flex min-h-screen bg-background text-primary font-sans">
+        <Navbar number={4} />
+        <div className="flex-1 p-8 max-w-7xl mx-auto">
+          <div className="mb-8">
+            <Link 
+              href="/components/Teachers"
+              className="flex items-center gap-2 text-secondary hover:text-primary transition-colors mb-4"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Teachers
+            </Link>
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
+              {id ? "Edit Teacher" : "Add New Teacher"}
+            </h1>
+            <p className="text-secondary/90">
+              {id ? "Update teacher information and availability" : "Create a new teacher and set their availability"}
+            </p>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-xl text-purple-400 mb-4">Basic Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Name*</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                  required
-                />
+          {error && (
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <p className="text-red-500 text-sm font-medium">{error}</p>
+            </div>
+          )}
+          
+          {formErrors.subjects && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-6 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <p className="text-amber-500 text-sm font-medium">{formErrors.subjects}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
+                  <User className="h-5 w-5 text-accent-cyan" />
+                  Basic Information
+                </h2>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="text-secondary hover:text-primary transition-colors"
+                    onMouseEnter={() => setShowTooltip("basic")}
+                    onMouseLeave={() => setShowTooltip("")}
+                  >
+                    <Info className="h-5 w-5" />
+                  </button>
+                  {showTooltip === "basic" && (
+                    <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
+                      Enter teacher's name, email, and maximum number of lessons they can teach per day.
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Email*</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Max Lessons per Day*</label>
-                <input
-                  type="number"
-                  value={maxLessons}
-                  onChange={(e) => setMaxLessons(Math.max(1, parseInt(e.target.value) || 1))}
-                  min="1"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Name*</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (formErrors.name) {
+                          setFormErrors({...formErrors, name: undefined});
+                        }
+                      }}
+                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.name ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                      placeholder="Enter teacher name"
+                      required
+                    />
+                  </div>
+                  {formErrors.name && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Email*</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (formErrors.email) {
+                          setFormErrors({...formErrors, email: undefined});
+                        }
+                      }}
+                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.email ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                      placeholder="email@example.com"
+                      required
+                    />
+                  </div>
+                  {formErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Max Lessons per Day*</label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
+                    <input
+                      type="number"
+                      value={maxLessons}
+                      onChange={(e) => {
+                        setMaxLessons(Math.max(1, parseInt(e.target.value) || 1));
+                        if (formErrors.maxLessons) {
+                          setFormErrors({...formErrors, maxLessons: undefined});
+                        }
+                      }}
+                      min="1"
+                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.maxLessons ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                      required
+                    />
+                  </div>
+                  {formErrors.maxLessons && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.maxLessons}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-xl text-purple-400 mb-4">Assigned Subjects</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {allSubjects.map((subject) => (
-                <div
-                  key={subject.id}
-                  onClick={() => handleSubjectChange(subject.id)}
-                  className={`p-4 text-center rounded-lg border cursor-pointer transition-colors ${
-                    subjects.includes(subject.id)
-                      ? "bg-purple-600 text-white border-purple-500"
-                      : "bg-gray-900 border-gray-700 hover:border-purple-500"
+            <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
+                  <BookMarked className="h-5 w-5 text-accent-cyan" />
+                  Assigned Subjects
+                </h2>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="text-secondary hover:text-primary transition-colors"
+                    onMouseEnter={() => setShowTooltip("subjects")}
+                    onMouseLeave={() => setShowTooltip("")}
+                  >
+                    <Info className="h-5 w-5" />
+                  </button>
+                  {showTooltip === "subjects" && (
+                    <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
+                      Select all subjects that this teacher can teach. Click on a subject to select/deselect it.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {allSubjects.map((subject) => (
+                  <div
+                    key={subject.id}
+                    onClick={() => handleSubjectChange(subject.id)}
+                    className={`p-4 text-center rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                      subjects.includes(subject.id)
+                        ? "bg-accent-cyan/10 border-accent-cyan text-primary shadow-sm"
+                        : "bg-background/80 border-border hover:border-accent-cyan/30"
+                    }`}
+                  >
+                    <BookOpen className={`h-5 w-5 ${subjects.includes(subject.id) ? 'text-accent-cyan' : 'text-secondary/70'}`} />
+                    <span>{subject.name}</span>
+                    {subjects.includes(subject.id) && (
+                      <CheckCircle2 className="h-4 w-4 text-accent-cyan" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-accent-cyan" />
+                  Availability
+                </h2>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="text-secondary hover:text-primary transition-colors"
+                    onMouseEnter={() => setShowTooltip("availability")}
+                    onMouseLeave={() => setShowTooltip("")}
+                  >
+                    <Info className="h-5 w-5" />
+                  </button>
+                  {showTooltip === "availability" && (
+                    <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
+                      <p>Define when the teacher is unavailable or has preferred teaching times:</p>
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Click a time slot to mark it</li>
+                        <li><span className="text-red-500">Red</span>: Unavailable times</li>
+                        <li><span className="text-amber-500">Yellow</span>: Preferred times</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setActiveMode("mandatory")}
+                  className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-colors ${
+                    activeMode === "mandatory"
+                      ? "bg-red-500/20 text-red-500 border border-red-500/30 font-medium"
+                      : "bg-background/80 text-secondary border border-border"
                   }`}
                 >
-                  {subject.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-xl text-purple-400 mb-4">Availability</h3>
-            
-            <div className="flex gap-4 mb-6">
-              <button
-                type="button"
-                onClick={() => setActiveMode("preferable")}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  activeMode === "preferable"
-                    ? "bg-purple-600 text-white"
-                    : "bg-gray-900 text-gray-400 hover:text-purple-400"
-                }`}
-              >
-                Preferable
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveMode("mandatory")}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  activeMode === "mandatory"
-                    ? "bg-purple-600 text-white"
-                    : "bg-gray-900 text-gray-400 hover:text-purple-400"
-                }`}
-              >
-                Mandatory
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-900">
-                    <th className="px-4 py-3 text-left border border-gray-700">Time</th>
-                    {timetableConfig?.days.map((day) => (
-                      <th key={day} className="px-4 py-3 text-left border border-gray-700">
-                        {day}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {timetableConfig?.generated_periods[timetableConfig?.days[0]]?.map((period, periodIndex) => (
-                    <tr key={periodIndex} className="hover:bg-gray-700/50">
-                      <td className="px-4 py-3 border border-gray-700">{period}</td>
-                      {timetableConfig.days.map((day) => (
-                        <td
-                          key={day}
-                          className="px-4 py-3 border border-gray-700 cursor-pointer"
-                          onClick={() => toggleTimeSlot(day, periodIndex)}
-                        >
-                          <div
-                            className={`w-6 h-6 rounded-full ${
-                              availabilityState[day]?.[periodIndex] === activeMode
-                                ? "bg-purple-600"
-                                : "bg-gray-700"
-                            }`}
-                          ></div>
-                        </td>
-                      ))}
-                    </tr>
+                  <X className="h-4 w-4" />
+                  Unavailable Times
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveMode("preferable")}
+                  className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-colors ${
+                    activeMode === "preferable"
+                      ? "bg-amber-500/20 text-amber-500 border border-amber-500/30 font-medium"
+                      : "bg-background/80 text-secondary border border-border"
+                  }`}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Preferred Times
+                </button>
+              </div>
+              
+              {timetableConfig && timetableConfig.generated_periods ? (
+                <div className="space-y-6">
+                  {Object.entries(timetableConfig.generated_periods).map(([day, times]) => (
+                    <div key={day}>
+                      <h3 className="text-md font-medium text-primary mb-3">{day}</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {times.map((time, idx) => (
+                          <button
+                            key={`${day}-${idx}`}
+                            type="button"
+                            onClick={() => toggleTimeSlot(day, idx)}
+                            className={`py-3 px-4 rounded-lg text-center transition-colors ${getTimeSlotClass(day, idx)}`}
+                          >
+                            <span className="text-sm">{time}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-secondary">
+                  No timetable configuration available. Please set up your school schedule first.
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="flex justify-between">
-            <button
-              type="button"
-              onClick={() => router.push("/components/TeachersConfig")}
-              className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={teacherLoading}
-            >
-              {teacherLoading ? "Saving..." : id ? "Update Teacher" : "Add Teacher"}
-            </button>
-          </div>
-        </form>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={teacherLoading}
+              >
+                {teacherLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Save className="h-5 w-5" />
+                )}
+                {id ? "Update Teacher" : "Save Teacher"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

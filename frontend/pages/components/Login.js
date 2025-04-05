@@ -5,30 +5,28 @@ import Head from 'next/head';
 import { useSignInWithEmailAndPassword } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase/config';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { Mail, Lock, ArrowRight, Calendar } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errMsg, setErrMsg] = useState('');
-  
   const [user, loading, error] = useSignInWithEmailAndPassword(auth);
   const router = useRouter();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setErrMsg(''); 
+    setErrMsg('');
 
     try {
-      const res = await signInWithEmailAndPassword(auth, email, password);  
+      const res = await signInWithEmailAndPassword(auth, email, password);
       router.push('/components/SchoolConfig');
-    }
-    catch (e) {
-      if(e.message === 'Firebase: Error (auth/missing-password).') {
+    } catch (e) {
+      if (e.message === 'Firebase: Error (auth/missing-password).') {
         setErrMsg('Please enter a password.');
-      } else if(e.message === 'Firebase: Error (auth/invalid-email).') {
+      } else if (e.message === 'Firebase: Error (auth/invalid-email).') {
         setErrMsg('Please enter a valid email address.');
-      } else if(e.message === 'Firebase: Error (auth/invalid-credential).') {
+      } else if (e.message === 'Firebase: Error (auth/invalid-credential).') {
         setErrMsg('Invalid credentials. Please try again.');
       }
     }
@@ -59,87 +57,104 @@ export default function Login() {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
       </Head>
 
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-r from-white via-gray-50 to-gray-200 p-0 m-0">
-        <div className="w-full flex justify-center items-center">
-          <div className="w-full max-w-md bg-white p-10 rounded-lg shadow-md">
-            <div className="space-y-6">
-              <h3 className="text-2xl text-center text-gray-800 font-semibold">Login to Your Account</h3>
+      <div className="min-h-screen bg-background text-primary font-sans">
+        {/* Background Effects */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-accent-pink/10 rounded-full blur-[120px] animate-pulse-slow animation-delay-4000"></div>
+        </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-gray-700">
-                  <i className="fas fa-envelope mr-2"></i> Email
-                </label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-gray-700">
-                  <i className="fas fa-lock mr-2"></i> Password
-                </label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-
-              <div className="text-right">
-                <Link href="/forgot-password" className="text-sm text-red-600 hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-
-              <button 
-                className="w-full py-3 px-4 bg-red-600 text-white rounded-lg font-bold flex items-center justify-center hover:bg-red-700 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={loading} 
-                onClick={handleLogin}
-              >
-                {loading ? (
-                  <i className="fas fa-spinner fa-spin mr-2"></i>
-                ) : (
-                  <i className="fas fa-sign-in-alt mr-2"></i>
-                )}
-                Login
-              </button>
-
-              {errMsg && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-center font-bold">
-                  <p>{errMsg}</p>
+        <div className="relative z-10 w-full min-h-screen flex justify-center items-center p-4">
+          <div className="w-full max-w-md">
+            {/* Logo */}
+            <div className="mb-8 text-center">
+              <div className="relative h-16 w-16 mx-auto mb-4">
+                <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan to-accent-pink rounded-2xl blur opacity-40"></div>
+                <div className="relative bg-surface h-full w-full rounded-2xl flex items-center justify-center border border-border">
+                  <Calendar className="h-8 w-8 text-accent-cyan" />
                 </div>
-              )}
-
-              {loading && (
-                <p className="text-blue-600 text-center font-bold animate-pulse">
-                  Loading...
-                </p>
-              )}
-              
-              <div className="flex items-center justify-center my-6">
-                <div className="flex-1 border-t border-gray-300"></div>
-                <span className="px-4 text-sm font-bold text-gray-700">OR</span>
-                <div className="flex-1 border-t border-gray-300"></div>
               </div>
+              <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end">
+                Timetable Generator
+              </h1>
+              <p className="text-secondary/90 mt-2 font-medium">Sign in to your account</p>
+            </div>
 
-              <div className="flex justify-center">
-                <button className="w-full py-3 px-4 bg-red-500 text-white rounded-lg font-bold flex items-center justify-center hover:bg-red-600 transition-colors duration-300">
-                  <i className="fab fa-google mr-2"></i> Sign In with Google
+            {/* Login Form */}
+            <div className="bg-surface/95 backdrop-blur-sm p-8 rounded-2xl border border-border shadow-soft">
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Email</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-secondary" />
+                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-secondary" />
+                    </div>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm text-accent-cyan hover:text-accent-cyan/80 transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+                >
+                  {loading ? (
+                    <div className="h-5 w-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      Sign In
+                      <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
                 </button>
-              </div>
 
-              <p className="text-center text-sm text-gray-600">
-                Don't have an account?{' '}
-                <Link href="/components/Signup" className="text-red-600 hover:underline">
+                {errMsg && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <p className="text-red-500 text-sm text-center font-medium">{errMsg}</p>
+                  </div>
+                )}
+              </form>
+
+              <div className="mt-6 flex items-center justify-center space-x-2 text-sm">
+                <span className="text-secondary">Don't have an account?</span>
+                <Link
+                  href="/components/Signup"
+                  className="text-accent-cyan hover:text-accent-cyan/80 transition-colors font-medium"
+                >
                   Sign Up
                 </Link>
-              </p>
+              </div>
             </div>
           </div>
         </div>

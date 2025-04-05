@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCreateUserWithEmailAndPassword } from 'react-firebase-hooks/auth';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { Mail, Lock, User, Calendar, ArrowRight } from 'lucide-react';
 
 export default function Signup() {
   const [firstName, setFirstName] = useState('');
@@ -71,123 +72,146 @@ export default function Signup() {
         />
       </Head>
 
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-r from-white via-gray-50 to-gray-200 p-0 m-0">
-        <div className="w-full flex justify-center items-center">
-          <div className="w-full max-w-2xl bg-white p-8 rounded-lg shadow-md">
-            <form onSubmit={handleSignUp} className="space-y-6">
-              <h3 className="text-2xl text-center text-gray-800 font-bold uppercase tracking-wider mb-8">
-                Registration Form
-              </h3>
+      <div className="min-h-screen bg-background text-primary font-sans">
+        {/* Background Effects */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-accent-pink/10 rounded-full blur-[120px] animate-pulse-slow animation-delay-4000"></div>
+        </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700">
-                    <i className="fas fa-user text-red-600 mr-2"></i> First Name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                    placeholder="Enter your first name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700">
-                    <i className="fas fa-user text-red-600 mr-2"></i> Last Name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                    placeholder="Enter your last name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                  />
+        <div className="relative z-10 w-full min-h-screen flex justify-center items-center p-4">
+          <div className="w-full max-w-2xl">
+            {/* Logo */}
+            <div className="mb-8 text-center">
+              <div className="relative h-16 w-16 mx-auto mb-4">
+                <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan to-accent-pink rounded-2xl blur opacity-40"></div>
+                <div className="relative bg-surface h-full w-full rounded-2xl flex items-center justify-center border border-border">
+                  <Calendar className="h-8 w-8 text-accent-cyan" />
                 </div>
               </div>
+              <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end">
+                Create Account
+              </h1>
+              <p className="text-secondary/90 mt-2 font-medium">Sign up to get started</p>
+            </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  <i className="fas fa-envelope text-red-600 mr-2"></i> Email
-                </label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
+            {/* Signup Form */}
+            <div className="bg-surface/95 backdrop-blur-sm p-8 rounded-2xl border border-border shadow-soft">
+              <form onSubmit={handleSignUp} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-secondary">First Name</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        placeholder="Enter your first name"
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  <i className="fas fa-lock text-red-600 mr-2"></i> Password
-                </label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-secondary">Last Name</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        placeholder="Enter your last name"
+                      />
+                    </div>
+                  </div>
+                </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  <i className="fas fa-lock text-red-600 mr-2"></i> Confirm Password
-                </label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-3 pl-10 rounded-full border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-colors"
-                  placeholder="Confirm your password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Email</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-secondary" />
+                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
 
-              <div className="flex justify-center">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-secondary" />
+                    </div>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Confirm Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-secondary" />
+                    </div>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      placeholder="Confirm your password"
+                    />
+                  </div>
+                </div>
+
                 <button
                   type="submit"
-                  className="w-[30%] py-3 px-6 bg-red-600 text-white rounded-full font-semibold flex items-center justify-center hover:bg-red-700 transition-colors duration-300 transform hover:scale-105"
+                  disabled={loading}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
                 >
-                  <i className="fas fa-paper-plane mr-2"></i> Register Now
+                  {loading ? (
+                    <div className="h-5 w-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      Create Account
+                      <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
                 </button>
+
+                {errMsg && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <p className="text-red-500 text-sm text-center font-medium">{errMsg}</p>
+                  </div>
+                )}
+              </form>
+
+              <div className="mt-6 flex items-center justify-center space-x-2 text-sm">
+                <span className="text-secondary">Already have an account?</span>
+                <Link
+                  href="/components/Login"
+                  className="text-accent-cyan hover:text-accent-cyan/80 transition-colors font-medium"
+                >
+                  Sign In
+                </Link>
               </div>
-            </form>
-
-            {errMsg && (
-              <div className="mt-4 bg-red-50 text-red-600 p-4 rounded-lg text-center font-semibold">
-                <p>{errMsg}</p>
-              </div>
-            )}
-
-            {loading && (
-              <p className="mt-4 text-blue-600 text-center font-semibold animate-pulse">
-                Loading...
-              </p>
-            )}
-
-            <div className="flex items-center justify-center my-6">
-              <div className="flex-1 border-t border-gray-300"></div>
-              <span className="px-4 text-sm font-bold text-gray-700">OR</span>
-              <div className="flex-1 border-t border-gray-300"></div>
             </div>
-
-            <div className="flex justify-center">
-              <button
-                onClick={handleGoogleSignIn}
-                className="w-full py-3 px-4 bg-red-500 text-white rounded-lg font-semibold flex items-center justify-center hover:bg-red-600 transition-colors duration-300"
-              >
-                <i className="fab fa-google mr-2"></i> Sign Up with Google
-              </button>
-            </div>
-
-            <p className="text-center text-sm text-gray-600 mt-4">
-              Already have an account?{' '}
-              <Link href="/components/Login" className="text-red-600 hover:underline">
-                Login
-              </Link>
-            </p>
           </div>
         </div>
       </div>
