@@ -3,9 +3,9 @@ import { useRouter } from 'next/router';
 import Navbar from './Navbar';
 import api from "../utils/api";
 
-const TimetableDisplay = () => {
+const Timetable = () => {
   const router = useRouter();
-  const [timetable, setTimetable] = useState([]);
+  const [timetableData, setTimetableData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -13,10 +13,11 @@ const TimetableDisplay = () => {
     const fetchTimetable = async () => {
       try {
         const { data } = await api.get("/api/timetable/latest/");
-        if (!data || !Array.isArray(data)) {
+        if (!data || !data.entries || !Array.isArray(data.entries)) {
           throw new Error("Invalid timetable data received");
         }
-        setTimetable(data);
+        console.log("Received timetable data:", data); // Debug log
+        setTimetableData(data);
       } catch (err) {
         setError("Failed to load timetable. Please try again.");
         console.error("Timetable fetch error:", err);
@@ -27,12 +28,9 @@ const TimetableDisplay = () => {
     fetchTimetable();
   }, []);
 
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  const timeSlots = ['8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'];
-
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
+      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
         <Navbar number={7} />
         <div className="flex-1 p-8 max-w-7xl">
           <div className="flex justify-center items-center h-full">
@@ -48,7 +46,7 @@ const TimetableDisplay = () => {
 
   if (error) {
     return (
-      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
+      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
         <Navbar number={7} />
         <div className="flex-1 p-8 max-w-7xl">
           <h1 className="text-3xl text-gray-50 mb-8">Generated Timetable</h1>
@@ -68,29 +66,34 @@ const TimetableDisplay = () => {
     );
   }
 
+  if (!timetableData) return null;
+
   return (
-    <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
+    <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
       <Navbar number={7} />
       
       <div className="flex-1 p-8 max-w-7xl">
         <h1 className="text-3xl text-gray-50 mb-8">Generated Timetable</h1>
         
-        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-          <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-[1px] bg-gray-700">
+        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
+          <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-[1px] bg-gray-700 min-w-[1000px]">
             <div className="bg-gray-800 p-4 text-center sticky left-0 z-10"></div>
-            {days.map(day => (
+            {timetableData.days.map(day => (
               <div key={day} className="bg-gray-800 p-4 text-center font-semibold border-b-2 border-purple-500">
                 {day}
               </div>
             ))}
 
-            {timeSlots.map((timeSlot, index) => (
+            {timetableData.timeSlots.map((timeSlot, index) => (
               <React.Fragment key={index}>
                 <div className="bg-gray-800 p-4 text-center sticky left-0 z-10">
                   {timeSlot}
                 </div>
-                {days.map(day => {
-                  const entry = timetable.find(e => e.day === day && e.period === index + 1);
+                {timetableData.days.map(day => {
+                  const entry = timetableData.entries.find(
+                    e => e.day === day && e.period === (index + 1)
+                  );
+                  console.log(`Looking for entry: day=${day}, period=${index + 1}, found:`, entry); // Debug log
                   return (
                     <div 
                       key={`${day}-${index}`} 
@@ -103,6 +106,7 @@ const TimetableDisplay = () => {
                           <div className="font-medium text-purple-400">{entry.subject}</div>
                           <div className="text-sm text-blue-400">{entry.teacher}</div>
                           <div className="text-xs text-emerald-400">{entry.classroom}</div>
+                          <div className="text-xs text-gray-400">{entry.class_group}</div>
                         </>
                       )}
                     </div>
@@ -126,4 +130,4 @@ const TimetableDisplay = () => {
   );
 };
 
-export default TimetableDisplay;
+export default Timetable;

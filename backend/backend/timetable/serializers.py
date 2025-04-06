@@ -2,6 +2,7 @@ from rest_framework import serializers
 from users.models import User
 from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup
 # from users.serializers import UserSerializer
+from datetime import datetime
 
 
 
@@ -69,7 +70,26 @@ class TimetableSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TimetableEntry
-        fields = ['day', 'period', 'subject', 'teacher', 'classroom', 'start_time', 'end_time']
+        fields = ['day', 'period', 'subject', 'teacher', 'classroom', 'class_group', 'start_time', 'end_time', 'is_practical']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Format subject name with practical indicator
+        if data['is_practical']:
+            data['display_text'] = f"{data['subject']} (PR)"
+        else:
+            data['display_text'] = str(data['subject'])
+            
+        # Add room/lab info
+        if data['classroom']:
+            data['location'] = str(data['classroom'])
+        
+        # Format time slot
+        start = datetime.strptime(data['start_time'], '%H:%M:%S').strftime('%I:%M')
+        end = datetime.strptime(data['end_time'], '%H:%M:%S').strftime('%I:%M')
+        data['time_slot'] = f"{start} to {end}"
+        
+        return data
 
 class ConfigSerializer(serializers.ModelSerializer):
     start_time = serializers.TimeField(
@@ -85,3 +105,20 @@ class ClassGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClassGroup
         fields = '__all__'
+
+class SubjectDetailsSerializer(serializers.ModelSerializer):
+    teachers = serializers.SerializerMethodField()
+    credit_hours = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subject
+        fields = ['code', 'name', 'credit_hours', 'teachers']
+
+    def get_teachers(self, obj):
+        teachers = Teacher.objects.filter(subjects=obj)
+        return [{'name': t.name, 'is_practical': False} for t in teachers]
+
+    def get_credit_hours(self, obj):
+        theory = 3 if obj.credits >= 3 else 2
+        practical = 1 if obj.is_practical else 0
+        return f"{theory}+{practical}"

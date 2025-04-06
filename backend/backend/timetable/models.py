@@ -14,6 +14,7 @@ class ScheduleConfig(models.Model):
     start_time = models.TimeField()
     lesson_duration = models.PositiveIntegerField()
     constraints = models.JSONField(default=dict)
+    class_groups = models.JSONField(default=list)
 
     def save(self, *args, **kwargs):
         # Ensure periods is always stored as array of strings
@@ -24,6 +25,15 @@ class ScheduleConfig(models.Model):
                 self.periods = []
         elif not isinstance(self.periods, list):
             self.periods = []
+            
+        # Ensure class_groups is always stored as array of strings
+        if isinstance(self.class_groups, str):
+            try:
+                self.class_groups = json.loads(self.class_groups)
+            except json.JSONDecodeError:
+                self.class_groups = []
+        elif not isinstance(self.class_groups, list):
+            self.class_groups = []
             
         super().save(*args, **kwargs)
 
@@ -57,6 +67,7 @@ class Subject(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
     credits = models.PositiveIntegerField()
+    is_practical = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -73,11 +84,18 @@ class Teacher(models.Model):
     
 
 class TimetableEntry(models.Model):
-    day = models.CharField(max_length=10)
-    period = models.PositiveIntegerField()
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
-    classroom = models.ForeignKey(Classroom, on_delete=models.CASCADE)
+    day = models.CharField(max_length=20)
+    period = models.IntegerField()
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True)
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, null=True, blank=True)
+    classroom = models.ForeignKey(Classroom, on_delete=models.CASCADE, null=True, blank=True)
     class_group = models.CharField(max_length=50)
     start_time = models.TimeField()
     end_time = models.TimeField()
+    is_practical = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['day', 'period']
+
+    def __str__(self):
+        return f"{self.day} Period {self.period}: {self.subject} {'(PR)' if self.is_practical else ''} - {self.teacher} - {self.classroom}"

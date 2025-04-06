@@ -200,19 +200,11 @@ const Constraints = () => {
         constraints: constraints.filter(c => c.active)
       });
       
-      if (response.data.task_id) {
-        // Poll for task completion
-        const pollResult = async () => {
-          const task = await api.get(`/api/timetable/tasks/${response.data.task_id}/`);
-          if (task.data.status === 'SUCCESS') {
-            router.push('/components/TimetableDisplay');
-          } else if (task.data.status === 'FAILURE') {
-            throw new Error('Generation failed');
-          } else {
-            setTimeout(pollResult, 1000);
-          }
-        };
-        await pollResult();
+      if (response.data.message === 'Timetable generated successfully') {
+        // Navigate directly to the timetable page with correct component name
+        router.push('/components/Timetable');
+      } else {
+        throw new Error('Failed to generate timetable');
       }
     } catch (error) {
       setError('Timetable generation failed: ' + error.message);
@@ -378,7 +370,10 @@ const Constraints = () => {
               disabled={loading}
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
               ) : (
                 <>
                   Generate Timetable

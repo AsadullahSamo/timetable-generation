@@ -19,8 +19,9 @@ def generate_timetable(config_id):
             day=entry_data['day'],
             period=entry_data['period'],
             subject=Subject.objects.get(name=entry_data['subject']),
-            teacher=Teacher.objects.get(user__username=entry_data['teacher']),
+            teacher=Teacher.objects.get(name=entry_data['teacher']),
             classroom=Classroom.objects.get(name=entry_data['classroom']),
+            class_group=entry_data['class_group'],
             start_time=entry_data['start_time'],
             end_time=entry_data['end_time']
         ))
