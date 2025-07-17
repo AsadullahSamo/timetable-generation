@@ -19,7 +19,7 @@ export default function Login() {
 
     try {
       const response = await api.post('/api/auth/login/', {
-        email,
+        username: email, // Can be email or username
         password
       });
 

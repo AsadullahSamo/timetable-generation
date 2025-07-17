@@ -7,6 +7,7 @@ import api from '../utils/api';
 export default function Signup() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,15 +32,18 @@ export default function Signup() {
 
     try {
       const response = await api.post('/api/auth/register/', {
+        username,
         first_name: firstName,
         last_name: lastName,
         email,
-        password
+        password,
+        password_confirm: confirmPassword
       });
 
       // Clear form on success
       setFirstName('');
       setLastName('');
+      setUsername('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
@@ -62,18 +66,7 @@ export default function Signup() {
       setLoading(false);
     }
   };
-    } catch (err) {
-      setErrMsg('Failed to sign in with Google.');
-    }
-  };
 
-  useEffect(() => {
-    if (error) {
-      const errorMessage =
-        firebaseErrorMessages[error.code] || firebaseErrorMessages.default;
-      setErrMsg(errorMessage);
-    }
-  }, [error]);
 
   return (
     <>
@@ -141,6 +134,23 @@ export default function Signup() {
                         placeholder="Enter your last name"
                       />
                     </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Username</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-secondary" />
+                    </div>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      placeholder="Choose a username"
+                      required
+                    />
                   </div>
                 </div>
 
