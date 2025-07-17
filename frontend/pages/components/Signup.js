@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useCreateUserWithEmailAndPassword } from 'react-firebase-hooks/auth';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth } from '../firebase/config';
 import { Mail, Lock, User, Calendar, ArrowRight } from 'lucide-react';
+import api from '../utils/api';
 
 export default function Signup() {
   const [firstName, setFirstName] = useState('');
@@ -13,43 +11,57 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errMsg, setErrMsg] = useState('');
-  const [createUserWithEmailAndPassword, user, loading, error] =
-    useCreateUserWithEmailAndPassword(auth);
-
-  const firebaseErrorMessages = {
-    'auth/email-already-in-use': 'This email address is already in use. Please try logging in.',
-    'auth/weak-password': 'Password should be at least 6 characters long.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    default: 'An error occurred. Please try again.',
-  };
+  const [loading, setLoading] = useState(false);
 
   const handleSignUp = async (e) => {
     e.preventDefault();
+    setErrMsg('');
 
     if (password !== confirmPassword) {
       setErrMsg('Passwords do not match.');
       return;
     }
 
-    try {
-      await createUserWithEmailAndPassword(email, password);
+    if (password.length < 6) {
+      setErrMsg('Password should be at least 6 characters long.');
+      return;
+    }
 
+    setLoading(true);
+
+    try {
+      const response = await api.post('/api/auth/register/', {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password
+      });
+
+      // Clear form on success
       setFirstName('');
       setLastName('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
       setErrMsg('');
-    } catch (err) {
-      console.error('Unexpected Error:', err.message);
+
+      // Optionally redirect to login or auto-login
+      alert('Account created successfully! Please log in.');
+
+    } catch (error) {
+      if (error.response?.data?.email) {
+        setErrMsg('This email address is already in use. Please try logging in.');
+      } else if (error.response?.data?.password) {
+        setErrMsg(error.response.data.password[0]);
+      } else if (error.response?.data?.detail) {
+        setErrMsg(error.response.data.detail);
+      } else {
+        setErrMsg('An error occurred. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
-
-  const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      const result = await signInWithPopup(auth, provider);
-      console.log('Google User:', result.user);
     } catch (err) {
       setErrMsg('Failed to sign in with Google.');
     }

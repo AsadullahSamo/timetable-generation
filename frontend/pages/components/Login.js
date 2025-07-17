@@ -2,54 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
-import { useSignInWithEmailAndPassword } from 'react-firebase-hooks/auth';
-import { auth } from '../firebase/config';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Mail, Lock, ArrowRight, Calendar } from 'lucide-react';
+import api from '../utils/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errMsg, setErrMsg] = useState('');
-  const [user, loading, error] = useSignInWithEmailAndPassword(auth);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrMsg('');
+    setLoading(true);
 
     try {
-      const res = await signInWithEmailAndPassword(auth, email, password);
+      const response = await api.post('/api/auth/login/', {
+        email,
+        password
+      });
+
+      // Store JWT tokens
+      localStorage.setItem('access_token', response.data.access);
+      localStorage.setItem('refresh_token', response.data.refresh);
+
       router.push('/components/SchoolConfig');
-    } catch (e) {
-      if (e.message === 'Firebase: Error (auth/missing-password).') {
-        setErrMsg('Please enter a password.');
-      } else if (e.message === 'Firebase: Error (auth/invalid-email).') {
-        setErrMsg('Please enter a valid email address.');
-      } else if (e.message === 'Firebase: Error (auth/invalid-credential).') {
+    } catch (error) {
+      if (error.response?.data?.detail) {
+        setErrMsg(error.response.data.detail);
+      } else if (error.response?.status === 401) {
         setErrMsg('Invalid credentials. Please try again.');
+      } else {
+        setErrMsg('An error occurred. Please try again.');
       }
+    } finally {
+      setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (error) {
-      switch (error.code) {
-        case 'auth/user-not-found':
-          setErrMsg('No account found with this email.');
-          break;
-        case 'auth/wrong-password':
-          setErrMsg('Incorrect password.');
-          break;
-        case 'auth/invalid-email':
-          setErrMsg('Please enter a valid email address.');
-          break;
-        default:
-          setErrMsg('An error occurred. Please try again.');
-          break;
-      }
-    }
-  }, [error]);
 
   return (
     <>

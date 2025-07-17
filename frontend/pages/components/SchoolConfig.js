@@ -144,7 +144,7 @@ const SchoolConfig = () => {
       });
 
       if (response.status === 201) {
-        router.push("/components/ClassesConfig");
+        router.push("/components/Classes");
       }
     } catch (error) {
       if (error.response) {
