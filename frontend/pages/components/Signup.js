@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { Mail, Lock, User, Calendar, ArrowRight } from 'lucide-react';
 import api from '../utils/api';
 
 export default function Signup() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
@@ -49,8 +51,8 @@ export default function Signup() {
       setConfirmPassword('');
       setErrMsg('');
 
-      // Optionally redirect to login or auto-login
-      alert('Account created successfully! Please log in.');
+      // Automatically redirect to login page
+      router.push('/components/Login');
 
     } catch (error) {
       if (error.response?.data?.email) {
