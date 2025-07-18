@@ -5,9 +5,9 @@ import Link from "next/link";
 import api from "../utils/api";
 import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Coffee, Trash2 } from 'lucide-react';
 
-const SchoolConfig = () => {
+const DepartmentConfig = () => {
   const router = useRouter();
-  const [schoolName, setSchoolName] = useState("");
+  const [departmentName, setDepartmentName] = useState("");
   const [numPeriods, setNumPeriods] = useState(0);
   const [startTime, setStartTime] = useState("08:00");
   const [days] = useState(["Mon", "Tue", "Wed", "Thu", "Fri"]);
@@ -48,8 +48,8 @@ const SchoolConfig = () => {
   };
 
   const validateConfiguration = () => {
-    if (!schoolName.trim()) {
-      setError("School name is required.");
+    if (!departmentName.trim()) {
+      setError("Department name is required.");
       return false;
     }
     if (numPeriods < 1) {
@@ -135,7 +135,7 @@ const SchoolConfig = () => {
       const formattedStartTime = `${startTime}:00`;
 
       const response = await api.post("/api/timetable/configs/", {
-        name: schoolName,
+        name: departmentName,
         days,
         periods: numPeriods,
         start_time: formattedStartTime,
@@ -167,9 +167,9 @@ const SchoolConfig = () => {
       <div className="flex-1 p-8 max-w-7xl">
         <div className="mb-8">
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
-            School Configuration
+            Department Configuration
           </h1>
-          <p className="text-secondary/90">Set up your school's basic information and schedule</p>
+          <p className="text-secondary/90">Set up your department's basic information and schedule</p>
         </div>
 
         {error && (
@@ -183,33 +183,33 @@ const SchoolConfig = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-accent-cyan" />
-                School Information
+                Department Information
               </h2>
               <div className="relative">
                 <button
                   type="button"
                   className="text-secondary hover:text-primary transition-colors"
-                  onMouseEnter={() => setShowTooltip("school")}
+                  onMouseEnter={() => setShowTooltip("department")}
                   onMouseLeave={() => setShowTooltip("")}
                 >
                   <Info className="h-5 w-5" />
                 </button>
-                {showTooltip === "school" && (
+                {showTooltip === "department" && (
                   <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                    Enter your school's name and basic schedule information. This will be used throughout the system.
+                    Enter your department's name and basic schedule information. This will be used throughout the system.
                   </div>
                 )}
               </div>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-secondary block mb-2">School Name</label>
+                <label className="text-sm font-medium text-secondary block mb-2">Department Name</label>
                 <input
                   type="text"
-                  value={schoolName}
-                  onChange={(e) => setSchoolName(e.target.value)}
+                  value={departmentName}
+                  onChange={(e) => setDepartmentName(e.target.value)}
                   className="w-full pl-4 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                  placeholder="Enter school name"
+                  placeholder="Enter department name"
                   required
                   disabled={loading}
                 />
@@ -385,4 +385,4 @@ const SchoolConfig = () => {
   );
 };
 
-export default SchoolConfig;
+export default DepartmentConfig;

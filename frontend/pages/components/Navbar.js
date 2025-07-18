@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 const menuItems = [
-  { name: "School Config", icon: Settings, path: "/components/SchoolConfig" },
+  { name: "Department Config", icon: Settings, path: "/components/DepartmentConfig" },
   { name: "Classes", icon: Users, path: "/components/Classes" },
   { name: "Subjects", icon: BookOpen, path: "/components/Subjects" },
   { name: "Teachers", icon: User, path: "/components/Teachers" },

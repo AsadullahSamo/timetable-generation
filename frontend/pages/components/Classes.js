@@ -448,7 +448,7 @@ const ClassesConfig = () => {
 
           <div className="flex justify-between mt-8">
             <Link
-              href="/components/SchoolConfig"
+              href="/components/DepartmentConfig"
               className="px-6 py-3 border border-border text-secondary rounded-xl hover:text-primary hover:border-accent-cyan/30 transition-colors flex items-center gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
