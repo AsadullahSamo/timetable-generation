@@ -27,7 +27,7 @@ export default function Login() {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      router.push('/components/SchoolConfig');
+      router.push('/components/DepartmentConfig');
     } catch (error) {
       if (error.response?.data?.detail) {
         setErrMsg(error.response.data.detail);
