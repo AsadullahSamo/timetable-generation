@@ -52,7 +52,16 @@ const AddTeacher = () => {
       try {
         const configRes = await api.get("/api/timetable/configs/");
         if (configRes.data.length > 0) {
-          setTimetableConfig(configRes.data[0]);
+          // Get the latest config (highest ID) that has generated_periods
+          const latestConfig = configRes.data
+            .filter(config => config.generated_periods && Object.keys(config.generated_periods).length > 0)
+            .sort((a, b) => b.id - a.id)[0];
+
+          if (latestConfig) {
+            setTimetableConfig(latestConfig);
+          } else {
+            setError("No timetable configuration with generated periods found. Please complete Department Configuration first.");
+          }
         }
         const subjectsRes = await api.get("/api/timetable/subjects/");
         setAllSubjects(subjectsRes.data);
@@ -515,7 +524,8 @@ const AddTeacher = () => {
                 </div>
               ) : (
                 <div className="text-center py-8 text-secondary">
-                  No timetable configuration available. Please set up your school schedule first.
+                  <p>No timetable configuration with generated periods available.</p>
+                  <p className="text-sm mt-2">Please complete Department Configuration and generate periods first.</p>
                 </div>
               )}
             </div>

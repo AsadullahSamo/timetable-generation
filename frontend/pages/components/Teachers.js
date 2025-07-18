@@ -68,11 +68,18 @@ const TeachersConfig = () => {
         setSubjects(subjectsRes.data);
         
         if (configRes.data.length > 0) {
-          setTimetableConfig(configRes.data[0]);
-          // Get weekdays from config
-          const configDays = Object.keys(configRes.data[0].generated_periods || {});
-          if (configDays.length > 0) {
-            setWeekDays(configDays);
+          // Get the latest config (highest ID) that has generated_periods
+          const latestConfig = configRes.data
+            .filter(config => config.generated_periods && Object.keys(config.generated_periods).length > 0)
+            .sort((a, b) => b.id - a.id)[0];
+
+          if (latestConfig) {
+            setTimetableConfig(latestConfig);
+            // Get weekdays from config
+            const configDays = Object.keys(latestConfig.generated_periods || {});
+            if (configDays.length > 0) {
+              setWeekDays(configDays);
+            }
           }
         }
       } catch (err) {
