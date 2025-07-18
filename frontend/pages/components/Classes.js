@@ -27,7 +27,6 @@ const ClassesConfig = () => {
   const [classData, setClassData] = useState({
     start_time: "08:00",
     end_time: "13:00",
-    latest_start_time: "08:00",
     min_lessons: 0,
     max_lessons: 5,
     class_groups: []
@@ -84,10 +83,7 @@ const ClassesConfig = () => {
       setError("Start time must be before end time.");
       return false;
     }
-    if (classData.latest_start_time < classData.start_time) {
-      setError("Latest start time cannot be before start time.");
-      return false;
-    }
+
     return true;
   };
 
@@ -103,8 +99,7 @@ const ClassesConfig = () => {
       const payload = {
         ...classData,
         start_time: `${classData.start_time}:00`,
-        end_time: `${classData.end_time}:00`,
-        latest_start_time: `${classData.latest_start_time}:00`
+        end_time: `${classData.end_time}:00`
       };
 
       let response;
@@ -121,7 +116,6 @@ const ClassesConfig = () => {
       setClassData({
         start_time: "08:00",
         end_time: "13:00",
-        latest_start_time: "08:00",
         min_lessons: 0,
         max_lessons: 5,
         class_groups: []
@@ -140,8 +134,7 @@ const ClassesConfig = () => {
     setClassData({
       ...configToEdit,
       start_time: configToEdit.start_time.slice(0, 5),
-      end_time: configToEdit.end_time.slice(0, 5),
-      latest_start_time: configToEdit.latest_start_time.slice(0, 5)
+      end_time: configToEdit.end_time.slice(0, 5)
     });
     setEditingId(id);
     setActiveConfig(id);
@@ -227,7 +220,6 @@ const ClassesConfig = () => {
                     setClassData({
                       start_time: "08:00",
                       end_time: "13:00",
-                      latest_start_time: "08:00",
                       min_lessons: 0,
                       max_lessons: 5,
                       class_groups: []
@@ -274,20 +266,7 @@ const ClassesConfig = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-secondary">Latest start time</label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
-                  <input
-                    type="time"
-                    name="latest_start_time"
-                    value={classData.latest_start_time}
-                    onChange={handleInputChange}
-                    className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                    required
-                  />
-                </div>
-              </div>
+
 
               {/* Lessons Inputs */}
               <div className="space-y-2">
@@ -394,7 +373,7 @@ const ClassesConfig = () => {
                     <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Classes</th>
                     <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Start Time</th>
                     <th className="px-4 py-3 text-left border border-border text-secondary font-medium">End Time</th>
-                    <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Latest Start</th>
+
                     <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Min Lessons</th>
                     <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Max Lessons</th>
                     <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Actions</th>
@@ -418,7 +397,7 @@ const ClassesConfig = () => {
                       </td>
                       <td className="px-4 py-3 border border-border">{config.start_time.slice(0, 5)}</td>
                       <td className="px-4 py-3 border border-border">{config.end_time.slice(0, 5)}</td>
-                      <td className="px-4 py-3 border border-border">{config.latest_start_time.slice(0, 5)}</td>
+
                       <td className="px-4 py-3 border border-border">{config.min_lessons}</td>
                       <td className="px-4 py-3 border border-border">{config.max_lessons}</td>
                       <td className="px-4 py-3 border border-border">
