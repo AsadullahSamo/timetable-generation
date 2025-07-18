@@ -44,6 +44,45 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
 
 class TimetableView(APIView):
+    def _convert_config_to_schedule_config(self, config):
+        """Convert Config model to ScheduleConfig format for algorithm compatibility"""
+        from collections import namedtuple
+
+        # Get class groups from ClassGroup model
+        class_groups_data = ClassGroup.objects.all()
+        all_class_groups = []
+        for cg in class_groups_data:
+            all_class_groups.extend(cg.class_groups)
+
+        # If no class groups found, use default
+        if not all_class_groups:
+            all_class_groups = ['CS-1A', 'CS-1B', 'CS-2A', 'CS-2B']
+
+        # Convert generated_periods to period names
+        period_names = []
+        if config.generated_periods:
+            first_day_periods = list(config.generated_periods.values())[0]
+            period_names = [f"Period {i+1}" for i in range(len(first_day_periods))]
+        else:
+            period_names = [f"Period {i+1}" for i in range(config.periods)]
+
+        # Create a ScheduleConfig-like object
+        ScheduleConfigLike = namedtuple('ScheduleConfigLike', [
+            'id', 'name', 'days', 'periods', 'start_time', 'lesson_duration',
+            'constraints', 'class_groups'
+        ])
+
+        return ScheduleConfigLike(
+            id=config.id,
+            name=config.name,
+            days=config.days,
+            periods=period_names,
+            start_time=config.start_time,
+            lesson_duration=config.lesson_duration,
+            constraints={},  # Default empty constraints
+            class_groups=all_class_groups
+        )
+
     def get(self, request):
         try:
             config = ScheduleConfig.objects.latest('id')
@@ -151,14 +190,32 @@ class TimetableView(APIView):
 
     def post(self, request):
         try:
-            # Get the latest config
-            config = ScheduleConfig.objects.latest('id')
+            # Try to get the latest Config from frontend first
+            frontend_config = Config.objects.filter(
+                generated_periods__isnull=False
+            ).exclude(generated_periods={}).order_by('-id').first()
+
+            if frontend_config:
+                # Convert Config to ScheduleConfig format
+                config = self._convert_config_to_schedule_config(frontend_config)
+            else:
+                # Fallback to existing ScheduleConfig
+                config = ScheduleConfig.objects.latest('id')
             
             # Get active constraints from request
-            constraints = request.data.get('constraints', [])
+            import json
+            try:
+                if hasattr(request, 'data'):
+                    constraints = request.data.get('constraints', [])
+                else:
+                    # Parse JSON body for regular Django requests
+                    body = json.loads(request.body.decode('utf-8')) if request.body else {}
+                    constraints = body.get('constraints', [])
+            except (json.JSONDecodeError, AttributeError):
+                constraints = []
             
             # Update config with the constraints from the request
-            config.constraints = constraints
+            # Note: If config is a namedtuple, we can't modify it, but constraints are passed to scheduler separately
             
             # Create scheduler instance
             scheduler = TimetableScheduler(config)
@@ -171,19 +228,31 @@ class TimetableView(APIView):
             
             entries_to_create = []
             for entry in timetable['entries']:
-                # Remove (PR) from subject name if present
-                subject_name = entry['subject'].replace(' (PR)', '')
-                
+                # Smart subject name resolution
+                subject_name = entry['subject']
+                try:
+                    # Try exact match first
+                    subject = Subject.objects.get(name=subject_name)
+                except Subject.DoesNotExist:
+                    # Try without (PR) suffix
+                    clean_name = subject_name.replace(' (PR)', '')
+                    try:
+                        subject = Subject.objects.get(name=clean_name)
+                    except Subject.DoesNotExist:
+                        # Log the error and skip this entry
+                        logger.error(f"Subject not found: '{subject_name}' or '{clean_name}'")
+                        continue
+
                 entries_to_create.append(TimetableEntry(
                     day=entry['day'],
                     period=entry['period'],
-                    subject=Subject.objects.get(name=subject_name),
+                    subject=subject,
                     teacher=Teacher.objects.get(name=entry['teacher']),
                     classroom=Classroom.objects.get(name=entry['classroom']),
                     class_group=entry['class_group'],
                     start_time=entry['start_time'],
                     end_time=entry['end_time'],
-                    is_practical='(PR)' in entry['subject']
+                    is_practical=subject.is_practical  # Use the subject's database property
                 ))
             
             # Bulk create entries for better performance
@@ -259,6 +328,45 @@ class TeacherViewSet(viewsets.ModelViewSet):
     #     return Response(serializer.data)
     
     
+class TestIntegrationView(APIView):
+    def get(self, request):
+        """Test the Config to ScheduleConfig integration"""
+        try:
+            # Get latest frontend config
+            frontend_config = Config.objects.filter(
+                generated_periods__isnull=False
+            ).exclude(generated_periods={}).order_by('-id').first()
+
+            if not frontend_config:
+                return Response({'error': 'No frontend config found'}, status=404)
+
+            # Convert to ScheduleConfig format
+            view = TimetableView()
+            converted_config = view._convert_config_to_schedule_config(frontend_config)
+
+            # Test scheduler initialization
+            from timetable.algorithms.scheduler import TimetableScheduler
+            scheduler = TimetableScheduler(converted_config)
+
+            return Response({
+                'success': True,
+                'frontend_config': {
+                    'id': frontend_config.id,
+                    'name': frontend_config.name,
+                    'periods': frontend_config.periods,
+                    'days': frontend_config.days
+                },
+                'converted_config': {
+                    'name': converted_config.name,
+                    'periods': converted_config.periods,
+                    'class_groups': converted_config.class_groups
+                },
+                'scheduler_initialized': True
+            })
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
 class LatestTimetableView(APIView):
     def get(self, request):
         try:
@@ -279,10 +387,37 @@ class LatestTimetableView(APIView):
                 current_time = (datetime.combine(datetime.today(), current_time) + 
                                timedelta(minutes=config.lesson_duration)).time()
             
+            # Normalize day names to match between config and entries
+            entries_data = TimetableSerializer(entries, many=True).data
+
+            # Create day mapping from entry format to config format
+            day_mapping = {
+                'Monday': 'MON', 'Mon': 'MON',
+                'Tuesday': 'TUE', 'Tue': 'TUE',
+                'Wednesday': 'WED', 'Wed': 'WED',
+                'Thursday': 'THU', 'Thu': 'THU',
+                'Friday': 'FRI', 'Fri': 'FRI',
+                'Saturday': 'SAT', 'Sat': 'SAT',
+                'Sunday': 'SUN', 'Sun': 'SUN'
+            }
+
+            # Debug: Check what day formats we actually have
+            unique_days = set(entry['day'] for entry in entries_data)
+            logger.info(f"Unique day formats in entries: {unique_days}")
+            logger.info(f"Config days: {config.days}")
+            logger.info(f"Day mapping keys: {list(day_mapping.keys())}")
+
+            # Normalize entry day names to match config format
+            for entry in entries_data:
+                original_day = entry['day']
+                # Simple approach: convert to uppercase and take first 3 chars
+                entry['day'] = entry['day'].upper()[:3]
+                logger.info(f"Day mapping: '{original_day}' -> '{entry['day']}'")
+
             data = {
                 "days": config.days,
                 "timeSlots": time_slots,
-                "entries": TimetableSerializer(entries, many=True).data
+                "entries": entries_data
             }
             
             # Log final data for debugging

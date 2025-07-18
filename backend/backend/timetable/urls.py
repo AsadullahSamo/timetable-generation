@@ -11,6 +11,7 @@ from .views import (
     ConfigViewSet,
     ClassRoomViewSet,  # Potential naming issue
     LatestTimetableView,
+    TestIntegrationView,
 )
 
 # router = DefaultRouter()
@@ -39,6 +40,7 @@ router.register(r'configs', ConfigViewSet, basename='config')
 
 urlpatterns = [
     path('generate-timetable/', TimetableView.as_view(), name='generate-timetable'),
+    path('test-integration/', TestIntegrationView.as_view(), name='test-integration'),
     path('tasks/<uuid:task_id>/', TaskStatusView.as_view(), name='task-status'),
     path('latest/', LatestTimetableView.as_view(), name='latest-timetable'),
 ] + router.urls

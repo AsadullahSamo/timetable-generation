@@ -90,10 +90,18 @@ const Timetable = () => {
                   {timeSlot}
                 </div>
                 {timetableData.days.map(day => {
+                  // Normalize day names for matching
+                  const normalizeDay = (dayName) => {
+                    if (typeof dayName === 'string') {
+                      return dayName.toUpperCase().substring(0, 3);
+                    }
+                    return dayName;
+                  };
+
                   const entry = timetableData.entries.find(
-                    e => e.day === day && e.period === (index + 1)
+                    e => normalizeDay(e.day) === normalizeDay(day) && e.period === (index + 1)
                   );
-                  console.log(`Looking for entry: day=${day}, period=${index + 1}, found:`, entry); // Debug log
+                  console.log(`Looking for entry: day=${day} (normalized: ${normalizeDay(day)}), period=${index + 1}, found:`, entry); // Debug log
                   return (
                     <div 
                       key={`${day}-${index}`} 
