@@ -33,6 +33,8 @@ from .tasks import (
     generate_timetable_report
 )
 
+from .services.cross_semester_conflict_detector import CrossSemesterConflictDetector
+
 logger = logging.getLogger(__name__)
 
 class SubjectViewSet(viewsets.ModelViewSet):
@@ -568,7 +570,10 @@ class TimetableView(APIView):
                     class_group=entry['class_group'],
                     start_time=entry['start_time'],
                     end_time=entry['end_time'],
-                    is_practical='(PR)' in entry['subject']
+                    is_practical='(PR)' in entry['subject'],
+                    schedule_config=config,
+                    semester=config.semester,
+                    academic_year=config.academic_year
                 ))
             # Bulk create entries for better performance
             TimetableEntry.objects.bulk_create(entries_to_create)
@@ -651,17 +656,41 @@ class LatestTimetableView(APIView):
                     {'error': 'No valid schedule configuration found.'},
                     status=400
                 )
-            entries = TimetableEntry.objects.all().order_by('day', 'period')
-            
+
+            # Get pagination parameters
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 10))
+            class_group_filter = request.query_params.get('class_group', None)
+
+            # Get all entries
+            entries_query = TimetableEntry.objects.all().order_by('day', 'period')
+
+            # Filter by class group if specified
+            if class_group_filter:
+                entries_query = entries_query.filter(class_group=class_group_filter)
+
+            # Get unique class groups for pagination info
+            all_class_groups = list(TimetableEntry.objects.values_list('class_group', flat=True).distinct())
+            total_class_groups = len(all_class_groups)
+
+            # If no specific class group requested, paginate by class groups
+            if not class_group_filter:
+                start_idx = (page - 1) * page_size
+                end_idx = start_idx + page_size
+                paginated_class_groups = all_class_groups[start_idx:end_idx]
+                entries_query = entries_query.filter(class_group__in=paginated_class_groups)
+
+            entries = list(entries_query)
+
             # Format time slots
             time_slots = []
             current_time = config.start_time
             for i in range(len(config.periods)):
-                end_time = (datetime.combine(datetime.today(), current_time) + 
+                end_time = (datetime.combine(datetime.today(), current_time) +
                           timedelta(minutes=config.lesson_duration)).time()
                 time_slots.append(f"{current_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}")
                 current_time = end_time
-            
+
             # Format entries
             formatted_entries = []
             for entry in entries:
@@ -675,11 +704,26 @@ class LatestTimetableView(APIView):
                     'start_time': entry.start_time.strftime("%H:%M:%S"),
                     'end_time': entry.end_time.strftime("%H:%M:%S")
                 })
-            
+
+            # Calculate pagination info
+            total_pages = (total_class_groups + page_size - 1) // page_size if not class_group_filter else 1
+            has_next = page < total_pages
+            has_previous = page > 1
+
             return Response({
                 'days': config.days,
                 'timeSlots': time_slots,
-                'entries': formatted_entries
+                'entries': formatted_entries,
+                'pagination': {
+                    'current_page': page,
+                    'total_pages': total_pages,
+                    'page_size': page_size,
+                    'total_class_groups': total_class_groups,
+                    'has_next': has_next,
+                    'has_previous': has_previous,
+                    'class_groups': all_class_groups,
+                    'current_class_groups': paginated_class_groups if not class_group_filter else [class_group_filter]
+                }
             })
             
         except ScheduleConfig.DoesNotExist:
@@ -690,9 +734,94 @@ class LatestTimetableView(APIView):
         except Exception as e:
             logger.error(f"Error retrieving latest timetable: {str(e)}")
             return Response(
-                {'error': f'Failed to retrieve latest timetable: {str(e)}'}, 
+                {'error': f'Failed to retrieve latest timetable: {str(e)}'},
                 status=500
             )
-    
+
+
+class CrossSemesterConflictView(APIView):
+    """
+    API endpoint for checking cross-semester conflicts
+    """
+
+    def get(self, request):
+        """Get cross-semester conflict summary"""
+        try:
+            # Get the latest config
+            config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
+            if not config:
+                return Response(
+                    {'error': 'No schedule configuration found.'},
+                    status=400
+                )
+
+            # Initialize conflict detector
+            conflict_detector = CrossSemesterConflictDetector(config)
+
+            # Get conflict summary
+            summary = conflict_detector.get_conflict_summary()
+
+            return Response({
+                'success': True,
+                'current_semester': config.semester,
+                'current_academic_year': config.academic_year,
+                'conflict_summary': summary
+            })
+
+        except Exception as e:
+            logger.error(f"Cross-semester conflict check error: {str(e)}")
+            return Response(
+                {'error': f'Failed to check cross-semester conflicts: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        """Check conflicts for specific teacher and time slot"""
+        try:
+            teacher_id = request.data.get('teacher_id')
+            day = request.data.get('day')
+            period = request.data.get('period')
+
+            if not all([teacher_id, day, period]):
+                return Response(
+                    {'error': 'teacher_id, day, and period are required'},
+                    status=400
+                )
+
+            # Get the latest config
+            config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
+            if not config:
+                return Response(
+                    {'error': 'No schedule configuration found.'},
+                    status=400
+                )
+
+            # Initialize conflict detector
+            conflict_detector = CrossSemesterConflictDetector(config)
+
+            # Check specific conflict
+            has_conflict, conflict_descriptions = conflict_detector.check_teacher_conflict(
+                teacher_id, day, period
+            )
+
+            # Get alternative suggestions if there's a conflict
+            suggestions = []
+            if has_conflict:
+                suggestions = conflict_detector.suggest_alternative_slots(teacher_id, day)
+
+            return Response({
+                'success': True,
+                'has_conflict': has_conflict,
+                'conflicts': conflict_descriptions,
+                'alternative_suggestions': suggestions
+            })
+
+        except Exception as e:
+            logger.error(f"Specific conflict check error: {str(e)}")
+            return Response(
+                {'error': f'Failed to check specific conflict: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     
     

@@ -1,6 +1,7 @@
 from django.db import models
 from users.models import User
 import json
+from datetime import date
 
 class Classroom(models.Model):
     name = models.CharField(max_length=50)
@@ -15,6 +16,9 @@ class ScheduleConfig(models.Model):
     lesson_duration = models.PositiveIntegerField()
     constraints = models.JSONField(default=dict)
     class_groups = models.JSONField(default=list)
+    semester = models.CharField(max_length=50, default="Fall 2024")
+    academic_year = models.CharField(max_length=20, default="2024-2025")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
         # Ensure periods is always stored as array of strings
@@ -93,6 +97,10 @@ class TimetableEntry(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
     is_practical = models.BooleanField(default=False)
+    schedule_config = models.ForeignKey(ScheduleConfig, on_delete=models.CASCADE, null=True, blank=True)
+    semester = models.CharField(max_length=50, default="Fall 2024")
+    academic_year = models.CharField(max_length=20, default="2024-2025")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['day', 'period']

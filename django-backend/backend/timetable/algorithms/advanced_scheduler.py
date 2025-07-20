@@ -9,6 +9,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from ..models import TimetableEntry, Subject, Teacher, Classroom, ScheduleConfig
+from ..services.cross_semester_conflict_detector import CrossSemesterConflictDetector
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class ConstraintType(Enum):
     BREAK_TIME = "break_time"
     DEPARTMENT_RULES = "department_rules"
     CONSECUTIVE_CLASSES = "consecutive_classes"
+    CROSS_SEMESTER_CONFLICTS = "cross_semester_conflicts"
 
 @dataclass
 class TimeSlot:
@@ -85,12 +87,16 @@ class AdvancedTimetableScheduler:
             ConstraintType.PRACTICAL_BLOCKS: 8.0,
             ConstraintType.BREAK_TIME: 4.0,
             ConstraintType.DEPARTMENT_RULES: 6.0,
-            ConstraintType.CONSECUTIVE_CLASSES: 5.0
+            ConstraintType.CONSECUTIVE_CLASSES: 5.0,
+            ConstraintType.CROSS_SEMESTER_CONFLICTS: 15.0  # Highest priority
         }
         
         # Initialize time slots
         self.time_slots = self._create_time_slots()
-        
+
+        # Initialize cross-semester conflict detector
+        self.conflict_detector = CrossSemesterConflictDetector(config)
+
         # Tracking structures
         self.teacher_workload = {}
         self.subject_frequency = {}
@@ -132,7 +138,9 @@ class AdvancedTimetableScheduler:
             
             best_solution = None
             best_fitness = float('-inf')
-            
+            last_best_fitness = float('-inf')
+            no_improvement_count = 0
+
             # Genetic algorithm evolution
             for generation in range(self.generations):
                 # Evaluate population
@@ -452,7 +460,9 @@ class AdvancedTimetableScheduler:
             penalty, violations = self._check_break_time(solution)
         elif constraint_type == ConstraintType.CONSECUTIVE_CLASSES:
             penalty, violations = self._check_consecutive_classes(solution)
-        
+        elif constraint_type == ConstraintType.CROSS_SEMESTER_CONFLICTS:
+            penalty, violations = self._check_cross_semester_conflicts(solution)
+
         return penalty, violations
     
     def _check_teacher_availability(self, solution: SchedulingSolution) -> Tuple[float, List[str]]:
@@ -705,4 +715,27 @@ class AdvancedTimetableScheduler:
                 'end_time': entry.end_time.strftime("%H:%M:%S"),
                 'is_practical': entry.is_practical
             } for entry in solution.entries]
-        } 
+        }
+
+    def _check_cross_semester_conflicts(self, solution: SchedulingSolution) -> Tuple[float, List[str]]:
+        """Check for conflicts with existing timetables from other semesters"""
+        penalty = 0.0
+        violations = []
+
+        for entry in solution.entries:
+            if not entry.teacher:
+                continue
+
+            # Check if this teacher has conflicts in other semesters
+            has_conflict, conflict_descriptions = self.conflict_detector.check_teacher_conflict(
+                entry.teacher.id, entry.day, entry.period
+            )
+
+            if has_conflict:
+                penalty += 15.0  # High penalty for cross-semester conflicts
+                violations.extend([
+                    f"Cross-semester conflict for {entry.teacher.name} on {entry.day} Period {entry.period}: {desc}"
+                    for desc in conflict_descriptions
+                ])
+
+        return penalty, violations
