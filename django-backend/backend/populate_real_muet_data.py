@@ -425,6 +425,13 @@ def create_schedule_configs():
             "year": "1st Year",
             "total_students": 60,
             "subjects": ["PF", "ICT", "AC", "AP", "FE"],
+            "teachers": {
+                "PF": ["Dr. Naeem Ahmed", "Mr. Sajjad Ali"],  # Programming Fundamentals
+                "ICT": ["Dr. Anoud Shaikh", "Mr. Arsalan"],  # Information & Communication Technology
+                "AC": "Mr. Saleem Memon",  # Applied Calculus
+                "AP": "Mr. Jabbar Memon",  # Applied Physics
+                "FE": "Ms. Uma Rubab"  # Functional English
+            },
             "time_slots": [
                 ("08:00", "08:45"),
                 ("08:45", "09:30"),
