@@ -115,6 +115,10 @@ class FinalUniversalScheduler:
             else:
                 print("✅ NO CONFLICTS - PERFECT TIMETABLE!")
 
+            # ENHANCEMENT 3: Analyze schedule compaction
+            compaction_analysis = self._analyze_schedule_compaction(all_entries)
+            result['compaction_analysis'] = compaction_analysis
+
             return result
 
         except Exception as e:
@@ -211,7 +215,10 @@ class FinalUniversalScheduler:
         for subject in theory_subjects:
             if self._has_teacher_for_subject(subject):
                 self._schedule_theory_subject(entries, class_schedule, subject, class_group)
-        
+
+        # ENHANCEMENT 4: Ensure minimum daily class duration
+        entries = self._enforce_minimum_daily_duration(entries, class_group)
+
         return entries
     
     def _is_practical_subject(self, subject: Subject) -> bool:
@@ -250,14 +257,19 @@ class FinalUniversalScheduler:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
 
-        # ENHANCEMENT: Try all days in random order to ensure distribution
+        # ENHANCEMENT 3: Prioritize early periods for practical subjects too
         import random
         days_shuffled = self.days.copy()
         random.shuffle(days_shuffled)
 
-        # Try to find 3 consecutive periods across ALL days
+        # ENHANCEMENT 3: Try early periods first (1-4), then later periods if needed
+        early_periods = [p for p in self.periods[:-2] if p <= 4]  # Periods 1-4 (early)
+        late_periods = [p for p in self.periods[:-2] if p > 4]   # Periods 5+ (late)
+        prioritized_periods = early_periods + late_periods
+
+        # Try to find 3 consecutive periods, prioritizing early times
         for day in days_shuffled:
-            for start_period in self.periods[:-2]:  # Need at least 3 periods
+            for start_period in prioritized_periods:
                 if self._can_schedule_block(class_schedule, day, start_period, 3, class_group):
                     teacher = self._find_available_teacher(teachers, day, start_period, 3)
                     if teacher:
@@ -289,19 +301,29 @@ class FinalUniversalScheduler:
         scheduled = 0
         target = min(subject.credits, len(self.days) * len(self.periods))  # Don't exceed available slots
 
-        # ENHANCEMENT: Distribute across ALL days evenly instead of filling day by day
+        # ENHANCEMENT: Prioritize early time slots (compact schedule)
         available_slots = []
         for day in self.days:
             for period in self.periods:
                 if self._can_schedule_single(class_schedule, day, period, class_group):
                     available_slots.append((day, period))
 
-        # Shuffle slots to ensure even distribution across all days
-        import random
-        random.shuffle(available_slots)
+        # ENHANCEMENT 3: Sort slots by priority - early periods first, then distribute across days
+        available_slots.sort(key=lambda slot: (slot[1], slot[0]))  # Sort by period first, then day
 
-        # Schedule across distributed slots
-        for day, period in available_slots:
+        # Add some randomization within same period to distribute across days
+        import random
+        from itertools import groupby
+
+        # Group by period and shuffle within each period group
+        prioritized_slots = []
+        for period, group in groupby(available_slots, key=lambda x: x[1]):
+            period_slots = list(group)
+            random.shuffle(period_slots)  # Randomize days within same period
+            prioritized_slots.extend(period_slots)
+
+        # Schedule across prioritized slots (early periods first)
+        for day, period in prioritized_slots:
             if scheduled >= target:
                 break
 
@@ -507,3 +529,143 @@ class FinalUniversalScheduler:
             'is_practical': entry.is_practical,
             'credits': entry.subject.credits
         }
+
+    def _analyze_schedule_compaction(self, entries: List[TimetableEntry]) -> Dict:
+        """ENHANCEMENT 3: Analyze how well the schedule is compacted to early periods."""
+        analysis = {
+            'section_analysis': {},
+            'overall_stats': {
+                'early_finish_sections': 0,  # Sections finishing by period 4 (12:00)
+                'medium_finish_sections': 0,  # Sections finishing by period 5 (1:00)
+                'late_finish_sections': 0,   # Sections finishing after period 5
+                'average_latest_period': 0.0
+            }
+        }
+
+        # Group entries by section and day
+        section_day_schedule = {}
+        for entry in entries:
+            key = (entry.class_group, entry.day)
+            if key not in section_day_schedule:
+                section_day_schedule[key] = []
+            section_day_schedule[key].append(entry.period)
+
+        # Analyze each section
+        section_latest_periods = {}
+        for (section, day), periods in section_day_schedule.items():
+            if section not in section_latest_periods:
+                section_latest_periods[section] = []
+
+            latest_period = max(periods)
+            section_latest_periods[section].append(latest_period)
+
+        # Calculate statistics for each section
+        for section, daily_latest_periods in section_latest_periods.items():
+            avg_latest = sum(daily_latest_periods) / len(daily_latest_periods)
+            max_latest = max(daily_latest_periods)
+
+            # Count days finishing early/medium/late
+            early_days = sum(1 for p in daily_latest_periods if p <= 4)  # By 12:00
+            medium_days = sum(1 for p in daily_latest_periods if p == 5)  # By 1:00
+            late_days = sum(1 for p in daily_latest_periods if p >= 6)   # After 1:00
+
+            analysis['section_analysis'][section] = {
+                'average_latest_period': round(avg_latest, 1),
+                'max_latest_period': max_latest,
+                'early_finish_days': early_days,   # Days finishing by 12:00
+                'medium_finish_days': medium_days, # Days finishing by 1:00
+                'late_finish_days': late_days,     # Days finishing after 1:00
+                'total_days': len(daily_latest_periods)
+            }
+
+            # Classify section overall
+            if avg_latest <= 4.0:
+                analysis['overall_stats']['early_finish_sections'] += 1
+            elif avg_latest <= 5.0:
+                analysis['overall_stats']['medium_finish_sections'] += 1
+            else:
+                analysis['overall_stats']['late_finish_sections'] += 1
+
+        # Calculate overall average
+        all_averages = [data['average_latest_period'] for data in analysis['section_analysis'].values()]
+        analysis['overall_stats']['average_latest_period'] = round(sum(all_averages) / len(all_averages), 1) if all_averages else 0.0
+
+        # Print compaction report
+        print(f"\n📊 SCHEDULE COMPACTION ANALYSIS:")
+        print(f"   Early finish sections (by 12:00): {analysis['overall_stats']['early_finish_sections']}")
+        print(f"   Medium finish sections (by 1:00): {analysis['overall_stats']['medium_finish_sections']}")
+        print(f"   Late finish sections (after 1:00): {analysis['overall_stats']['late_finish_sections']}")
+        print(f"   Overall average latest period: {analysis['overall_stats']['average_latest_period']}")
+
+        return analysis
+
+    def _enforce_minimum_daily_duration(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT 4: Ensure minimum daily class duration (no early finishes except Friday)."""
+        if not entries:
+            return entries
+
+        # Group entries by day
+        day_entries = {}
+        for entry in entries:
+            if entry.day not in day_entries:
+                day_entries[entry.day] = []
+            day_entries[entry.day].append(entry)
+
+        # Check each day for minimum duration
+        additional_entries = []
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            # Find latest period for this day
+            latest_period = max(entry.period for entry in day_entry_list)
+
+            # ENHANCEMENT 4: Minimum duration rules
+            min_required_period = 3  # Minimum end at Period 3 (11:00 AM)
+            if day.lower() == 'friday':
+                min_required_period = 2  # Friday can end earlier (Period 2 = 10:00 AM)
+
+            if latest_period < min_required_period:
+                print(f"     ⚠️  {class_group} {day} ends too early at Period {latest_period}, extending...")
+
+                # Try to add more classes to reach minimum duration
+                periods_needed = min_required_period - latest_period
+                additional_entries.extend(
+                    self._add_filler_classes(class_group, day, latest_period + 1, periods_needed)
+                )
+
+        return entries + additional_entries
+
+    def _add_filler_classes(self, class_group: str, day: str, start_period: int, periods_needed: int) -> List[TimetableEntry]:
+        """Add filler classes to meet minimum daily duration."""
+        filler_entries = []
+
+        # Get subjects for this class group to use for filler
+        subjects = self._get_subjects_for_class_group(class_group)
+        theory_subjects = [s for s in subjects if not self._is_practical_subject(s)]
+
+        if not theory_subjects:
+            return filler_entries
+
+        # Add filler periods
+        for i in range(periods_needed):
+            period = start_period + i
+            if period > len(self.periods):
+                break
+
+            # Use a theory subject for filler (rotate through subjects)
+            subject = theory_subjects[i % len(theory_subjects)]
+
+            # Find available teacher and classroom
+            teachers = self._get_teachers_for_subject(subject)
+            if teachers:
+                teacher = self._find_available_teacher(teachers, day, period, 1)
+                if teacher:
+                    classroom = self._find_available_classroom(day, period, 1)
+                    if classroom:
+                        entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                        filler_entries.append(entry)
+                        self._mark_global_schedule(teacher, classroom, day, period)
+                        print(f"       ✅ Added filler class: {subject.code} on {day} P{period}")
+
+        return filler_entries
