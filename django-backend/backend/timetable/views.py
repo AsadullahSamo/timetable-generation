@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from rest_framework.permissions import IsAuthenticated
 from .algorithms.advanced_scheduler import AdvancedTimetableScheduler
 from .algorithms.working_scheduler import WorkingTimetableScheduler
+from .algorithms.final_scheduler import FinalUniversalScheduler
 from .constraint_manager import ConstraintManager
 import logging
 from rest_framework.pagination import PageNumberPagination
@@ -190,8 +191,8 @@ class SimpleTimetableView(APIView):
                     status=400
                 )
             
-            # Use the working scheduler instead of broken advanced scheduler
-            scheduler = WorkingTimetableScheduler(config)
+            # Use the FINAL UNIVERSAL scheduler - works with ANY data
+            scheduler = FinalUniversalScheduler(config)
 
             # Generate timetable synchronously (faster)
             result = scheduler.generate_timetable()
@@ -552,8 +553,8 @@ class TimetableView(APIView):
             constraints = request.data.get('constraints', [])
             # Update config with the constraints from the request
             config.constraints = constraints
-            # Create scheduler instance - use working scheduler
-            scheduler = WorkingTimetableScheduler(config)
+            # Create scheduler instance - use FINAL UNIVERSAL scheduler
+            scheduler = FinalUniversalScheduler(config)
             # Generate timetable
             timetable = scheduler.generate_timetable()
             # Save entries to database

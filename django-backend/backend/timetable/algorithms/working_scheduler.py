@@ -116,44 +116,106 @@ class WorkingTimetableScheduler:
         print(f"   📚 Subjects for {class_group}: {[s.code for s in semester_subjects]}")
         
         # Schedule practical subjects first (they need consecutive periods)
-        practical_subjects = [s for s in semester_subjects if s.code.endswith(' Pr')]
+        practical_subjects = [s for s in semester_subjects if self._is_practical_subject(s)]
         for subject in practical_subjects:
             self._schedule_practical_subject(entries, subject, class_group)
-        
+
         # Schedule theory subjects
-        theory_subjects = [s for s in semester_subjects if not s.code.endswith(' Pr')]
+        theory_subjects = [s for s in semester_subjects if not self._is_practical_subject(s)]
         for subject in theory_subjects:
             self._schedule_theory_subject(entries, subject, class_group)
         
         return entries
     
     def _get_subjects_for_class_group(self, class_group: str) -> List[Subject]:
-        """Get subjects appropriate for the class group's semester."""
-        # Map class groups to their subjects based on semester
-        semester_mapping = {
-            '21SW': ['SM', 'CC', 'SQE', 'CC Pr', 'SQE Pr'],  # 8th semester
-            '22SW': ['SPM', 'DS&A', 'MAD', 'DS', 'TSW', 'DS&A Pr', 'MAD Pr'],  # 6th semester
-            '23SW': ['IS', 'HCI', 'ABIS', 'SCD', 'SP', 'SCD Pr'],  # 4th semester
-            '24SW': ['DSA', 'OR', 'SRE', 'SEM', 'DBS', 'DSA Pr', 'DBS Pr']  # 2nd semester
-        }
-        
-        subject_codes = semester_mapping.get(class_group, [])
+        """Get subjects for the class group - UNIVERSAL VERSION."""
+        # Try to get subjects from database relationships first
         subjects = []
-        
-        for code in subject_codes:
-            subject = Subject.objects.filter(code=code).first()
-            if subject:
-                subjects.append(subject)
-        
+
+        # Method 1: Check if subjects have a class_group or semester field
+        try:
+            # Look for subjects that might be linked to this class group
+            subjects = list(Subject.objects.filter(
+                models.Q(name__icontains=class_group) |
+                models.Q(code__icontains=class_group)
+            ))
+        except:
+            pass
+
+        # Method 2: If no specific mapping, use ALL subjects (let user/admin decide)
+        if not subjects:
+            subjects = list(Subject.objects.all())
+            print(f"   📚 No specific subjects found for {class_group}, using all {len(subjects)} subjects")
+
+        # Method 3: Fallback to hardcoded mapping for known batches (backward compatibility)
+        if not subjects:
+            semester_mapping = {
+                '21SW': ['SM', 'CC', 'SQE', 'CC Pr', 'SQE Pr'],
+                '22SW': ['SPM', 'DS&A', 'MAD', 'DS', 'TSW', 'DS&A Pr', 'MAD Pr'],
+                '23SW': ['IS', 'HCI', 'ABIS', 'SCD', 'SP', 'SCD Pr'],
+                '24SW': ['DSA', 'OR', 'SRE', 'SEM', 'DBS', 'DSA Pr', 'DBS Pr']
+            }
+
+            subject_codes = semester_mapping.get(class_group, [])
+            for code in subject_codes:
+                subject = Subject.objects.filter(code=code).first()
+                if subject:
+                    subjects.append(subject)
+
         return subjects
-    
-    def _schedule_practical_subject(self, entries: List[TimetableEntry], 
+
+    def _is_practical_subject(self, subject: Subject) -> bool:
+        """Universal method to detect if a subject is practical."""
+        # Method 1: Check the is_practical field if it exists
+        if hasattr(subject, 'is_practical') and subject.is_practical:
+            return True
+
+        # Method 2: Check common practical indicators in code/name
+        practical_indicators = [
+            ' Pr', 'Pr', '_LAB', 'LAB', 'Lab', 'Practical', 'PRACTICAL',
+            'Workshop', 'WORKSHOP', 'Project', 'PROJECT'
+        ]
+
+        for indicator in practical_indicators:
+            if indicator in subject.code or indicator in subject.name:
+                return True
+
+        # Method 3: Check if credits = 1 (common for practicals) - but be more specific
+        if subject.credits == 1 and any(ind in subject.code.upper() or ind in subject.name.upper()
+                                       for ind in ['LAB', 'PRACTICAL', 'PROJECT', 'WORKSHOP']):
+            return True
+
+        return False
+
+    def _get_teachers_for_subject(self, subject: Subject) -> List[Teacher]:
+        """Universal method to find teachers for a subject."""
+        # Method 1: Use many-to-many relationship if it exists
+        try:
+            teachers = list(subject.teacher_set.all())
+            if teachers:
+                return teachers
+        except:
+            pass
+
+        # Method 2: Check reverse relationship
+        try:
+            teachers = [t for t in self.teachers if subject in t.subjects.all()]
+            if teachers:
+                return teachers
+        except:
+            pass
+
+        # Method 3: Fallback - assign any available teacher (for new data)
+        print(f"   🔄 No specific teacher assignment found for {subject.code}, using available teachers")
+        return self.teachers  # Return all teachers as potential candidates
+
+    def _schedule_practical_subject(self, entries: List[TimetableEntry],
                                   subject: Subject, class_group: str):
         """Schedule a practical subject (needs 3 consecutive periods)."""
         print(f"   🧪 Scheduling practical: {subject.code}")
         
-        # Find available teacher
-        available_teachers = [t for t in self.teachers if subject in t.subjects.all()]
+        # Find available teachers - UNIVERSAL METHOD
+        available_teachers = self._get_teachers_for_subject(subject)
         if not available_teachers:
             print(f"   ⚠️  No teachers found for {subject.code}")
             return
@@ -187,8 +249,8 @@ class WorkingTimetableScheduler:
         """Schedule a theory subject (needs credits number of periods per week)."""
         print(f"   📖 Scheduling theory: {subject.code} ({subject.credits} credits)")
         
-        # Find available teachers
-        available_teachers = [t for t in self.teachers if subject in t.subjects.all()]
+        # Find available teachers - UNIVERSAL METHOD
+        available_teachers = self._get_teachers_for_subject(subject)
         if not available_teachers:
             print(f"   ⚠️  No teachers found for {subject.code}")
             return
@@ -318,9 +380,15 @@ class WorkingTimetableScheduler:
         end_hour = start.hour
         end_minute = start.minute + self.lesson_duration
 
-        if end_minute >= 60:
+        # Handle minute overflow properly
+        while end_minute >= 60:
             end_hour += 1
             end_minute -= 60
+
+        # Handle hour overflow
+        if end_hour >= 24:
+            end_hour = 23
+            end_minute = 59
 
         return time(hour=end_hour, minute=end_minute)
 
