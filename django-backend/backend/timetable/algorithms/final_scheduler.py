@@ -119,6 +119,10 @@ class FinalUniversalScheduler:
             compaction_analysis = self._analyze_schedule_compaction(all_entries)
             result['compaction_analysis'] = compaction_analysis
 
+            # ENHANCEMENT 5: Overall credit hour compliance report
+            overall_compliance = self._generate_overall_compliance_report(all_entries)
+            result['credit_hour_compliance'] = overall_compliance
+
             return result
 
         except Exception as e:
@@ -219,6 +223,9 @@ class FinalUniversalScheduler:
         # ENHANCEMENT 4: Ensure minimum daily class duration
         entries = self._enforce_minimum_daily_duration(entries, class_group)
 
+        # ENHANCEMENT 5: Validate credit hour compliance
+        self._validate_credit_hour_compliance(entries, subjects, class_group)
+
         return entries
     
     def _is_practical_subject(self, subject: Subject) -> bool:
@@ -248,8 +255,9 @@ class FinalUniversalScheduler:
     
     def _schedule_practical_subject(self, entries: List[TimetableEntry],
                                   class_schedule: dict, subject: Subject, class_group: str):
-        """Schedule practical subject (3 consecutive periods) - ENHANCED to utilize ALL days."""
+        """Schedule practical subject - ENHANCED with strict credit hour compliance."""
         print(f"     🧪 Scheduling practical: {subject.code}")
+        print(f"       🎯 Practical rule: 1 credit = 1 session/week (3 consecutive hours)")
 
         # Find available teacher
         teachers = self._get_teachers_for_subject(subject)
@@ -290,7 +298,7 @@ class FinalUniversalScheduler:
     
     def _schedule_theory_subject(self, entries: List[TimetableEntry],
                                class_schedule: dict, subject: Subject, class_group: str):
-        """Schedule theory subject - ENHANCED to utilize ALL days."""
+        """Schedule theory subject - ENHANCED with strict credit hour compliance."""
         print(f"     📖 Scheduling theory: {subject.code} ({subject.credits} credits)")
 
         teachers = self._get_teachers_for_subject(subject)
@@ -298,8 +306,11 @@ class FinalUniversalScheduler:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
 
+        # ENHANCEMENT 5: Strict credit hour compliance
         scheduled = 0
-        target = min(subject.credits, len(self.days) * len(self.periods))  # Don't exceed available slots
+        target = subject.credits  # MUST schedule exactly the credit hours, no more, no less
+
+        print(f"       🎯 Target: EXACTLY {target} classes per week (strict credit compliance)")
 
         # ENHANCEMENT: Prioritize early time slots (compact schedule)
         available_slots = []
@@ -600,7 +611,7 @@ class FinalUniversalScheduler:
         return analysis
 
     def _enforce_minimum_daily_duration(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
-        """ENHANCEMENT 4: Ensure minimum daily class duration (no early finishes except Friday)."""
+        """ENHANCEMENT 4: Ensure minimum daily class duration using smart redistribution (no filler classes)."""
         if not entries:
             return entries
 
@@ -611,30 +622,8 @@ class FinalUniversalScheduler:
                 day_entries[entry.day] = []
             day_entries[entry.day].append(entry)
 
-        # Check each day for minimum duration
-        additional_entries = []
-        for day, day_entry_list in day_entries.items():
-            if not day_entry_list:
-                continue
-
-            # Find latest period for this day
-            latest_period = max(entry.period for entry in day_entry_list)
-
-            # ENHANCEMENT 4: Minimum duration rules
-            min_required_period = 3  # Minimum end at Period 3 (11:00 AM)
-            if day.lower() == 'friday':
-                min_required_period = 2  # Friday can end earlier (Period 2 = 10:00 AM)
-
-            if latest_period < min_required_period:
-                print(f"     ⚠️  {class_group} {day} ends too early at Period {latest_period}, extending...")
-
-                # Try to add more classes to reach minimum duration
-                periods_needed = min_required_period - latest_period
-                additional_entries.extend(
-                    self._add_filler_classes(class_group, day, latest_period + 1, periods_needed)
-                )
-
-        return entries + additional_entries
+        # ENHANCEMENT: Smart redistribution instead of filler classes
+        return self._redistribute_classes_for_minimum_duration(entries, day_entries, class_group)
 
     def _add_filler_classes(self, class_group: str, day: str, start_period: int, periods_needed: int) -> List[TimetableEntry]:
         """Add filler classes to meet minimum daily duration."""
@@ -669,3 +658,216 @@ class FinalUniversalScheduler:
                         print(f"       ✅ Added filler class: {subject.code} on {day} P{period}")
 
         return filler_entries
+
+    def _redistribute_classes_for_minimum_duration(self, entries: List[TimetableEntry], day_entries: dict, class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT: Smart class redistribution to meet minimum duration without adding filler classes."""
+        print(f"     🔄 Smart redistribution for minimum duration compliance...")
+
+        # Analyze each day's duration
+        day_analysis = {}
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            latest_period = max(entry.period for entry in day_entry_list)
+            min_required_period = 3  # Default minimum (11:00 AM)
+            if day.lower() == 'friday':
+                min_required_period = 2  # Friday can end earlier (10:00 AM)
+
+            day_analysis[day] = {
+                'entries': day_entry_list,
+                'latest_period': latest_period,
+                'min_required': min_required_period,
+                'needs_extension': latest_period < min_required_period,
+                'deficit': max(0, min_required_period - latest_period),
+                'theory_classes': [e for e in day_entry_list if not e.is_practical]
+            }
+
+        # Find days that need extension and days that can donate classes
+        short_days = [day for day, analysis in day_analysis.items() if analysis['needs_extension']]
+        long_days = [day for day, analysis in day_analysis.items() if not analysis['needs_extension'] and len(analysis['theory_classes']) > 1]
+
+        if not short_days:
+            print(f"       ✅ All days meet minimum duration requirements")
+            return entries
+
+        print(f"       📊 Short days needing extension: {short_days}")
+        print(f"       📊 Long days available for redistribution: {long_days}")
+
+        # Perform smart redistribution
+        redistributed_entries = list(entries)  # Copy original entries
+
+        for short_day in short_days:
+            short_analysis = day_analysis[short_day]
+            classes_needed = short_analysis['deficit']
+
+            print(f"       🔄 {class_group} {short_day} needs {classes_needed} more classes")
+
+            # Try to move theory classes from long days
+            classes_moved = 0
+            for long_day in long_days:
+                if classes_moved >= classes_needed:
+                    break
+
+                long_analysis = day_analysis[long_day]
+                movable_classes = [e for e in long_analysis['theory_classes']
+                                 if e.period > short_analysis['min_required']]  # Only move classes from later periods
+
+                for movable_class in movable_classes:
+                    if classes_moved >= classes_needed:
+                        break
+
+                    # Find available slot in short day
+                    target_period = short_analysis['latest_period'] + classes_moved + 1
+
+                    if target_period <= len(self.periods) and self._can_move_class(movable_class, short_day, target_period, redistributed_entries):
+                        # Move the class
+                        print(f"         ✅ Moving {movable_class.subject.code} from {long_day} P{movable_class.period} to {short_day} P{target_period}")
+
+                        # Update the entry
+                        for i, entry in enumerate(redistributed_entries):
+                            if (entry.class_group == movable_class.class_group and
+                                entry.subject.code == movable_class.subject.code and
+                                entry.day == movable_class.day and
+                                entry.period == movable_class.period):
+
+                                # Create new entry with updated day and period
+                                new_entry = self._create_entry(
+                                    short_day, target_period,
+                                    entry.subject, entry.teacher, entry.classroom,
+                                    entry.class_group, entry.is_practical
+                                )
+                                redistributed_entries[i] = new_entry
+                                classes_moved += 1
+                                break
+
+            if classes_moved > 0:
+                print(f"       ✅ Successfully moved {classes_moved} classes to {short_day}")
+            else:
+                print(f"       ⚠️  Could not find classes to move to {short_day}")
+
+        return redistributed_entries
+
+    def _can_move_class(self, movable_class: TimetableEntry, target_day: str, target_period: int, entries: List[TimetableEntry]) -> bool:
+        """Check if a class can be moved to a specific day and period."""
+        # Check if target slot is already occupied
+        for entry in entries:
+            if (entry.class_group == movable_class.class_group and
+                entry.day == target_day and
+                entry.period == target_period):
+                return False
+
+        # Check teacher availability (simplified - could be enhanced)
+        for entry in entries:
+            if (entry.teacher.id == movable_class.teacher.id and
+                entry.day == target_day and
+                entry.period == target_period and
+                entry != movable_class):
+                return False
+
+        # Check classroom availability (simplified - could be enhanced)
+        for entry in entries:
+            if (entry.classroom.id == movable_class.classroom.id and
+                entry.day == target_day and
+                entry.period == target_period and
+                entry != movable_class):
+                return False
+
+        return True
+
+    def _validate_credit_hour_compliance(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str):
+        """ENHANCEMENT 5: Validate that subjects are scheduled exactly according to their credit hours."""
+        print(f"     📊 Validating credit hour compliance for {class_group}...")
+
+        # Count scheduled classes per subject
+        subject_counts = {}
+        for entry in entries:
+            subject_code = entry.subject.code
+            if subject_code not in subject_counts:
+                subject_counts[subject_code] = 0
+
+            # For practical subjects, count 3 consecutive periods as 1 session
+            if entry.is_practical:
+                # Only count the first period of a practical session
+                if entry.period == 1 or not any(
+                    e.subject.code == subject_code and e.day == entry.day and e.period == entry.period - 1
+                    for e in entries
+                ):
+                    subject_counts[subject_code] += 1
+            else:
+                subject_counts[subject_code] += 1
+
+        # Validate against expected credit hours
+        compliance_issues = []
+        for subject in subjects:
+            expected_classes = subject.credits
+            actual_classes = subject_counts.get(subject.code, 0)
+
+            # Special rule for practical subjects
+            if self._is_practical_subject(subject):
+                expected_classes = 1  # Practical subjects: 1 credit = 1 session per week
+                rule_description = "1 credit = 1 session/week (3 consecutive hours)"
+            else:
+                rule_description = f"{subject.credits} credits = {subject.credits} classes/week"
+
+            if actual_classes != expected_classes:
+                compliance_issues.append({
+                    'subject': subject.code,
+                    'expected': expected_classes,
+                    'actual': actual_classes,
+                    'rule': rule_description
+                })
+                print(f"       ❌ {subject.code}: Expected {expected_classes}, got {actual_classes} ({rule_description})")
+            else:
+                print(f"       ✅ {subject.code}: {actual_classes} classes/week (compliant)")
+
+        if compliance_issues:
+            print(f"     ⚠️  {len(compliance_issues)} credit hour compliance issues found")
+        else:
+            print(f"     ✅ Perfect credit hour compliance - all subjects scheduled correctly!")
+
+        return compliance_issues
+
+    def _generate_overall_compliance_report(self, entries: List[TimetableEntry]) -> Dict:
+        """ENHANCEMENT 5: Generate overall credit hour compliance report."""
+        print(f"\n📊 OVERALL CREDIT HOUR COMPLIANCE REPORT:")
+
+        # Group entries by section
+        section_entries = {}
+        for entry in entries:
+            if entry.class_group not in section_entries:
+                section_entries[entry.class_group] = []
+            section_entries[entry.class_group].append(entry)
+
+        total_sections = len(section_entries)
+        compliant_sections = 0
+        total_issues = 0
+
+        for section, section_entry_list in section_entries.items():
+            subjects = self._get_subjects_for_class_group(section)
+            issues = self._validate_credit_hour_compliance(section_entry_list, subjects, section)
+
+            if not issues:
+                compliant_sections += 1
+            else:
+                total_issues += len(issues)
+
+        compliance_percentage = (compliant_sections / total_sections * 100) if total_sections > 0 else 0
+
+        print(f"   📈 Compliant sections: {compliant_sections}/{total_sections} ({compliance_percentage:.1f}%)")
+        print(f"   📊 Total compliance issues: {total_issues}")
+
+        if compliance_percentage == 100:
+            print(f"   🏆 PERFECT CREDIT HOUR COMPLIANCE!")
+        elif compliance_percentage >= 80:
+            print(f"   ✅ Good compliance rate")
+        else:
+            print(f"   ⚠️  Compliance needs improvement")
+
+        return {
+            'total_sections': total_sections,
+            'compliant_sections': compliant_sections,
+            'compliance_percentage': compliance_percentage,
+            'total_issues': total_issues,
+            'perfect_compliance': compliance_percentage == 100
+        }
