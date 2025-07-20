@@ -239,19 +239,24 @@ class FinalUniversalScheduler:
         except:
             return len(self.all_teachers) > 0  # Fallback: if teachers exist, assume assignable
     
-    def _schedule_practical_subject(self, entries: List[TimetableEntry], 
+    def _schedule_practical_subject(self, entries: List[TimetableEntry],
                                   class_schedule: dict, subject: Subject, class_group: str):
-        """Schedule practical subject (3 consecutive periods)."""
+        """Schedule practical subject (3 consecutive periods) - ENHANCED to utilize ALL days."""
         print(f"     🧪 Scheduling practical: {subject.code}")
-        
+
         # Find available teacher
         teachers = self._get_teachers_for_subject(subject)
         if not teachers:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
-        
-        # Try to find 3 consecutive periods
-        for day in self.days:
+
+        # ENHANCEMENT: Try all days in random order to ensure distribution
+        import random
+        days_shuffled = self.days.copy()
+        random.shuffle(days_shuffled)
+
+        # Try to find 3 consecutive periods across ALL days
+        for day in days_shuffled:
             for start_period in self.periods[:-2]:  # Need at least 3 periods
                 if self._can_schedule_block(class_schedule, day, start_period, 3, class_group):
                     teacher = self._find_available_teacher(teachers, day, start_period, 3)
@@ -265,47 +270,56 @@ class FinalUniversalScheduler:
                                 entries.append(entry)
                                 class_schedule[(day, period)] = entry
                                 self._mark_global_schedule(teacher, classroom, day, period)
-                            
+
                             print(f"     ✅ Scheduled {subject.code}: {day} P{start_period}-{start_period+2}")
                             return
-        
+
         print(f"     ❌ Could not schedule practical {subject.code}")
     
-    def _schedule_theory_subject(self, entries: List[TimetableEntry], 
+    def _schedule_theory_subject(self, entries: List[TimetableEntry],
                                class_schedule: dict, subject: Subject, class_group: str):
-        """Schedule theory subject."""
+        """Schedule theory subject - ENHANCED to utilize ALL days."""
         print(f"     📖 Scheduling theory: {subject.code} ({subject.credits} credits)")
-        
+
         teachers = self._get_teachers_for_subject(subject)
         if not teachers:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
-        
+
         scheduled = 0
         target = min(subject.credits, len(self.days) * len(self.periods))  # Don't exceed available slots
-        
+
+        # ENHANCEMENT: Distribute across ALL days evenly instead of filling day by day
+        available_slots = []
         for day in self.days:
+            for period in self.periods:
+                if self._can_schedule_single(class_schedule, day, period, class_group):
+                    available_slots.append((day, period))
+
+        # Shuffle slots to ensure even distribution across all days
+        import random
+        random.shuffle(available_slots)
+
+        # Schedule across distributed slots
+        for day, period in available_slots:
             if scheduled >= target:
                 break
-            for period in self.periods:
-                if scheduled >= target:
-                    break
-                
-                if self._can_schedule_single(class_schedule, day, period, class_group):
-                    teacher = self._find_available_teacher(teachers, day, period, 1)
-                    if teacher:
-                        classroom = self._find_available_classroom(day, period, 1)
-                        if classroom:
-                            entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
-                            entries.append(entry)
-                            class_schedule[(day, period)] = entry
-                            self._mark_global_schedule(teacher, classroom, day, period)
-                            scheduled += 1
-        
+
+            teacher = self._find_available_teacher(teachers, day, period, 1)
+            if teacher:
+                classroom = self._find_available_classroom(day, period, 1)
+                if classroom:
+                    entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                    entries.append(entry)
+                    class_schedule[(day, period)] = entry
+                    self._mark_global_schedule(teacher, classroom, day, period)
+                    scheduled += 1
+                    print(f"       ✅ Scheduled {subject.code} on {day} P{period}")
+
         if scheduled < target:
             print(f"     ⚠️  Only scheduled {scheduled}/{target} periods for {subject.code}")
         else:
-            print(f"     ✅ Fully scheduled {subject.code}")
+            print(f"     ✅ Fully scheduled {subject.code} across {scheduled} periods")
     
     def _get_teachers_for_subject(self, subject: Subject) -> List[Teacher]:
         """Get teachers for a subject - UNIVERSAL."""

@@ -105,7 +105,7 @@ const Timetable = () => {
                   className="bg-gray-700 border border-gray-600 text-gray-100 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="">All Sections</option>
-                  {timetableData.pagination.class_groups
+                  {[...new Set(timetableData.pagination.class_groups)]  // FIXED: Remove duplicates
                     .sort((a, b) => {
                       // Sort sections properly (21SW-I, 21SW-II, 21SW-III, 22SW-I, etc.)
                       const [batchA, sectionA] = a.split('-');
