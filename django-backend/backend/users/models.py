@@ -7,7 +7,5 @@ class User(AbstractUser):
         ('TEACHER', 'Teacher'),
         ('STUDENT', 'Student'),
     )
-    role = models.CharField(max_length=10, choices=ROLES, default='TEACHER')
-
-    def __str__(self):
-        return f"{self.username} ({self.get_role_display()})"
+    # role = models.CharField(max_length=10, choices=ROLES, default='TEACHER')
+    firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)

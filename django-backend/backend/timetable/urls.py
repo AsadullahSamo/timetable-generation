@@ -12,6 +12,8 @@ from .views import (
     ClassRoomViewSet,  # Potential naming issue
     LatestTimetableView,
     AdvancedTimetableView,
+    SimpleTimetableView,
+    FastTimetableView,
     ConstraintManagementView,
     OptimizationView,
     TimetableReportView,
@@ -48,6 +50,8 @@ urlpatterns = [
     
     # Advanced timetable operations
     path('advanced-generate/', AdvancedTimetableView.as_view(), name='advanced-generate'),
+    path('simple-generate/', SimpleTimetableView.as_view(), name='simple-generate'),
+    path('fast-generate/', FastTimetableView.as_view(), name='fast-generate'),
     path('constraints/', ConstraintManagementView.as_view(), name='constraints'),
     path('optimize/', OptimizationView.as_view(), name='optimize'),
     path('report/', TimetableReportView.as_view(), name='report'),

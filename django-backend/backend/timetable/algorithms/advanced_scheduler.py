@@ -67,12 +67,12 @@ class AdvancedTimetableScheduler:
         self.teachers = list(Teacher.objects.all())
         self.classrooms = list(Classroom.objects.all())
         
-        # Genetic algorithm parameters
-        self.population_size = 50
-        self.generations = 100
-        self.mutation_rate = 0.1
+        # Genetic algorithm parameters (optimized for speed)
+        self.population_size = 30  # Reduced from 50
+        self.generations = 50      # Reduced from 100
+        self.mutation_rate = 0.15  # Increased for faster convergence
         self.crossover_rate = 0.8
-        self.elite_size = 5
+        self.elite_size = 3        # Reduced from 5
         
         # Constraint weights
         self.constraint_weights = {
@@ -172,6 +172,17 @@ class AdvancedTimetableScheduler:
                 # Log progress
                 if generation % 10 == 0:
                     logger.info(f"Generation {generation}: Best fitness = {best_fitness}")
+                
+                # Early stopping if no improvement for 20 generations
+                if best_fitness > last_best_fitness:
+                    last_best_fitness = best_fitness
+                    no_improvement_count = 0
+                else:
+                    no_improvement_count += 1
+                
+                if no_improvement_count >= 20:
+                    logger.info(f"Early stopping at generation {generation} - no improvement for 20 generations")
+                    break
             
             # Return best solution
             if best_solution:
@@ -407,6 +418,11 @@ class AdvancedTimetableScheduler:
             total_penalty += penalty * self.constraint_weights[constraint_type]
             violations.extend(constraint_violations)
         
+        # Check theory-practical balance constraint (additional constraint)
+        penalty, constraint_violations = self._check_theory_practical_balance(solution)
+        total_penalty += penalty * 15.0  # High weight for this constraint
+        violations.extend(constraint_violations)
+        
         # Calculate fitness (higher is better)
         fitness = 1000.0 - total_penalty
         
@@ -537,7 +553,7 @@ class AdvancedTimetableScheduler:
         return penalty, violations
     
     def _check_practical_blocks(self, solution: SchedulingSolution) -> Tuple[float, List[str]]:
-        """Check practical block constraints"""
+        """Check practical block constraints - 1 credit = 3 consecutive periods"""
         penalty = 0.0
         violations = []
         
@@ -550,16 +566,16 @@ class AdvancedTimetableScheduler:
                 day_entries = [e for e in practical_entries if e.day == day]
                 day_entries.sort(key=lambda x: x.period)
                 
-                # Check for 3-hour blocks
+                # Check for 3 consecutive periods (1 credit = 3 periods)
                 for i in range(len(day_entries) - 2):
                     if (day_entries[i+1].period == day_entries[i].period + 1 and
                         day_entries[i+2].period == day_entries[i].period + 2):
-                        # Good 3-hour block
+                        # Good 3-period block
                         break
                 else:
-                    if day_entries:  # If there are practical entries but no 3-hour block
-                        penalty += 8.0
-                        violations.append(f"Practical subject not in 3-hour block for {class_group}")
+                    if day_entries:  # If there are practical entries but no 3-period block
+                        penalty += 10.0  # Higher penalty for practical block violation
+                        violations.append(f"Practical subject not in 3 consecutive periods for {class_group} on {day}")
         
         return penalty, violations
     
@@ -604,6 +620,27 @@ class AdvancedTimetableScheduler:
                     if consecutive_count > 4:  # Max 4 consecutive classes
                         penalty += 3.0
                         violations.append(f"Too many consecutive classes for {class_group}")
+        
+        return penalty, violations
+    
+    def _check_theory_practical_balance(self, solution: SchedulingSolution) -> Tuple[float, List[str]]:
+        """Check that no day has only practical classes (must have theory classes)"""
+        penalty = 0.0
+        violations = []
+        
+        for class_group in self.class_groups:
+            for day in self.days:
+                day_entries = [e for e in solution.entries 
+                             if e.class_group == class_group and e.day == day]
+                
+                if day_entries:  # If there are classes on this day
+                    practical_entries = [e for e in day_entries if e.is_practical]
+                    theory_entries = [e for e in day_entries if not e.is_practical]
+                    
+                    # If there are practical classes but no theory classes
+                    if practical_entries and not theory_entries:
+                        penalty += 15.0  # High penalty for this constraint violation
+                        violations.append(f"Day {day} for {class_group} has only practical classes - must have theory classes")
         
         return penalty, violations
     
