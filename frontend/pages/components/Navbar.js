@@ -6,6 +6,7 @@ import {
   Users,
   BookOpen,
   User,
+  Building2,
   Sliders,
   Calendar,
   LogOut
@@ -16,6 +17,7 @@ const menuItems = [
   { name: "Classes", icon: Users, path: "/components/Classes" },
   { name: "Subjects", icon: BookOpen, path: "/components/Subjects" },
   { name: "Teachers", icon: User, path: "/components/Teachers" },
+  { name: "Classrooms", icon: Building2, path: "/components/Classrooms" },
   { name: "Constraints", icon: Sliders, path: "/components/Constraints" },
   { name: "Timetable", icon: Calendar, path: "/components/Timetable" }
 ];

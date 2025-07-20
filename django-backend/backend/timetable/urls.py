@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     SubjectViewSet,
     TeacherViewSet,
-    # ClassroomViewSet,
+    ClassroomViewSet,
     ScheduleConfigViewSet,
     TimetableViewSet,
     TimetableView,
@@ -39,6 +39,7 @@ router = DefaultRouter()
 
 router.register(r'subjects', SubjectViewSet)
 router.register(r'teachers', TeacherViewSet)
+router.register(r'classrooms', ClassroomViewSet)  # Fixed: Added classroom endpoint
 router.register(r'class-groups', ClassRoomViewSet)
 router.register(r'schedule-configs', ScheduleConfigViewSet, basename='schedule-config')
 router.register(r'timetables', TimetableViewSet, basename='timetable')
