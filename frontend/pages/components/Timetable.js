@@ -93,9 +93,9 @@ const Timetable = () => {
         {timetableData.pagination && (
           <div className="mb-6 bg-gray-800 rounded-lg border border-gray-700 p-4">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              {/* Class Group Filter */}
+              {/* Class Group Filter - ENHANCED for Sections */}
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-300">Filter by Class:</label>
+                <label className="text-sm text-gray-300">Filter by Section:</label>
                 <select
                   value={selectedClassGroup}
                   onChange={(e) => {
@@ -104,9 +104,19 @@ const Timetable = () => {
                   }}
                   className="bg-gray-700 border border-gray-600 text-gray-100 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
-                  <option value="">All Classes</option>
-                  {timetableData.pagination.class_groups.map(group => (
-                    <option key={group} value={group}>{group}</option>
+                  <option value="">All Sections</option>
+                  {timetableData.pagination.class_groups
+                    .sort((a, b) => {
+                      // Sort sections properly (21SW-I, 21SW-II, 21SW-III, 22SW-I, etc.)
+                      const [batchA, sectionA] = a.split('-');
+                      const [batchB, sectionB] = b.split('-');
+                      if (batchA !== batchB) return batchA.localeCompare(batchB);
+                      return (sectionA || '').localeCompare(sectionB || '');
+                    })
+                    .map(group => (
+                    <option key={group} value={group}>
+                      {group.includes('-') ? `${group.split('-')[0]} Section ${group.split('-')[1]}` : group}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -238,7 +248,12 @@ const Timetable = () => {
                           <div className="font-medium text-purple-400">{entry.subject}</div>
                           <div className="text-sm text-blue-400">{entry.teacher}</div>
                           <div className="text-xs text-emerald-400">{entry.classroom}</div>
-                          <div className="text-xs text-gray-400">{entry.class_group}</div>
+                          <div className="text-xs text-gray-400">
+                            {entry.class_group.includes('-') ?
+                              `${entry.class_group.split('-')[0]} Sec ${entry.class_group.split('-')[1]}` :
+                              entry.class_group
+                            }
+                          </div>
                         </>
                       )}
                     </div>
