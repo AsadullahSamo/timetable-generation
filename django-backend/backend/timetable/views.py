@@ -7,6 +7,7 @@ from celery.result import AsyncResult
 from datetime import datetime, timedelta
 from rest_framework.permissions import IsAuthenticated
 from .algorithms.advanced_scheduler import AdvancedTimetableScheduler
+from .algorithms.working_scheduler import WorkingTimetableScheduler
 from .constraint_manager import ConstraintManager
 import logging
 from rest_framework.pagination import PageNumberPagination
@@ -189,9 +190,9 @@ class SimpleTimetableView(APIView):
                     status=400
                 )
             
-            # Initialize the scheduler with optimized parameters
-            scheduler = AdvancedTimetableScheduler(config)
-            
+            # Use the working scheduler instead of broken advanced scheduler
+            scheduler = WorkingTimetableScheduler(config)
+
             # Generate timetable synchronously (faster)
             result = scheduler.generate_timetable()
             
@@ -551,8 +552,8 @@ class TimetableView(APIView):
             constraints = request.data.get('constraints', [])
             # Update config with the constraints from the request
             config.constraints = constraints
-            # Create scheduler instance
-            scheduler = AdvancedTimetableScheduler(config)
+            # Create scheduler instance - use working scheduler
+            scheduler = WorkingTimetableScheduler(config)
             # Generate timetable
             timetable = scheduler.generate_timetable()
             # Save entries to database

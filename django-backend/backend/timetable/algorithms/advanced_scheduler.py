@@ -371,29 +371,75 @@ class AdvancedTimetableScheduler:
     def _find_available_teacher(self, entries: List[TimetableEntry],
                               subject: Subject, day: str,
                               period: int, duration: int) -> Optional[Teacher]:
-        """Find available teacher for the given slot (optimized)"""
+        """Find available teacher with cross-semester conflict detection and load balancing"""
+        from collections import defaultdict
+
+        # Get teacher workloads across ALL existing timetables (cross-semester)
+        teacher_workloads = defaultdict(int)
+
+        # Count existing workloads from database
+        from timetable.models import TimetableEntry as DBTimetableEntry
+        for db_entry in DBTimetableEntry.objects.select_related('teacher'):
+            if db_entry.teacher:
+                teacher_workloads[db_entry.teacher.id] += 1
+
+        # Count workloads from current generation
+        for entry in entries:
+            if entry.teacher:
+                teacher_workloads[entry.teacher.id] += 1
+
         available_teachers = []
 
         for teacher in self.teachers:
-            # Use prefetched subjects to avoid database queries
+            # Check if teacher can teach this subject
             teacher_subjects = list(teacher.subjects.all())
-            if subject in teacher_subjects:
-                # Check if teacher is available for all periods
-                available = True
-                for i in range(duration):
-                    check_period = period + i
-                    for entry in entries:
-                        if (entry.day == day and entry.period == check_period and
-                            entry.teacher == teacher):
-                            available = False
-                            break
-                    if not available:
+            if subject not in teacher_subjects:
+                continue
+
+            # Check availability in current generation
+            available_in_current = True
+            for i in range(duration):
+                check_period = period + i
+                for entry in entries:
+                    if (entry.day == day and entry.period == check_period and
+                        entry.teacher == teacher):
+                        available_in_current = False
                         break
-                
-                if available:
-                    available_teachers.append(teacher)
-        
-        return random.choice(available_teachers) if available_teachers else None
+                if not available_in_current:
+                    break
+
+            if not available_in_current:
+                continue
+
+            # Check cross-semester availability (database)
+            available_cross_semester = True
+            for i in range(duration):
+                check_period = period + i
+                existing_conflict = DBTimetableEntry.objects.filter(
+                    teacher=teacher,
+                    day=day,
+                    period=check_period
+                ).exists()
+
+                if existing_conflict:
+                    available_cross_semester = False
+                    break
+
+            if available_cross_semester:
+                # Add teacher with their current workload for load balancing
+                available_teachers.append((teacher, teacher_workloads[teacher.id]))
+
+        if not available_teachers:
+            return None
+
+        # INTELLIGENT SELECTION: Choose teacher with lowest workload (load balancing)
+        available_teachers.sort(key=lambda x: x[1])  # Sort by workload
+
+        # Select from teachers with lowest workload (with some randomness for variety)
+        min_workload = available_teachers[0][1]
+        best_teachers = [t for t, w in available_teachers if w == min_workload]
+
+        return random.choice(best_teachers) if best_teachers else available_teachers[0][0]
     
     def _find_available_classroom(self, entries: List[TimetableEntry], 
                                 day: str, period: int, 
