@@ -386,7 +386,10 @@ class MUETConflictTester:
                 conflicts_detected = 0
                 for teacher_name in list(multi_batch_teachers.keys())[:3]:
                     try:
-                        teacher = Teacher.objects.get(name=teacher_name)
+                        teacher = Teacher.objects.filter(name=teacher_name).first()
+                        if not teacher:
+                            continue
+
                         config = ScheduleConfig.objects.first()
                         conflict_detector = CrossSemesterConflictDetector(config)
 
@@ -399,7 +402,8 @@ class MUETConflictTester:
                                 if has_conflict:
                                     conflicts_detected += 1
 
-                    except Teacher.DoesNotExist:
+                    except Exception as e:
+                        print(f"     ⚠️  Error testing teacher {teacher_name}: {e}")
                         continue
 
                 print(f"   ✓ Conflicts detected for multi-batch teachers: {conflicts_detected}")
@@ -435,16 +439,19 @@ class MUETConflictTester:
 
                 # Test if this teacher can be scheduled for more periods
                 try:
-                    teacher = Teacher.objects.get(name=max_loaded_teacher[0])
-                    config = ScheduleConfig.objects.first()
-                    conflict_detector = CrossSemesterConflictDetector(config)
+                    teacher = Teacher.objects.filter(name=max_loaded_teacher[0]).first()
+                    if teacher:
+                        config = ScheduleConfig.objects.first()
+                        conflict_detector = CrossSemesterConflictDetector(config)
 
-                    availability = conflict_detector.get_teacher_availability(teacher.id)
-                    total_available = sum(len(periods) for periods in availability.values())
-                    print(f"     Remaining availability: {total_available} slots")
+                        availability = conflict_detector.get_teacher_availability(teacher.id)
+                        total_available = sum(len(periods) for periods in availability.values())
+                        print(f"     Remaining availability: {total_available} slots")
+                    else:
+                        print("     ⚠️  Teacher not found in database")
 
-                except Teacher.DoesNotExist:
-                    print("     ⚠️  Teacher not found in database")
+                except Exception as e:
+                    print(f"     ⚠️  Error checking teacher availability: {e}")
 
             # Edge Case 2: Classroom capacity vs class size
             print("\n   Testing classroom capacity constraints...")

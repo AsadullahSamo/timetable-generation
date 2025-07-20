@@ -213,6 +213,51 @@ def create_muet_data():
             except Exception as e:
                 print(f"  ❌ Failed to create teacher {teacher_data['name']}: {e}")
                 continue
+
+        # 4. ASSIGN SUBJECTS TO TEACHERS (CRITICAL FOR SCHEDULER)
+        print("\n🔗 Assigning subjects to teachers...")
+
+        # Get all subjects for assignment
+        all_subjects = list(Subject.objects.all())
+
+        # Assign subjects to teachers based on expertise areas
+        subject_assignments = {
+            # Core CS subjects
+            "Dr. Naeem Ahmed": ["PF", "SW121", "SW124"],  # Programming & SE
+            "Dr. Mohsin Memon": ["SW212", "SW215", "SW216"],  # DSA, DB, Requirements
+            "Dr. Anoud Shaikh": ["ICT", "SW317", "SW318"],  # HCI, AI Systems
+            "Mr. Mansoor": ["SW217", "SW225", "SW226"],  # OR, OS, Networks
+            "Ms. Amrita Dewani": ["SW211", "SW227", "SW228"],  # Management, Architecture
+            "Ms. Memoona Sami": ["SW315", "SW316", "SW415"],  # Construction, Security
+            "Mr. Naveen Kumar": ["SW416", "SW417", "SW418"],  # Multimedia, Web, Formal Methods
+            "Mr. Junaid Ahmed": ["MTH112", "MTH317", "AC"],  # Mathematics subjects
+            "Ms. Hina Ali": ["PS106", "SS104", "FE"],  # General subjects
+            "Mr. Saleem Memon": ["AC", "AP", "MTH112"],  # Physics/Math
+            "Mr. Jabbar Memon": ["AP", "AC"],  # Physics
+            "Ms. Uma Rubab": ["FE", "ENG301"],  # English
+        }
+
+        # Assign subjects to teachers
+        for teacher_name, subject_codes in subject_assignments.items():
+            if teacher_name in teachers:
+                teacher = teachers[teacher_name]
+                assigned_count = 0
+                for subject_code in subject_codes:
+                    try:
+                        subject = Subject.objects.get(code=subject_code)
+                        teacher.subjects.add(subject)
+                        assigned_count += 1
+                    except Subject.DoesNotExist:
+                        continue
+                print(f"  ✓ {teacher_name}: {assigned_count} subjects assigned")
+
+        # Assign remaining teachers to general subjects (fallback)
+        general_subjects = Subject.objects.filter(code__in=["PF", "ICT", "FE", "AC", "AP"])
+        for teacher_name, teacher in teachers.items():
+            if teacher.subjects.count() == 0:  # No subjects assigned yet
+                for subject in general_subjects[:2]:  # Assign 2 general subjects
+                    teacher.subjects.add(subject)
+                print(f"  ✓ {teacher_name}: Assigned general subjects (fallback)")
         
         # 3. CREATE CLASSROOMS
         print("\n🏫 Creating classrooms...")

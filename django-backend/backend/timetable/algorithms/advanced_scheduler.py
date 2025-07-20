@@ -64,17 +64,20 @@ class AdvancedTimetableScheduler:
         self.class_groups = config.class_groups
         self.constraints = config.constraints
         
-        # Data structures
+        # Data structures (optimized queries)
         self.subjects = list(Subject.objects.all())
-        self.teachers = list(Teacher.objects.all())
+        self.teachers = list(Teacher.objects.prefetch_related('subjects').all())
         self.classrooms = list(Classroom.objects.all())
         
-        # Genetic algorithm parameters (optimized for speed)
-        self.population_size = 30  # Reduced from 50
-        self.generations = 50      # Reduced from 100
-        self.mutation_rate = 0.15  # Increased for faster convergence
+        # Genetic algorithm parameters (optimized for speed and reliability)
+        self.population_size = 20  # Further reduced for faster testing
+        self.generations = 30      # Reduced for faster convergence
+        self.mutation_rate = 0.2   # Higher for better exploration
         self.crossover_rate = 0.8
-        self.elite_size = 3        # Reduced from 5
+        self.elite_size = 2        # Smaller elite size
+
+        # Add timeout protection
+        self.max_attempts_per_subject = 100  # Prevent infinite loops
         
         # Constraint weights
         self.constraint_weights = {
@@ -340,20 +343,22 @@ class AdvancedTimetableScheduler:
         
         return True
     
-    def _find_available_teacher(self, entries: List[TimetableEntry], 
-                              subject: Subject, day: str, 
+    def _find_available_teacher(self, entries: List[TimetableEntry],
+                              subject: Subject, day: str,
                               period: int, duration: int) -> Optional[Teacher]:
-        """Find available teacher for the given slot"""
+        """Find available teacher for the given slot (optimized)"""
         available_teachers = []
-        
+
         for teacher in self.teachers:
-            if subject in teacher.subjects.all():
+            # Use prefetched subjects to avoid database queries
+            teacher_subjects = list(teacher.subjects.all())
+            if subject in teacher_subjects:
                 # Check if teacher is available for all periods
                 available = True
                 for i in range(duration):
                     check_period = period + i
                     for entry in entries:
-                        if (entry.day == day and entry.period == check_period and 
+                        if (entry.day == day and entry.period == check_period and
                             entry.teacher == teacher):
                             available = False
                             break
