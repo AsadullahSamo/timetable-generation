@@ -223,6 +223,12 @@ class FinalUniversalScheduler:
         # ENHANCEMENT 4: Ensure minimum daily class duration
         entries = self._enforce_minimum_daily_duration(entries, class_group)
 
+        # ENHANCEMENT 7: Enforce Friday 12:00 PM limit
+        entries = self._enforce_friday_time_limit(entries, class_group)
+
+        # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches
+        entries = self._assign_thesis_day_if_needed(entries, subjects, class_group)
+
         # ENHANCEMENT 5: Validate credit hour compliance
         self._validate_credit_hour_compliance(entries, subjects, class_group)
 
@@ -748,6 +754,250 @@ class FinalUniversalScheduler:
 
         return redistributed_entries
 
+    def _enforce_friday_time_limit(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT 7: Enforce Friday classes must not exceed 12:00 PM (Period 4)."""
+        print(f"     📅 Enforcing Friday 12:00 PM limit for {class_group}...")
+
+        # Find Friday entries that violate the limit
+        friday_entries = [e for e in entries if e.day.lower() == 'friday']
+        violating_entries = [e for e in friday_entries if e.period > 4]  # Period 5+ = after 12:00 PM
+
+        if not violating_entries:
+            print(f"       ✅ All Friday classes end by 12:00 PM - no violations")
+            return entries
+
+        print(f"       ⚠️  Found {len(violating_entries)} Friday classes after 12:00 PM - redistributing...")
+
+        # Remove violating entries from Friday
+        compliant_entries = [e for e in entries if not (e.day.lower() == 'friday' and e.period > 4)]
+
+        # Try to redistribute violating entries to other days
+        redistributed_entries = list(compliant_entries)
+
+        for violating_entry in violating_entries:
+            # Try to find alternative slot on other days (Monday-Thursday)
+            alternative_found = False
+
+            for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday']:
+                for period in range(1, 8):  # Try all periods
+                    if self._can_reschedule_entry(violating_entry, day, period, redistributed_entries):
+                        # Create new entry with alternative day/period
+                        new_entry = self._create_entry(
+                            day, period,
+                            violating_entry.subject, violating_entry.teacher, violating_entry.classroom,
+                            violating_entry.class_group, violating_entry.is_practical
+                        )
+                        redistributed_entries.append(new_entry)
+                        alternative_found = True
+                        print(f"         ✅ Moved {violating_entry.subject.code} from Friday P{violating_entry.period} to {day} P{period}")
+                        break
+
+                if alternative_found:
+                    break
+
+            if not alternative_found:
+                print(f"         ⚠️  Could not redistribute {violating_entry.subject.code} - keeping on Friday P{min(violating_entry.period, 4)}")
+                # Keep the class but move it to Period 4 (12:00 PM) as last resort
+                capped_entry = self._create_entry(
+                    'Friday', 4,
+                    violating_entry.subject, violating_entry.teacher, violating_entry.classroom,
+                    violating_entry.class_group, violating_entry.is_practical
+                )
+                redistributed_entries.append(capped_entry)
+
+        # Verify Friday compliance
+        final_friday_entries = [e for e in redistributed_entries if e.day.lower() == 'friday']
+        violations_remaining = [e for e in final_friday_entries if e.period > 4]
+
+        if not violations_remaining:
+            print(f"       ✅ Friday 12:00 PM limit successfully enforced!")
+        else:
+            print(f"       ⚠️  {len(violations_remaining)} Friday violations remain (unavoidable)")
+
+        return redistributed_entries
+
+    def _assign_thesis_day_if_needed(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batch (detected by 3 theory subjects)."""
+        print(f"     🎓 Analyzing {class_group} for Thesis Day eligibility...")
+
+        # INTELLIGENT DETECTION: Final year batch has exactly 3 theory subjects
+        theory_subjects = [s for s in subjects if not s.is_practical]
+        theory_count = len(theory_subjects)
+
+        is_final_year = theory_count == 3  # Precise detection: exactly 3 theory subjects = final year
+
+        if not is_final_year:
+            print(f"       ℹ️  {class_group} has {theory_count} theory subjects - not final year, no Thesis Day")
+            return entries
+
+        print(f"       🎓 DETECTED: {class_group} is FINAL YEAR batch ({theory_count} theory subjects) - eligible for Thesis Day")
+
+        # Analyze current schedule for problematic days
+        day_entries = {}
+        for entry in entries:
+            if entry.day not in day_entries:
+                day_entries[entry.day] = []
+            day_entries[entry.day].append(entry)
+
+        # Find days with insufficient classes
+        problematic_days = []
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            latest_period = max(entry.period for entry in day_entry_list)
+            min_required_period = 3  # Default minimum (11:00 AM)
+            if day.lower() == 'friday':
+                min_required_period = 2  # Friday can end earlier
+
+            if latest_period < min_required_period:
+                problematic_days.append({
+                    'day': day,
+                    'latest_period': latest_period,
+                    'classes_count': len(day_entry_list),
+                    'deficit': min_required_period - latest_period
+                })
+
+        if not problematic_days:
+            print(f"       ✅ {class_group} has no problematic days - no Thesis Day assignment needed")
+            return entries
+
+        # INTELLIGENT DECISION: Assign Thesis Day to the most problematic day
+        most_problematic = max(problematic_days, key=lambda x: x['deficit'])
+        thesis_day = most_problematic['day']
+
+        print(f"       🎓 INTELLIGENT ASSIGNMENT: {thesis_day} designated as THESIS DAY for {class_group}")
+        print(f"          📊 {thesis_day} had only {most_problematic['classes_count']} classes (ending at Period {most_problematic['latest_period']})")
+        print(f"          🎯 Thesis Day solves minimum duration while preserving credit compliance")
+
+        # Create Thesis Day entry (special marker)
+        thesis_entry = self._create_thesis_day_entry(class_group, thesis_day)
+
+        return entries + [thesis_entry]
+
+    def _assign_thesis_day_if_needed(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches (detected by low subject count)."""
+        print(f"     🎓 Analyzing {class_group} for Thesis Day eligibility...")
+
+        # INTELLIGENT DETECTION: Final year batches have fewer subjects (≤ 5 subjects typically)
+        total_subjects = len(subjects)
+        is_final_year = total_subjects <= 5  # Smart detection based on subject count
+
+        if not is_final_year:
+            print(f"       ℹ️  {class_group} has {total_subjects} subjects - not final year, no Thesis Day needed")
+            return entries
+
+        print(f"       🎓 DETECTED: {class_group} is final year batch ({total_subjects} subjects) - eligible for Thesis Day")
+
+        # Analyze current schedule for problematic days
+        day_entries = {}
+        for entry in entries:
+            if entry.day not in day_entries:
+                day_entries[entry.day] = []
+            day_entries[entry.day].append(entry)
+
+        # Find days with insufficient classes that couldn't be fixed by redistribution
+        problematic_days = []
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            latest_period = max(entry.period for entry in day_entry_list)
+            min_required_period = 3  # Default minimum (11:00 AM)
+            if day.lower() == 'friday':
+                min_required_period = 2  # Friday can end earlier
+
+            if latest_period < min_required_period:
+                problematic_days.append({
+                    'day': day,
+                    'latest_period': latest_period,
+                    'classes_count': len(day_entry_list),
+                    'deficit': min_required_period - latest_period
+                })
+
+        if not problematic_days:
+            print(f"       ✅ {class_group} has no problematic days - no Thesis Day assignment needed")
+            return entries
+
+        # INTELLIGENT DECISION: Assign Thesis Day to the most problematic day
+        most_problematic = max(problematic_days, key=lambda x: x['deficit'])
+        thesis_day = most_problematic['day']
+
+        print(f"       🎓 INTELLIGENT ASSIGNMENT: {thesis_day} designated as Thesis Day for {class_group}")
+        print(f"          📊 {thesis_day} had only {most_problematic['classes_count']} classes (ending at Period {most_problematic['latest_period']})")
+        print(f"          🎯 Thesis Day solves minimum duration requirement while preserving credit compliance")
+
+        # Create Thesis Day entry
+        thesis_entry = self._create_thesis_day_entry(class_group, thesis_day)
+
+        return entries + [thesis_entry]
+
+    def _assign_thesis_day_if_needed(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batch (detected by 3 theory subjects)."""
+        print(f"     🎓 Analyzing {class_group} for Thesis Day eligibility...")
+
+        # INTELLIGENT DETECTION: Final year batch has exactly 3 theory subjects
+        theory_subjects = [s for s in subjects if not s.is_practical]
+        theory_count = len(theory_subjects)
+
+        print(f"       🔍 Debug: Total subjects={len(subjects)}, Theory subjects={theory_count}")
+        print(f"       🔍 Theory subjects: {[s.code for s in theory_subjects]}")
+
+        is_final_year = theory_count == 3  # Precise detection: exactly 3 theory subjects = final year
+
+        if not is_final_year:
+            print(f"       ℹ️  {class_group} has {theory_count} theory subjects - not final year, no Thesis Day")
+            return entries
+
+        # Analyze current schedule for problematic days
+        day_entries = {}
+        for entry in entries:
+            if entry.day not in day_entries:
+                day_entries[entry.day] = []
+            day_entries[entry.day].append(entry)
+
+        # Find days with insufficient classes that couldn't be fixed by redistribution
+        problematic_days = []
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            latest_period = max(entry.period for entry in day_entry_list)
+            min_required_period = 3  # Default minimum (11:00 AM)
+            if day.lower() == 'friday':
+                min_required_period = 2  # Friday can end earlier
+
+            if latest_period < min_required_period:
+                problematic_days.append({
+                    'day': day,
+                    'latest_period': latest_period,
+                    'classes_count': len(day_entry_list),
+                    'deficit': min_required_period - latest_period
+                })
+
+        if not problematic_days:
+            print(f"       ✅ {class_group} has no problematic days - no Thesis Day needed")
+            return entries
+
+        # INTELLIGENT DECISION: Assign Thesis Day to the most problematic day
+        most_problematic = max(problematic_days, key=lambda x: x['deficit'])
+        thesis_day = most_problematic['day']
+
+        print(f"       🎓 INTELLIGENT DECISION: Assigning {thesis_day} as Thesis Day for {class_group}")
+        print(f"          📊 {thesis_day} had only {most_problematic['classes_count']} classes (ending at Period {most_problematic['latest_period']})")
+        print(f"          🎯 Thesis Day solves minimum duration requirement for final year students")
+
+        # Create Thesis Day entry and clear that day of other classes
+        thesis_entry = self._create_thesis_day_entry(class_group, thesis_day)
+
+        # ENHANCEMENT: Remove all other classes from thesis day to make it a complete day off
+        filtered_entries = [e for e in entries if e.day != thesis_day]
+
+        print(f"          🧹 Cleared {len(entries) - len(filtered_entries)} classes from {thesis_day}")
+        print(f"          🎓 {thesis_day} is now a complete THESIS DAY OFF for {class_group}")
+
+        return filtered_entries + [thesis_entry]
+
     def _can_move_class(self, movable_class: TimetableEntry, target_day: str, target_period: int, entries: List[TimetableEntry]) -> bool:
         """Check if a class can be moved to a specific day and period."""
         # Check if target slot is already occupied
@@ -771,6 +1021,31 @@ class FinalUniversalScheduler:
                 entry.day == target_day and
                 entry.period == target_period and
                 entry != movable_class):
+                return False
+
+        return True
+
+    def _can_reschedule_entry(self, entry: TimetableEntry, target_day: str, target_period: int, existing_entries: List[TimetableEntry]) -> bool:
+        """Check if an entry can be rescheduled to a specific day and period."""
+        # Check if target slot is already occupied by same class group
+        for existing in existing_entries:
+            if (existing.class_group == entry.class_group and
+                existing.day == target_day and
+                existing.period == target_period):
+                return False
+
+        # Check teacher availability
+        for existing in existing_entries:
+            if (existing.teacher.id == entry.teacher.id and
+                existing.day == target_day and
+                existing.period == target_period):
+                return False
+
+        # Check classroom availability
+        for existing in existing_entries:
+            if (existing.classroom.id == entry.classroom.id and
+                existing.day == target_day and
+                existing.period == target_period):
                 return False
 
         return True
@@ -871,3 +1146,51 @@ class FinalUniversalScheduler:
             'total_issues': total_issues,
             'perfect_compliance': compliance_percentage == 100
         }
+
+    def _create_thesis_day_entry(self, class_group: str, thesis_day: str) -> TimetableEntry:
+        """Create a special Thesis Day entry for final year students."""
+        from timetable.models import Subject, Teacher, Classroom
+
+        # FIX: Clean up any old thesis entries and create the correct one
+        # Remove old problematic "THESIS" entries
+        Subject.objects.filter(code="THESIS").delete()
+
+        # Create or get the correct "Thesis Day" subject
+        thesis_subject, created = Subject.objects.get_or_create(
+            code="THESIS DAY",
+            defaults={
+                'name': "Thesis Work - Complete Day Off",
+                'credits': 0,  # Special: 0 credits for thesis day
+                'is_practical': False
+            }
+        )
+
+        # Create or get special "Thesis Supervisor" teacher
+        thesis_teacher, created = Teacher.objects.get_or_create(
+            name="Thesis Supervisor",
+            defaults={'email': 'thesis@university.edu'}
+        )
+
+        # Use any available classroom (or create thesis room)
+        thesis_classroom, created = Classroom.objects.get_or_create(
+            name="Thesis Room",
+            defaults={'capacity': 30}
+        )
+
+        # Create thesis day entry for the entire day (Period 1-7)
+        from datetime import time
+        thesis_entry = TimetableEntry(
+            day=thesis_day,
+            period=1,  # Start from Period 1
+            subject=thesis_subject,
+            teacher=thesis_teacher,
+            classroom=thesis_classroom,
+            class_group=class_group,
+            start_time=time(8, 0),  # 8:00 AM
+            end_time=time(15, 0),   # 3:00 PM (full day thesis work)
+            is_practical=False
+        )
+
+        print(f"          📝 Created Thesis Day entry: {thesis_day} full day for {class_group}")
+
+        return thesis_entry
