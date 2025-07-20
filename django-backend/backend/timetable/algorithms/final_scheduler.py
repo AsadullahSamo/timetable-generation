@@ -50,43 +50,47 @@ class FinalUniversalScheduler:
         print(f"📊 Final Scheduler: {len(self.all_subjects)} subjects, {len(self.all_teachers)} teachers, {len(self.all_classrooms)} classrooms")
     
     def generate_timetable(self) -> Dict:
-        """Generate complete timetable - FINAL VERSION."""
+        """Generate complete timetable - ENHANCED VERSION with Section Support."""
         start_time = datetime.now()
-        
+
         print(f"🚀 FINAL TIMETABLE GENERATION: {self.config.name}")
         print(f"📅 Class groups: {self.class_groups}")
-        
+
         try:
             # STEP 1: Clean up previous timetables for this config
             self._cleanup_previous_timetables()
-            
+
             # STEP 2: Load existing cross-semester schedules
             self._load_existing_schedules()
-            
-            # STEP 3: Generate timetables for all class groups
+
+            # STEP 3: Expand class groups to include sections (ENHANCEMENT)
+            expanded_class_groups = self._expand_class_groups_with_sections()
+            print(f"📋 Expanded to sections: {expanded_class_groups}")
+
+            # STEP 4: Generate timetables for all class groups (including sections)
             all_entries = []
-            
-            for class_group in self.class_groups:
+
+            for class_group in expanded_class_groups:
                 print(f"\n📋 Generating for {class_group}...")
-                
+
                 # Get subjects for this specific class group
                 subjects = self._get_subjects_for_class_group(class_group)
                 print(f"   📚 Found {len(subjects)} subjects for {class_group}")
-                
+
                 # Generate entries for this class group
                 entries = self._generate_for_class_group(class_group, subjects)
                 all_entries.extend(entries)
-                
+
                 print(f"   ✅ Generated {len(entries)} entries for {class_group}")
-            
-            # STEP 4: Save to database
+
+            # STEP 5: Save to database
             saved_count = self._save_entries_to_database(all_entries)
-            
-            # STEP 5: Verify no conflicts
+
+            # STEP 6: Verify no conflicts
             conflicts = self._check_all_conflicts(all_entries)
-            
+
             generation_time = (datetime.now() - start_time).total_seconds()
-            
+
             result = {
                 'entries': [self._entry_to_dict(entry) for entry in all_entries],
                 'fitness_score': 100.0 - len(conflicts),
@@ -94,23 +98,25 @@ class FinalUniversalScheduler:
                 'generation_time': generation_time,
                 'total_entries': len(all_entries),
                 'saved_entries': saved_count,
-                'success': True
+                'success': True,
+                'sections_generated': expanded_class_groups  # NEW: Include sections info
             }
-            
+
             print(f"\n🎉 GENERATION COMPLETE!")
             print(f"📊 Total entries: {len(all_entries)}")
+            print(f"📋 Sections generated: {len(expanded_class_groups)}")
             print(f"💾 Saved to database: {saved_count}")
             print(f"⏱️  Time: {generation_time:.2f}s")
-            
+
             if conflicts:
                 print(f"⚠️  Conflicts: {len(conflicts)}")
                 for conflict in conflicts[:3]:
                     print(f"   - {conflict}")
             else:
                 print("✅ NO CONFLICTS - PERFECT TIMETABLE!")
-            
+
             return result
-            
+
         except Exception as e:
             print(f"❌ Generation failed: {str(e)}")
             import traceback
@@ -138,18 +144,50 @@ class FinalUniversalScheduler:
         
         if existing_entries.exists():
             print(f"🔍 Loaded {existing_entries.count()} existing entries to avoid conflicts")
-    
+
+    def _expand_class_groups_with_sections(self) -> List[str]:
+        """ENHANCEMENT: Expand class groups to include sections (I, II, III)."""
+        expanded_groups = []
+
+        for class_group in self.class_groups:
+            # Check if class_group already has section (like 21SW-I)
+            if '-' in class_group and class_group.split('-')[1] in ['I', 'II', 'III']:
+                # Already has section, use as is
+                expanded_groups.append(class_group)
+            else:
+                # Expand to include sections I, II, III
+                sections = ['I', 'II', 'III']
+                for section in sections:
+                    expanded_groups.append(f"{class_group}-{section}")
+
+        return expanded_groups
+
     def _get_subjects_for_class_group(self, class_group: str) -> List[Subject]:
-        """Get subjects for a specific class group - UNIVERSAL METHOD."""
+        """Get subjects for a specific class group - ENHANCED with Section Support."""
+        # Extract base batch from class_group (e.g., "21SW-I" -> "21SW")
+        base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+
+        # CORRECT semester-based subject mapping (same subjects for all sections)
+        semester_mapping = {
+            '21SW': ['SM', 'CC', 'SQE', 'CC Pr', 'SQE Pr'],  # 8th semester
+            '22SW': ['SPM', 'DS&A', 'MAD', 'DS', 'TSW', 'DS&A Pr', 'MAD Pr'],  # 6th semester
+            '23SW': ['IS', 'HCI', 'ABIS', 'SCD', 'SP', 'SCD Pr'],  # 4th semester
+            '24SW': ['DSA', 'OR', 'SRE', 'SEM', 'DBS', 'DSA Pr', 'DBS Pr']  # 2nd semester
+        }
+
+        subject_codes = semester_mapping.get(base_batch, [])
         subjects = []
-        
-        # Method 1: Try to find subjects specifically assigned to this class group
-        # This would work if there's a relationship or naming convention
-        
-        # Method 2: Get all subjects and let the system handle assignment
-        # This is the most universal approach - use ALL subjects
-        subjects = self.all_subjects
-        
+
+        for code in subject_codes:
+            subject = Subject.objects.filter(code=code).first()
+            if subject:
+                subjects.append(subject)
+
+        # Fallback: if no mapping found, try to get all subjects (for unknown batches)
+        if not subjects and base_batch not in semester_mapping:
+            print(f"   ⚠️  Unknown class group {class_group} (base: {base_batch}), using all subjects")
+            subjects = self.all_subjects
+
         return subjects
     
     def _generate_for_class_group(self, class_group: str, subjects: List[Subject]) -> List[TimetableEntry]:
