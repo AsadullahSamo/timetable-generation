@@ -64,9 +64,9 @@ class AdvancedTimetableScheduler:
         self.class_groups = config.class_groups
         self.constraints = config.constraints
         
-        # Data structures (optimized queries)
+        # Data structures (optimized queries with auto-cleanup)
         self.subjects = list(Subject.objects.all())
-        self.teachers = list(Teacher.objects.prefetch_related('subjects').all())
+        self.teachers = self._load_and_cleanup_teachers()
         self.classrooms = list(Classroom.objects.all())
         
         # Genetic algorithm parameters (optimized for speed and reliability)
@@ -78,6 +78,22 @@ class AdvancedTimetableScheduler:
 
         # Add timeout protection
         self.max_attempts_per_subject = 100  # Prevent infinite loops
+
+        # Enhanced logging system (optional)
+        try:
+            self.logger = self._setup_detailed_logging()
+        except:
+            self.logger = None
+
+        self.generation_stats = {
+            'start_time': None,
+            'end_time': None,
+            'iterations': 0,
+            'conflicts_resolved': 0,
+            'duplicates_handled': 0,
+            'teacher_assignments': 0,
+            'classroom_assignments': 0
+        }
         
         # Constraint weights
         self.constraint_weights = {
@@ -134,10 +150,19 @@ class AdvancedTimetableScheduler:
         Returns comprehensive result with fitness score and violations.
         """
         start_time = time.time()
-        
+        if hasattr(self, 'generation_stats'):
+            self.generation_stats['start_time'] = start_time
+
+        if self.logger:
+            self.logger.info(f"🚀 Starting timetable generation for {self.config.name}")
+            self.logger.info(f"📊 Data loaded: {len(self.subjects)} subjects, {len(self.teachers)} teachers, {len(self.classrooms)} classrooms")
+            self.logger.info(f"⚙️  Algorithm parameters: Population={self.population_size}, Generations={self.generations}")
+
         try:
             # Initialize population
+            self.logger.info("🧬 Initializing population...")
             population = self._initialize_population()
+            self.logger.info(f"✅ Created {len(population)} initial solutions")
             
             best_solution = None
             best_fitness = float('-inf')
@@ -744,3 +769,76 @@ class AdvancedTimetableScheduler:
                 ])
 
         return penalty, violations
+
+    def _load_and_cleanup_teachers(self) -> List[Teacher]:
+        """Load teachers with automatic duplicate detection and resolution"""
+        from collections import defaultdict
+
+        # Load all teachers with prefetched subjects
+        all_teachers = list(Teacher.objects.prefetch_related('subjects').all())
+
+        # Group by name to detect duplicates
+        name_groups = defaultdict(list)
+        for teacher in all_teachers:
+            name_groups[teacher.name].append(teacher)
+
+        # Handle duplicates automatically
+        cleaned_teachers = []
+        duplicates_handled = 0
+
+        for name, teachers in name_groups.items():
+            if len(teachers) == 1:
+                # No duplicates
+                cleaned_teachers.append(teachers[0])
+            else:
+                # Handle duplicates intelligently
+                duplicates_handled += len(teachers) - 1
+
+                # Strategy: Keep the teacher with most subject assignments
+                best_teacher = max(teachers, key=lambda t: t.subjects.count())
+
+                # Merge subject assignments from duplicates
+                all_subjects = set()
+                for teacher in teachers:
+                    all_subjects.update(teacher.subjects.all())
+
+                # Assign all subjects to the best teacher
+                for subject in all_subjects:
+                    best_teacher.subjects.add(subject)
+
+                cleaned_teachers.append(best_teacher)
+
+                print(f"🔧 Auto-resolved duplicate teacher: {name} ({len(teachers)} instances → 1)")
+
+        if hasattr(self, 'generation_stats'):
+            self.generation_stats['duplicates_handled'] = duplicates_handled
+        if duplicates_handled > 0:
+            print(f"✅ Algorithm auto-handled {duplicates_handled} duplicate teachers")
+
+        return cleaned_teachers
+
+    def _setup_detailed_logging(self):
+        """Setup comprehensive logging system"""
+        import logging
+
+        # Create logger
+        logger = logging.getLogger(f'TimetableScheduler_{self.config.name}')
+        logger.setLevel(logging.DEBUG)
+
+        # Prevent duplicate handlers
+        if logger.handlers:
+            logger.handlers.clear()
+
+        # Create console handler with detailed formatting
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+
+        # Create detailed formatter
+        formatter = logging.Formatter(
+            '%(asctime)s | %(name)s | %(levelname)s | %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+
+        return logger
