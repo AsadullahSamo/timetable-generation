@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import Head from "next/head";
 import Navbar from "./Navbar";
 import Link from "next/link";
 import api from "../utils/api";
-import { 
-  Building2, 
-  Users, 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Info, 
-  Loader2, 
+import {
+  Building2,
+  Plus,
+  Edit2,
+  Trash2,
+  Loader2,
   ArrowLeft,
-  CheckCircle2,
   AlertCircle,
   Search,
   X
@@ -20,16 +17,15 @@ import {
 
 const Classrooms = () => {
   const [classrooms, setClassrooms] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  
   const [formData, setFormData] = useState({
     name: "",
     capacity: ""
   });
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     fetchClassrooms();
@@ -37,11 +33,10 @@ const Classrooms = () => {
 
   const fetchClassrooms = async () => {
     try {
-      setLoading(true);
       const response = await api.get('/api/timetable/classrooms/');
       setClassrooms(response.data);
     } catch (error) {
-      setError('Failed to fetch classrooms');
+      setError('Failed to load classrooms');
       console.error('Error fetching classrooms:', error);
     } finally {
       setLoading(false);
@@ -65,14 +60,13 @@ const Classrooms = () => {
       setError("Valid capacity is required");
       return false;
     }
-
     return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    
+
     if (!validateForm()) {
       return;
     }
@@ -85,7 +79,7 @@ const Classrooms = () => {
 
       if (editingId) {
         const response = await api.put(`/api/timetable/classrooms/${editingId}/`, payload);
-        setClassrooms(classrooms.map(room => 
+        setClassrooms(classrooms.map(room =>
           room.id === editingId ? response.data : room
         ));
       } else {
@@ -93,7 +87,6 @@ const Classrooms = () => {
         setClassrooms([...classrooms, response.data]);
       }
 
-      // Reset form
       setFormData({ name: "", capacity: "" });
       setShowForm(false);
       setEditingId(null);
@@ -113,10 +106,6 @@ const Classrooms = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this classroom?')) {
-      return;
-    }
-
     try {
       await api.delete(`/api/timetable/classrooms/${id}/`);
       setClassrooms(classrooms.filter(room => room.id !== id));
@@ -135,48 +124,42 @@ const Classrooms = () => {
       <Head>
         <title>Classrooms - MUET Timetable System</title>
       </Head>
-      <Navbar />
-      
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-surface/30 pt-20">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
+
+      <div className="flex h-screen bg-background text-primary font-sans overflow-hidden">
+        <Navbar />
+        <div className="flex-1 p-8 max-w-7xl overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-primary mb-2">Classrooms</h1>
-              <p className="text-secondary">Manage classrooms and their capacities</p>
+              <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">Classrooms</h1>
+              <p className="text-secondary/90">Manage classrooms and their capacities</p>
             </div>
             <Link href="/components/DepartmentConfig">
-              <button className="flex items-center gap-2 px-4 py-2 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
+              <button className="flex items-center gap-2 px-4 py-2 bg-background/95 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
                 <ArrowLeft className="h-4 w-4" />
                 Back to Config
               </button>
             </Link>
           </div>
 
-          {/* Error Display */}
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
               <span className="text-red-500">{error}</span>
-              <button 
-                onClick={() => setError(null)}
-                className="ml-auto text-red-500 hover:text-red-400"
-              >
+              <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-400">
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
 
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
+          <div className="flex items-center justify-between mb-6">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
               <input
                 type="text"
                 placeholder="Search classrooms..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-surface/80 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
+                className="pl-10 pr-4 py-2 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
               />
             </div>
             <button
@@ -193,14 +176,13 @@ const Classrooms = () => {
             </button>
           </div>
 
-          {/* Form Modal */}
           {showForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-surface rounded-2xl p-6 w-full max-w-md">
                 <h2 className="text-xl font-semibold text-primary mb-4">
                   {editingId ? 'Edit Classroom' : 'Add New Classroom'}
                 </h2>
-                
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
@@ -233,8 +215,6 @@ const Classrooms = () => {
                     />
                   </div>
 
-
-
                   <div className="flex gap-3 pt-4">
                     <button
                       type="button"
@@ -244,7 +224,7 @@ const Classrooms = () => {
                         setFormData({ name: "", capacity: "" });
                         setError(null);
                       }}
-                      className="flex-1 px-4 py-3 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all"
+                      className="flex-1 px-4 py-3 bg-background/95 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all"
                     >
                       Cancel
                     </button>
@@ -260,7 +240,6 @@ const Classrooms = () => {
             </div>
           )}
 
-          {/* Classrooms List */}
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent-cyan" />
@@ -268,7 +247,7 @@ const Classrooms = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredClassrooms.map((classroom) => (
-                <div key={classroom.id} className="bg-surface/80 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
+                <div key={classroom.id} className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent-cyan/10 rounded-lg">
@@ -296,14 +275,9 @@ const Classrooms = () => {
                       </button>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2 text-sm text-secondary">
-                    <Users className="h-4 w-4" />
-                    <span>Capacity: {classroom.capacity} students</span>
-                  </div>
                 </div>
               ))}
-              
+
               {filteredClassrooms.length === 0 && !loading && (
                 <div className="col-span-full text-center py-12">
                   <Building2 className="h-12 w-12 text-secondary/50 mx-auto mb-4" />

@@ -150,7 +150,7 @@ const DepartmentConfig = () => {
       });
 
       if (response.status === 201) {
-        router.push("/components/Classes");
+        router.push("/timetable");
       }
     } catch (error) {
       if (error.response) {
