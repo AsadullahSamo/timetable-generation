@@ -28,8 +28,7 @@ const Classrooms = () => {
   
   const [formData, setFormData] = useState({
     name: "",
-    capacity: "",
-    building: ""
+    capacity: ""
   });
 
   useEffect(() => {
@@ -66,10 +65,7 @@ const Classrooms = () => {
       setError("Valid capacity is required");
       return false;
     }
-    if (!formData.building.trim()) {
-      setError("Building name is required");
-      return false;
-    }
+
     return true;
   };
 
@@ -84,8 +80,7 @@ const Classrooms = () => {
     try {
       const payload = {
         name: formData.name.trim(),
-        capacity: parseInt(formData.capacity),
-        building: formData.building.trim()
+        capacity: parseInt(formData.capacity)
       };
 
       if (editingId) {
@@ -99,7 +94,7 @@ const Classrooms = () => {
       }
 
       // Reset form
-      setFormData({ name: "", capacity: "", building: "" });
+      setFormData({ name: "", capacity: "" });
       setShowForm(false);
       setEditingId(null);
     } catch (error) {
@@ -111,8 +106,7 @@ const Classrooms = () => {
   const handleEdit = (classroom) => {
     setFormData({
       name: classroom.name,
-      capacity: classroom.capacity.toString(),
-      building: classroom.building
+      capacity: classroom.capacity.toString()
     });
     setEditingId(classroom.id);
     setShowForm(true);
@@ -133,8 +127,7 @@ const Classrooms = () => {
   };
 
   const filteredClassrooms = classrooms.filter(room =>
-    room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    room.building.toLowerCase().includes(searchTerm.toLowerCase())
+    room.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -190,7 +183,7 @@ const Classrooms = () => {
               onClick={() => {
                 setShowForm(true);
                 setEditingId(null);
-                setFormData({ name: "", capacity: "", building: "" });
+                setFormData({ name: "", capacity: "" });
                 setError(null);
               }}
               className="flex items-center gap-2 px-6 py-3 bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-xl transition-all"
@@ -240,20 +233,7 @@ const Classrooms = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">
-                      Building *
-                    </label>
-                    <input
-                      type="text"
-                      name="building"
-                      value={formData.building}
-                      onChange={handleInputChange}
-                      placeholder="e.g., Software Engineering Department"
-                      className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
-                      required
-                    />
-                  </div>
+
 
                   <div className="flex gap-3 pt-4">
                     <button
@@ -261,7 +241,7 @@ const Classrooms = () => {
                       onClick={() => {
                         setShowForm(false);
                         setEditingId(null);
-                        setFormData({ name: "", capacity: "", building: "" });
+                        setFormData({ name: "", capacity: "" });
                         setError(null);
                       }}
                       className="flex-1 px-4 py-3 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all"
@@ -296,7 +276,7 @@ const Classrooms = () => {
                       </div>
                       <div>
                         <h3 className="font-semibold text-primary">{classroom.name}</h3>
-                        <p className="text-sm text-secondary">{classroom.building}</p>
+                        <p className="text-sm text-secondary">Capacity: {classroom.capacity}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">

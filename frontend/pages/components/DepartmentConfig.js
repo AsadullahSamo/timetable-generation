@@ -8,6 +8,7 @@ import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Coffee, T
 const DepartmentConfig = () => {
   const router = useRouter();
   const [departmentName, setDepartmentName] = useState("");
+  const [classGroups, setClassGroups] = useState("");
   const [numPeriods, setNumPeriods] = useState(0);
   const [startTime, setStartTime] = useState("08:00");
   const [days] = useState(["Mon", "Tue", "Wed", "Thu", "Fri"]);
@@ -50,6 +51,10 @@ const DepartmentConfig = () => {
   const validateConfiguration = () => {
     if (!departmentName.trim()) {
       setError("Department name is required.");
+      return false;
+    }
+    if (!classGroups.trim()) {
+      setError("Class groups are required (e.g., 21SW,22SW,23SW,24SW).");
       return false;
     }
     if (numPeriods < 1) {
@@ -136,6 +141,7 @@ const DepartmentConfig = () => {
 
       const response = await api.post("/api/timetable/configs/", {
         name: departmentName,
+        class_groups: classGroups.split(',').map(g => g.trim()).join(','),
         days,
         periods: numPeriods,
         start_time: formattedStartTime,
@@ -213,6 +219,22 @@ const DepartmentConfig = () => {
                   required
                   disabled={loading}
                 />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-secondary block mb-2">Class Groups</label>
+                <input
+                  type="text"
+                  value={classGroups}
+                  onChange={(e) => setClassGroups(e.target.value)}
+                  className="w-full pl-4 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                  placeholder="e.g., 21SW,22SW,23SW,24SW"
+                  required
+                  disabled={loading}
+                />
+                <p className="text-xs text-secondary/70 mt-1">
+                  Enter class groups separated by commas (e.g., 21SW,22SW,23SW,24SW)
+                </p>
               </div>
             </div>
           </section>
