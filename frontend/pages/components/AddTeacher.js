@@ -3,21 +3,19 @@ import { useRouter } from "next/router";
 import api from "../utils/api";
 import Head from "next/head";
 import Link from "next/link";
-import { 
-  User, 
-  Mail, 
-  Clock, 
-  BookOpen, 
-  Save, 
-  X, 
-  AlertCircle, 
-  Loader2, 
+import {
+  User,
+  Mail,
+  Clock,
+  Save,
+  CheckCircle2,
+  X,
+  AlertCircle,
+  Loader2,
   CalendarClock,
-  BookMarked,
   Info,
   ArrowLeft,
   Calendar,
-  CheckCircle2,
   AlertTriangle
 } from 'lucide-react';
 import Navbar from "./Navbar";
@@ -29,8 +27,7 @@ const AddTeacher = () => {
   // Form states
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [subjects, setSubjects] = useState([]);
-  const [allSubjects, setAllSubjects] = useState([]);
+
   const [maxLessons, setMaxLessons] = useState(4);
   // Internal availability state: { day: { periodIndex: mode } }
   const [availabilityState, setAvailabilityState] = useState({});
@@ -46,9 +43,9 @@ const AddTeacher = () => {
   const [activeMode, setActiveMode] = useState("preferable");
   const [formErrors, setFormErrors] = useState({});
 
-  // Fetch configuration and subjects once on mount.
+  // Fetch configuration once on mount.
   useEffect(() => {
-    const fetchConfigAndSubjects = async () => {
+    const fetchConfig = async () => {
       try {
         const configRes = await api.get("/api/timetable/configs/");
         if (configRes.data.length > 0) {
@@ -63,15 +60,13 @@ const AddTeacher = () => {
             setError("No timetable configuration with generated periods found. Please complete Department Configuration first.");
           }
         }
-        const subjectsRes = await api.get("/api/timetable/subjects/");
-        setAllSubjects(subjectsRes.data);
       } catch (err) {
-        setError("Failed to load configuration or subjects.");
+        setError("Failed to load configuration.");
       } finally {
         setConfigLoading(false);
       }
     };
-    fetchConfigAndSubjects();
+    fetchConfig();
   }, []);
 
   // Fetch teacher data if editing
@@ -82,7 +77,6 @@ const AddTeacher = () => {
         const { data } = await api.get(`/api/timetable/teachers/${id}/`);
         setName(data.name);
         setEmail(data.email);
-        setSubjects(data.subjects || []);
         setMaxLessons(data.max_lessons_per_day);
         // Convert availability data to internal state
         const newState = {};
@@ -128,10 +122,6 @@ const AddTeacher = () => {
       errors.maxLessons = "Must be at least 1 lesson per day";
     }
     
-    if (subjects.length === 0) {
-      errors.subjects = "Please select at least one subject";
-    }
-    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -153,7 +143,6 @@ const AddTeacher = () => {
       const teacherData = {
         name,
         email,
-        subjects,
         max_lessons_per_day: maxLessons,
         unavailable_periods: availability
       };
@@ -176,21 +165,7 @@ const AddTeacher = () => {
   // Combine loading states for rendering:
   const isLoading = configLoading || teacherLoading;
 
-  const handleSubjectChange = (subjectId) => {
-    setSubjects(prev =>
-      prev.includes(subjectId)
-        ? prev.filter((id) => id !== subjectId)
-        : [...prev, subjectId]
-    );
-    
-    // Clear subject error when selection changes
-    if (formErrors.subjects) {
-      setFormErrors(prev => ({
-        ...prev,
-        subjects: undefined
-      }));
-    }
-  };
+
 
   // Toggle the state for a given day and period index.
   const toggleTimeSlot = (day, periodIndex) => {
@@ -304,12 +279,7 @@ const AddTeacher = () => {
             </div>
           )}
           
-          {formErrors.subjects && (
-            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-6 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              <p className="text-amber-500 text-sm font-medium">{formErrors.subjects}</p>
-            </div>
-          )}
+
 
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
@@ -404,48 +374,7 @@ const AddTeacher = () => {
               </div>
             </div>
 
-            <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
-                  <BookMarked className="h-5 w-5 text-accent-cyan" />
-                  Assigned Subjects
-                </h2>
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="text-secondary hover:text-primary transition-colors"
-                    onMouseEnter={() => setShowTooltip("subjects")}
-                    onMouseLeave={() => setShowTooltip("")}
-                  >
-                    <Info className="h-5 w-5" />
-                  </button>
-                  {showTooltip === "subjects" && (
-                    <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Select all subjects that this teacher can teach. Click on a subject to select/deselect it.
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {allSubjects.map((subject) => (
-                  <div
-                    key={subject.id}
-                    onClick={() => handleSubjectChange(subject.id)}
-                    className={`p-4 text-center rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
-                      subjects.includes(subject.id)
-                        ? "bg-accent-cyan/10 border-accent-cyan text-primary shadow-sm"
-                        : "bg-background/80 border-border hover:border-accent-cyan/30"
-                    }`}
-                  >
-                    <BookOpen className={`h-5 w-5 ${subjects.includes(subject.id) ? 'text-accent-cyan' : 'text-secondary/70'}`} />
-                    <span>{subject.name}</span>
-                    {subjects.includes(subject.id) && (
-                      <CheckCircle2 className="h-4 w-4 text-accent-cyan" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+
 
             <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
               <div className="flex items-center justify-between mb-4">
