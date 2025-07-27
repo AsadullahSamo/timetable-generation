@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Navbar from "./Navbar";
 import Link from "next/link";
 import api from "../utils/api";
-import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Coffee, Trash2 } from 'lucide-react';
+import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Coffee, Trash2, BookOpen, Users } from 'lucide-react';
 
 const DepartmentConfig = () => {
   const router = useRouter();
@@ -17,6 +17,28 @@ const DepartmentConfig = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showTooltip, setShowTooltip] = useState("");
+
+  // New states for subject-batch assignment
+  const [subjects, setSubjects] = useState([]);
+  const [batchSubjects, setBatchSubjects] = useState({});
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+
+  // Fetch subjects on component mount
+  useEffect(() => {
+    fetchSubjects();
+  }, []);
+
+  const fetchSubjects = async () => {
+    try {
+      const response = await api.get('/api/timetable/subjects/');
+      setSubjects(response.data);
+    } catch (error) {
+      setError('Failed to load subjects');
+      console.error('Error fetching subjects:', error);
+    } finally {
+      setLoadingSubjects(false);
+    }
+  };
 
   // Time formatting helpers
   const formatTime = (timeString) => {
@@ -46,6 +68,34 @@ const DepartmentConfig = () => {
     const newPeriods = { ...periods };
     newPeriods[day].splice(index, 1);
     setPeriods(newPeriods);
+  };
+
+  // Helper functions for batch-subject assignment
+  const getBatchesFromClassGroups = () => {
+    if (!classGroups) return [];
+    return classGroups.split(',').map(batch => batch.trim()).filter(batch => batch);
+  };
+
+  const toggleSubjectForBatch = (batch, subjectId) => {
+    setBatchSubjects(prev => {
+      const newBatchSubjects = { ...prev };
+      if (!newBatchSubjects[batch]) {
+        newBatchSubjects[batch] = [];
+      }
+
+      const subjectIndex = newBatchSubjects[batch].indexOf(subjectId);
+      if (subjectIndex > -1) {
+        newBatchSubjects[batch].splice(subjectIndex, 1);
+      } else {
+        newBatchSubjects[batch].push(subjectId);
+      }
+
+      return newBatchSubjects;
+    });
+  };
+
+  const isSubjectAssignedToBatch = (batch, subjectId) => {
+    return batchSubjects[batch]?.includes(subjectId) || false;
   };
 
   const validateConfiguration = () => {
@@ -146,7 +196,8 @@ const DepartmentConfig = () => {
         periods: numPeriods,
         start_time: formattedStartTime,
         lesson_duration: lessonDuration,
-        generated_periods: periods
+        generated_periods: periods,
+        batch_subjects: batchSubjects // ⭐ NEW: Include subject-batch assignments
       });
 
       if (response.status === 201) {
@@ -370,13 +421,76 @@ const DepartmentConfig = () => {
             )}
           </section>
 
+          {/* Batch-Subject Assignment Section */}
+          {classGroups && subjects.length > 0 && (
+            <section className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-accent-cyan" />
+                  Subject Assignment to Batches
+                </h2>
+                <div className="text-sm text-secondary">
+                  Assign subjects to each batch
+                </div>
+              </div>
+
+              {loadingSubjects ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-accent-cyan" />
+                  <span className="ml-2 text-secondary">Loading subjects...</span>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {getBatchesFromClassGroups().map((batch) => (
+                    <div key={batch} className="bg-background/95 rounded-xl p-4 border border-border">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Users className="h-4 w-4 text-accent-cyan" />
+                        <h3 className="font-medium text-primary">{batch}</h3>
+                        <span className="text-sm text-secondary">
+                          ({batchSubjects[batch]?.length || 0} subjects assigned)
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {subjects.map((subject) => (
+                          <div
+                            key={subject.id}
+                            onClick={() => toggleSubjectForBatch(batch, subject.id)}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                              isSubjectAssignedToBatch(batch, subject.id)
+                                ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
+                                : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="font-medium text-sm">{subject.code}</div>
+                                <div className="text-xs opacity-75">{subject.name}</div>
+                              </div>
+                              <div className="text-xs">
+                                {subject.credits} cr
+                                {subject.credits === 1 && (
+                                  <span className="ml-1 text-accent-pink">Pr</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="flex justify-between mt-8">
             <Link
-              href="/"
+              href="/components/Classrooms"
               className="px-6 py-3 border border-border text-secondary rounded-xl hover:text-primary hover:border-accent-cyan/30 transition-colors flex items-center gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              Back to Classrooms
             </Link>
 
             <div className="flex gap-4">
@@ -393,10 +507,10 @@ const DepartmentConfig = () => {
               </button>
 
               <Link
-                href="/components/Classes"
+                href="/timetable"
                 className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300"
               >
-                Next
+                Generate Timetable
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>

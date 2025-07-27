@@ -133,10 +133,10 @@ const Classrooms = () => {
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">Classrooms</h1>
               <p className="text-secondary/90">Manage classrooms and their capacities</p>
             </div>
-            <Link href="/components/DepartmentConfig">
-              <button className="flex items-center gap-2 px-4 py-2 bg-background/95 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
+            <Link href="/components/Teachers">
+              <button className="flex items-center gap-2 px-4 py-2 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
                 <ArrowLeft className="h-4 w-4" />
-                Back to Config
+                Back to Teachers
               </button>
             </Link>
           </div>
@@ -288,6 +288,22 @@ const Classrooms = () => {
               )}
             </div>
           )}
+
+          {/* Navigation */}
+          <div className="flex justify-between mt-8">
+            <Link href="/components/Teachers">
+              <button className="flex items-center gap-2 px-6 py-3 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
+                <ArrowLeft className="h-4 w-4" />
+                Back to Teachers
+              </button>
+            </Link>
+            <Link href="/components/DepartmentConfig">
+              <button className="flex items-center gap-2 px-6 py-3 bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-xl transition-all">
+                Next: Department Config
+                <ArrowLeft className="h-4 w-4 rotate-180" />
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
     </>
