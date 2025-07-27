@@ -125,7 +125,7 @@ class TimetableDataPopulator:
         subjects_data = [
             # 21SW - 8th Semester (Final Year)
             ('SM', 'Simulation and Modeling', 3, ['Dr. Sania Bhatti', 'Mr. Umar Farooq']),
-            ('CC', 'Cloud Computing', 3, ['Ms. Sana Faiz']),
+            ('CC', 'Cloud Computing', 3, ['Dr. Rabeea Jaffari']),
             ('SQE', 'Software Quality Engineering', 3, ['Mr. Aqib Ali']),
             
             # 22SW - 6th Semester (3rd Year)

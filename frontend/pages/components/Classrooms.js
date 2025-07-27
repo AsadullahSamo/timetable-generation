@@ -19,7 +19,8 @@ const Classrooms = () => {
   const [classrooms, setClassrooms] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
-    capacity: ""
+    capacity: "",
+    building: ""
   });
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,10 @@ const Classrooms = () => {
       setError("Valid capacity is required");
       return false;
     }
+    if (!formData.building.trim()) {
+      setError("Building name is required");
+      return false;
+    }
     return true;
   };
 
@@ -74,7 +79,8 @@ const Classrooms = () => {
     try {
       const payload = {
         name: formData.name.trim(),
-        capacity: parseInt(formData.capacity)
+        capacity: parseInt(formData.capacity),
+        building: formData.building.trim()
       };
 
       if (editingId) {
@@ -87,7 +93,7 @@ const Classrooms = () => {
         setClassrooms([...classrooms, response.data]);
       }
 
-      setFormData({ name: "", capacity: "" });
+      setFormData({ name: "", capacity: "", building: "" });
       setShowForm(false);
       setEditingId(null);
     } catch (error) {
@@ -99,7 +105,8 @@ const Classrooms = () => {
   const handleEdit = (classroom) => {
     setFormData({
       name: classroom.name,
-      capacity: classroom.capacity.toString()
+      capacity: classroom.capacity.toString(),
+      building: classroom.building || ""
     });
     setEditingId(classroom.id);
     setShowForm(true);
@@ -126,7 +133,7 @@ const Classrooms = () => {
       </Head>
 
       <div className="flex h-screen bg-background text-primary font-sans overflow-hidden">
-        <Navbar />
+        <Navbar number={5} />
         <div className="flex-1 p-8 max-w-7xl overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -166,7 +173,7 @@ const Classrooms = () => {
               onClick={() => {
                 setShowForm(true);
                 setEditingId(null);
-                setFormData({ name: "", capacity: "" });
+                setFormData({ name: "", capacity: "", building: "" });
                 setError(null);
               }}
               className="flex items-center gap-2 px-6 py-3 bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-xl transition-all"
@@ -215,13 +222,28 @@ const Classrooms = () => {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-2">
+                      Building *
+                    </label>
+                    <input
+                      type="text"
+                      name="building"
+                      value={formData.building}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Main Building, Block A"
+                      className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
+                      required
+                    />
+                  </div>
+
                   <div className="flex gap-3 pt-4">
                     <button
                       type="button"
                       onClick={() => {
                         setShowForm(false);
                         setEditingId(null);
-                        setFormData({ name: "", capacity: "" });
+                        setFormData({ name: "", capacity: "", building: "" });
                         setError(null);
                       }}
                       className="flex-1 px-4 py-3 bg-background/95 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all"

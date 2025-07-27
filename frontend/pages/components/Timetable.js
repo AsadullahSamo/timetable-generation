@@ -33,7 +33,12 @@ const Timetable = () => {
         setTimetableData(data);
         setError("");
       } catch (err) {
-        setError("Failed to load timetable. Please try again.");
+        // Handle specific case when no configuration exists (400 error)
+        if (err.response?.status === 400) {
+          setError("No schedule configuration found. Please set up Department Configuration first.");
+        } else {
+          setError("Failed to load timetable. Please try again.");
+        }
         console.error("Timetable fetch error:", err);
       } finally {
         setLoading(false);
@@ -45,7 +50,7 @@ const Timetable = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
-        <Navbar number={7} />
+        <Navbar number={8} />
         <div className="flex-1 p-8 max-w-7xl">
           <div className="flex justify-center items-center h-full">
             <div className="text-center text-purple-400 italic">
@@ -61,7 +66,7 @@ const Timetable = () => {
   if (error) {
     return (
       <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
-        <Navbar number={7} />
+        <Navbar number={8} />
         <div className="flex-1 p-8 max-w-7xl">
           <h1 className="text-3xl text-gray-50 mb-8">Generated Timetable</h1>
           <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
@@ -84,7 +89,7 @@ const Timetable = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
-      <Navbar number={7} />
+      <Navbar number={8} />
       
       <div className="flex-1 p-8 max-w-7xl">
         <h1 className="text-3xl text-gray-50 mb-8">Generated Timetable</h1>

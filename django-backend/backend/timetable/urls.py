@@ -10,6 +10,7 @@ from .views import (
     TaskStatusView,
     ConfigViewSet,
     ClassRoomViewSet,  # Potential naming issue
+    BatchViewSet,
     LatestTimetableView,
     AdvancedTimetableView,
     SimpleTimetableView,
@@ -44,6 +45,7 @@ router.register(r'class-groups', ClassRoomViewSet)
 router.register(r'schedule-configs', ScheduleConfigViewSet, basename='schedule-config')
 router.register(r'timetables', TimetableViewSet, basename='timetable')
 router.register(r'configs', ConfigViewSet, basename='config')
+router.register(r'batches', BatchViewSet, basename='batch')
 
 urlpatterns = [
     # Basic timetable operations

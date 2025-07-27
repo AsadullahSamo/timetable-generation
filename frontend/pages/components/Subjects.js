@@ -25,10 +25,12 @@ import {
 
 const SubjectConfig = () => {
   const [subjects, setSubjects] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
     code: "",
-    credits: 3
+    credits: 3,
+    batch: ""
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -59,7 +61,25 @@ const SubjectConfig = () => {
         setLoading(false);
       }
     };
+
+    const fetchBatches = async () => {
+      try {
+        const { data } = await api.get("/api/timetable/batches/");
+        setBatches(data);
+      } catch (err) {
+        console.error("Batches fetch error:", err);
+        // Fallback to hardcoded batches if API fails
+        setBatches([
+          { id: 1, name: "21SW", description: "8th Semester - Final Year" },
+          { id: 2, name: "22SW", description: "6th Semester - 3rd Year" },
+          { id: 3, name: "23SW", description: "4th Semester - 2nd Year" },
+          { id: 4, name: "24SW", description: "2nd Semester - 1st Year" }
+        ]);
+      }
+    };
+
     fetchSubjects();
+    fetchBatches();
   }, []);
 
   const validateForm = () => {
@@ -82,7 +102,13 @@ const SubjectConfig = () => {
     } else if (formData.credits > 10) {
       errors.credits = "Credits cannot exceed 10";
     }
-    
+
+    if (!formData.batch.trim()) {
+      errors.batch = "Batch is required (e.g., 21SW, 22SW, 23SW, 24SW)";
+    } else if (!/^(21|22|23|24)SW$/i.test(formData.batch)) {
+      errors.batch = "Batch must be in format: 21SW, 22SW, 23SW, or 24SW";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -127,7 +153,7 @@ const SubjectConfig = () => {
         setSubjects([...subjects, data]);
         setActiveSubject(data.id);
       }
-      setFormData({ name: "", code: "", credits: 3 });
+      setFormData({ name: "", code: "", credits: 3, batch: "" });
       setEditingId(null);
     } catch (err) {
       const errorData = err.response?.data;
@@ -163,7 +189,7 @@ const SubjectConfig = () => {
       await api.delete(`/api/timetable/subjects/${showDeleteConfirm}/`);
       setSubjects(subjects.filter(sub => sub.id !== showDeleteConfirm));
       if (editingId === showDeleteConfirm) {
-        setFormData({ name: "", code: "", credits: 3 });
+        setFormData({ name: "", code: "", credits: 3, batch: "" });
         setEditingId(null);
       }
       setShowDeleteConfirm(null);
@@ -177,7 +203,8 @@ const SubjectConfig = () => {
     setFormData({
       name: subject.name,
       code: subject.code,
-      credits: subject.credits
+      credits: subject.credits,
+      batch: subject.batch || ""
     });
     setEditingId(subject.id);
     setActiveSubject(subject.id);
@@ -185,7 +212,7 @@ const SubjectConfig = () => {
   };
   
   const clearForm = () => {
-    setFormData({ name: "", code: "", credits: 3 });
+    setFormData({ name: "", code: "", credits: 3, batch: "" });
     setEditingId(null);
     setFormErrors({});
   };
@@ -353,7 +380,36 @@ const SubjectConfig = () => {
                   )}
                 </div>
               </div>
-              
+
+              {/* Batch Field */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Batch *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Hash className="h-5 w-5 text-secondary/70" />
+                  </div>
+                  <select
+                    name="batch"
+                    value={formData.batch}
+                    onChange={handleInputChange}
+                    className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.batch ? 'border-red-500' : 'border-border'} rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                    required
+                  >
+                    <option value="">Select Batch</option>
+                    {batches.map((batch) => (
+                      <option key={batch.id} value={batch.name}>
+                        {batch.name} ({batch.description})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {formErrors.batch && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.batch}</p>
+                )}
+              </div>
+
               <button
                 type="submit"
                 className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"

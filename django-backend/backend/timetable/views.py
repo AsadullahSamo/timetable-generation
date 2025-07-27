@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import ScheduleConfig, TimetableEntry
@@ -18,14 +18,15 @@ from django.db import transaction
 from django.db.models import Q
 
 from .serializers import (
-    SubjectSerializer, 
+    SubjectSerializer,
     TeacherSerializer,
     ClassroomSerializer,
     ScheduleConfigSerializer,
     TimetableEntrySerializer,
     TimetableSerializer,
     ConfigSerializer,
-    ClassGroupSerializer
+    ClassGroupSerializer,
+    BatchSerializer
 )
 
 from .tasks import (
@@ -46,10 +47,37 @@ class SubjectViewSet(viewsets.ModelViewSet):
 class ClassroomViewSet(viewsets.ModelViewSet):
     queryset = Classroom.objects.all()
     serializer_class = ClassroomSerializer
+    authentication_classes = []  # Temporarily disable authentication for testing
+
+    def create(self, request, *args, **kwargs):
+        logger.info(f"Classroom received data: {request.data}")
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"Classroom save failed: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
 class ScheduleConfigViewSet(viewsets.ModelViewSet):
     queryset = ScheduleConfig.objects.all()
     serializer_class = ScheduleConfigSerializer
+    authentication_classes = []  # Temporarily disable authentication for testing
+
+    def create(self, request, *args, **kwargs):
+        logger.info(f"ScheduleConfig received data: {request.data}")
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"ScheduleConfig save failed: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+
+class BatchViewSet(viewsets.ModelViewSet):
+    queryset = Batch.objects.all()
+    serializer_class = BatchSerializer
+    authentication_classes = []  # Temporarily disable authentication for testing
 
 class TimetableViewSet(viewsets.ModelViewSet):
     queryset = TimetableEntry.objects.all()

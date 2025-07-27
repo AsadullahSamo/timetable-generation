@@ -31,6 +31,9 @@ import {
 
 const Constraints = () => {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [constraints, setConstraints] = useState([
     // Credit Hour Rules
     { 
@@ -166,8 +169,7 @@ const Constraints = () => {
       category: 'general'
     }
   ]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  // const [loading, setLoading] = useState(false);
   const [showTooltip, setShowTooltip] = useState("");
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -191,23 +193,153 @@ const Constraints = () => {
     );
   };
 
+  const validatePrerequisites = async () => {
+    try {
+      // Check if basic data exists
+      const [configRes, subjectsRes, teachersRes, classroomsRes, classesRes] = await Promise.all([
+        api.get('/api/timetable/configs/'),
+        api.get('/api/timetable/subjects/'),
+        api.get('/api/timetable/teachers/'),
+        api.get('/api/timetable/classrooms/'),
+        api.get('/api/timetable/class-groups/')
+      ]);
+
+      const issues = [];
+
+      // Check department configuration
+      if (!configRes.data.length || !configRes.data[0].start_time) {
+        issues.push('⚙️ Department Configuration: Set up working days, periods, and times');
+      }
+
+      // Check subjects
+      if (!subjectsRes.data.length) {
+        issues.push('📚 Subjects: Add at least one subject');
+      } else {
+        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch);
+        if (subjectsWithoutBatch.length > 0) {
+          issues.push(`📚 Subjects: ${subjectsWithoutBatch.length} subjects need batch assignment`);
+        }
+      }
+
+      // Check teachers
+      if (!teachersRes.data.length) {
+        issues.push('👨‍🏫 Teachers: Add at least one teacher');
+      }
+
+      // Check classrooms
+      if (!classroomsRes.data.length) {
+        issues.push('🏫 Classrooms: Add at least one classroom');
+      }
+
+      // Check classes
+      if (!classesRes.data.length) {
+        issues.push('👥 Classes: Add at least one class group');
+      }
+
+      return issues;
+    } catch (error) {
+      console.error('Validation error:', error);
+      return ['❌ Unable to validate prerequisites. Please check your connection.'];
+    }
+  };
+
+  const handleCheckPrerequisites = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    const issues = await validatePrerequisites();
+
+    if (issues.length === 0) {
+      setSuccess('✅ All prerequisites are met! You can now generate the timetable.');
+    } else {
+      const issuesList = issues.map(issue => `• ${issue}`).join('\n');
+      setError(`⚠️ Please fix the following issues before generating timetables:\n\n${issuesList}`);
+    }
+
+    setLoading(false);
+  };
+
   const handleGenerateTimetable = async () => {
     try {
       setLoading(true);
       setError('');
-      
+      setSuccess('');
+
+      console.log('🔍 Validating prerequisites...');
+      const validationIssues = await validatePrerequisites();
+
+      if (validationIssues.length > 0) {
+        const issuesList = validationIssues.map(issue => `• ${issue}`).join('\n');
+        setError(`⚠️ Please fix the following issues before generating timetables:\n\n${issuesList}`);
+        return;
+      }
+
+      console.log('🚀 Starting timetable generation...');
+      console.log('Active constraints:', constraints.filter(c => c.active));
+
       const response = await api.post('/api/timetable/generate-timetable/', {
         constraints: constraints.filter(c => c.active)
       });
-      
+
+      console.log('✅ API Response:', response.data);
+
       if (response.data.message === 'Timetable generated successfully') {
-        // Navigate directly to the timetable page with correct component name
-        router.push('/components/Timetable');
+        console.log('🎉 Timetable generated successfully! Navigating to timetable page...');
+        const entriesCount = response.data.entries_count || 'multiple';
+        setSuccess(`🎉 Timetable generated successfully! Created ${entriesCount} schedule entries. Redirecting to view timetable...`);
+
+        // Wait a moment to show success message, then navigate
+        setTimeout(() => {
+          router.push('/components/Timetable');
+        }, 2000);
       } else {
         throw new Error('Failed to generate timetable');
       }
     } catch (error) {
-      setError('Timetable generation failed: ' + error.message);
+      console.error('❌ Timetable generation error:', error);
+      console.error('Error response:', error.response?.data);
+
+      // Enhanced error handling with specific user-friendly messages
+      let errorMessage = 'Timetable generation failed. ';
+
+      if (error.response?.data?.error) {
+        const apiError = error.response.data.error;
+
+        // Parse common error types and provide actionable solutions
+        if (apiError.includes('No valid schedule configuration found')) {
+          errorMessage = '⚠️ Missing Department Configuration: Please go to Department Config and set up your schedule (working days, periods, times) before generating timetables.';
+        } else if (apiError.includes('Teacher') && apiError.includes('returned more than one')) {
+          errorMessage = '⚠️ Duplicate Teacher Found: There are duplicate teachers in your database. Please check Teachers section and remove duplicates.';
+        } else if (apiError.includes('Subject') && apiError.includes('returned more than one')) {
+          errorMessage = '⚠️ Duplicate Subject Found: There are duplicate subjects in your database. Please check Subjects section and remove duplicates.';
+        } else if (apiError.includes('Classroom') && apiError.includes('returned more than one')) {
+          errorMessage = '⚠️ Duplicate Classroom Found: There are duplicate classrooms in your database. Please check Classrooms section and remove duplicates.';
+        } else if (apiError.includes('No subjects found')) {
+          errorMessage = '⚠️ No Subjects Added: Please add subjects in the Subjects section before generating timetables.';
+        } else if (apiError.includes('No teachers found')) {
+          errorMessage = '⚠️ No Teachers Added: Please add teachers in the Teachers section before generating timetables.';
+        } else if (apiError.includes('No classrooms found')) {
+          errorMessage = '⚠️ No Classrooms Added: Please add classrooms in the Classrooms section before generating timetables.';
+        } else if (apiError.includes('No class groups found')) {
+          errorMessage = '⚠️ No Classes Added: Please add class groups in the Classes section before generating timetables.';
+        } else if (apiError.includes('batch')) {
+          errorMessage = '⚠️ Batch Assignment Issue: Some subjects may not be assigned to batches. Please check Subjects section and assign all subjects to appropriate batches.';
+        } else if (apiError.includes('constraint')) {
+          errorMessage = '⚠️ Constraint Conflict: The selected constraints cannot be satisfied. Try adjusting or disabling some constraints.';
+        } else if (apiError.includes('schedule')) {
+          errorMessage = '⚠️ Scheduling Conflict: Unable to create a valid schedule with current data. Check for conflicts in teacher availability, classroom capacity, or time slots.';
+        } else {
+          // Show the raw error for unknown issues
+          errorMessage = `⚠️ Generation Error: ${apiError}`;
+        }
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        errorMessage = '🌐 Network Error: Cannot connect to the server. Please check if the backend is running.';
+      } else {
+        errorMessage = `⚠️ Unexpected Error: ${error.message}`;
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -250,7 +382,7 @@ const Constraints = () => {
       </Head>
 
       <div className="flex min-h-screen bg-background text-primary font-sans">
-        <Navbar number={6} />
+        <Navbar number={7} />
         <div className="flex-1 p-8 max-w-[60rem] mx-auto">
           <div className="mb-8">
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
@@ -259,10 +391,27 @@ const Constraints = () => {
             <p className="text-secondary/90">Configure and prioritize scheduling rules for timetable generation</p>
           </div>
 
+          {success && (
+            <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-green-500 font-semibold text-sm mb-2">Success!</h3>
+                  <div className="text-green-500 text-sm">{success}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              <p className="text-red-500 text-sm font-medium">{error}</p>
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-red-500 font-semibold text-sm mb-2">Timetable Generation Failed</h3>
+                  <div className="text-red-500 text-sm whitespace-pre-line">{error}</div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -364,23 +513,39 @@ const Constraints = () => {
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
-            <button
-              className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={handleGenerateTimetable}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
+
+            <div className="flex gap-3">
+              <button
+                className="px-6 py-3 border border-accent-cyan/30 text-accent-cyan rounded-xl hover:bg-accent-cyan/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleCheckPrerequisites}
+                disabled={loading}
+              >
+                {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  Generate Timetable
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Check Prerequisites
+              </button>
+
+              <button
+                className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleGenerateTimetable}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    Generate Timetable
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

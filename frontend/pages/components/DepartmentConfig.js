@@ -189,19 +189,23 @@ const DepartmentConfig = () => {
       // Convert startTime to HH:mm:ss format
       const formattedStartTime = `${startTime}:00`;
 
-      const response = await api.post("/api/timetable/configs/", {
+      const response = await api.post("/api/timetable/schedule-configs/", {
         name: departmentName,
-        class_groups: classGroups.split(',').map(g => g.trim()).join(','),
+        class_groups: classGroups.split(',').map(g => g.trim()),
         days,
-        periods: numPeriods,
+        periods: Array.from({length: numPeriods}, (_, i) => (i + 1).toString()),
         start_time: formattedStartTime,
         lesson_duration: lessonDuration,
-        generated_periods: periods,
-        batch_subjects: batchSubjects // ⭐ NEW: Include subject-batch assignments
+        constraints: {},
+        semester: "Fall 2024",
+        academic_year: "2024-2025"
       });
 
       if (response.status === 201) {
-        router.push("/timetable");
+        // Just show success message, don't redirect to timetable
+        setError(null);
+        alert("Department Configuration saved successfully!");
+        // Stay on the same page so user can continue with other configurations
       }
     } catch (error) {
       if (error.response) {
@@ -219,7 +223,7 @@ const DepartmentConfig = () => {
 
   return (
     <div className="flex min-h-screen bg-background text-primary font-sans">
-      <Navbar />
+      <Navbar number={6} />
 
       <div className="flex-1 p-8 max-w-7xl">
         <div className="mb-8">

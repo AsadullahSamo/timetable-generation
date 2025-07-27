@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from users.models import User
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch
 # from users.serializers import UserSerializer
 from datetime import datetime
 import traceback
@@ -105,6 +105,11 @@ class ConfigSerializer(serializers.ModelSerializer):
 class ClassGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClassGroup
+        fields = '__all__'
+
+class BatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Batch
         fields = '__all__'
 
 class SubjectDetailsSerializer(serializers.ModelSerializer):

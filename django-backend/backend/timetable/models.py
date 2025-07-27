@@ -67,11 +67,32 @@ class ClassGroup(models.Model):
     def __str__(self):
         return ".".join(self.class_groups) or "No class groups"
     
+class Batch(models.Model):
+    name = models.CharField(max_length=10, unique=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW")
+    description = models.CharField(max_length=100, help_text="e.g., 8th Semester - Final Year")
+    semester_number = models.PositiveIntegerField(help_text="e.g., 8 for 8th semester")
+    academic_year = models.CharField(max_length=20, default="2024-2025")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-semester_number']  # Final year first
+
+    def __str__(self):
+        return f"{self.name} - {self.description}"
+
 class Subject(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
     credits = models.PositiveIntegerField()
     is_practical = models.BooleanField(default=False)
+    batch = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW")
+
+    def save(self, *args, **kwargs):
+        # Auto-detect practical subjects based on name or code
+        if '(PR)' in self.name or '(Pr)' in self.name or 'Pr' in self.code or 'PR' in self.code:
+            self.is_practical = True
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

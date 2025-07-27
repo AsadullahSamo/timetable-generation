@@ -171,11 +171,18 @@ class FinalUniversalScheduler:
         return expanded_groups
 
     def _get_subjects_for_class_group(self, class_group: str) -> List[Subject]:
-        """Get subjects for a specific class group - ENHANCED with Section Support."""
+        """Get subjects for a specific class group - DATABASE-DRIVEN with Fallback."""
         # Extract base batch from class_group (e.g., "21SW-I" -> "21SW")
         base_batch = class_group.split('-')[0] if '-' in class_group else class_group
 
-        # CORRECT semester-based subject mapping (same subjects for all sections)
+        # Method 1: Try to get subjects from database batch field (NEW!)
+        subjects = list(Subject.objects.filter(batch=base_batch))
+
+        if subjects:
+            print(f"   📚 Found {len(subjects)} subjects for {base_batch} from database")
+            return subjects
+
+        # Method 2: Fallback to hardcoded mapping for backward compatibility
         semester_mapping = {
             '21SW': ['SM', 'CC', 'SQE', 'CC Pr', 'SQE Pr'],  # 8th semester
             '22SW': ['SPM', 'DS&A', 'MAD', 'DS', 'TSW', 'DS&A Pr', 'MAD Pr'],  # 6th semester
@@ -191,12 +198,13 @@ class FinalUniversalScheduler:
             if subject:
                 subjects.append(subject)
 
-        # Fallback: if no mapping found, try to get all subjects (for unknown batches)
-        if not subjects and base_batch not in semester_mapping:
-            print(f"   ⚠️  Unknown class group {class_group} (base: {base_batch}), using all subjects")
-            subjects = self.all_subjects
+        if subjects:
+            print(f"   📚 Found {len(subjects)} subjects for {base_batch} from hardcoded mapping")
+            return subjects
 
-        return subjects
+        # Method 3: Final fallback - use all subjects
+        print(f"   ⚠️  Unknown class group {class_group} (base: {base_batch}), using all subjects")
+        return self.all_subjects
     
     def _generate_for_class_group(self, class_group: str, subjects: List[Subject]) -> List[TimetableEntry]:
         """Generate timetable for a specific class group."""
