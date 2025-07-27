@@ -26,12 +26,15 @@ import {
 const SubjectConfig = () => {
   const [subjects, setSubjects] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
     code: "",
     credits: 3,
     batch: ""
   });
+  const [showAssignments, setShowAssignments] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
@@ -78,9 +81,34 @@ const SubjectConfig = () => {
       }
     };
 
+    const fetchTeachers = async () => {
+      try {
+        const { data } = await api.get("/api/timetable/teachers/");
+        setTeachers(data);
+      } catch (err) {
+        console.error("Teachers fetch error:", err);
+      }
+    };
+
+    const fetchAssignments = async () => {
+      try {
+        const { data } = await api.get("/api/timetable/teacher-assignments/");
+        setAssignments(data);
+      } catch (err) {
+        console.error("Assignments fetch error:", err);
+      }
+    };
+
     fetchSubjects();
     fetchBatches();
+    fetchTeachers();
+    fetchAssignments();
   }, []);
+
+  // Get teacher assignments for a subject
+  const getSubjectAssignments = (subjectId) => {
+    return assignments.filter(assignment => assignment.subject === subjectId);
+  };
 
   const validateForm = () => {
     const errors = {};
@@ -232,7 +260,7 @@ const SubjectConfig = () => {
       </Head>
 
       <div className="flex min-h-screen bg-background text-primary font-sans">
-        <Navbar number={3} />
+        <Navbar number={2} />
         <div className="flex-1 p-8 max-w-7xl">
           <div className="mb-8">
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
@@ -468,6 +496,7 @@ const SubjectConfig = () => {
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Subject Name</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Code</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Credits</th>
+                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Teacher Assignments</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Actions</th>
                       </tr>
                     </thead>
@@ -489,6 +518,26 @@ const SubjectConfig = () => {
                           </td>
                           <td className="px-4 py-3 border border-border font-mono">{subject.code}</td>
                           <td className="px-4 py-3 border border-border">{subject.credits}</td>
+                          <td className="px-4 py-3 border border-border">
+                            {(() => {
+                              const subjectAssignments = getSubjectAssignments(subject.id);
+                              if (subjectAssignments.length === 0) {
+                                return <span className="text-secondary/60 text-sm">No assignments</span>;
+                              }
+                              return (
+                                <div className="space-y-1">
+                                  {subjectAssignments.map((assignment, index) => (
+                                    <div key={index} className="text-sm">
+                                      <span className="font-medium text-primary">{assignment.teacher_name}</span>
+                                      <span className="text-secondary/70 ml-2">
+                                        ({assignment.batch_name} - {assignment.sections?.join(', ') || 'All'})
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </td>
                           <td className="px-4 py-3 border border-border">
                             <div className="flex items-center gap-2">
                               <button

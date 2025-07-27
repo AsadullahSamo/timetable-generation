@@ -2,18 +2,19 @@ import React, { useState, useEffect } from "react";
 import Head from "next/head";
 import Navbar from "./Navbar";
 import api from "../utils/api";
-import { 
-  GraduationCap, 
-  Search, 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Loader2, 
+import {
+  GraduationCap,
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  Loader2,
   AlertCircle,
   X,
   Hash,
   Calendar,
-  BookOpen
+  BookOpen,
+  Users
 } from 'lucide-react';
 
 const BatchManagement = () => {
@@ -22,7 +23,8 @@ const BatchManagement = () => {
     name: "",
     description: "",
     semester_number: 1,
-    academic_year: "2024-2025"
+    academic_year: "2024-2025",
+    total_sections: 1
   });
   const [formErrors, setFormErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -79,7 +81,7 @@ const BatchManagement = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === "semester_number" ? Math.max(1, parseInt(value) || 1) : value
+      [name]: (name === "semester_number" || name === "total_sections") ? Math.max(1, parseInt(value) || 1) : value
     }));
     
     // Clear specific field error when user starts typing
@@ -113,7 +115,7 @@ const BatchManagement = () => {
         const { data } = await api.post("/api/timetable/batches/", formData);
         setBatches([...batches, data]);
       }
-      setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025" });
+      setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1 });
       setEditingId(null);
       setShowForm(false);
     } catch (err) {
@@ -137,7 +139,8 @@ const BatchManagement = () => {
       name: batch.name,
       description: batch.description,
       semester_number: batch.semester_number,
-      academic_year: batch.academic_year
+      academic_year: batch.academic_year,
+      total_sections: batch.total_sections || 1
     });
     setEditingId(batch.id);
     setShowForm(true);
@@ -145,7 +148,7 @@ const BatchManagement = () => {
   };
   
   const clearForm = () => {
-    setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025" });
+    setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1 });
     setEditingId(null);
     setFormErrors({});
   };
@@ -280,6 +283,32 @@ const BatchManagement = () => {
                       <p className="text-red-500 text-xs mt-1">{formErrors.semester_number}</p>
                     )}
                   </div>
+
+                  {/* Total Sections */}
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-2">
+                      Total Sections *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Users className="h-5 w-5 text-secondary/70" />
+                      </div>
+                      <input
+                        type="number"
+                        name="total_sections"
+                        value={formData.total_sections}
+                        onChange={handleInputChange}
+                        min="1"
+                        max="5"
+                        className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.total_sections ? 'border-red-500' : 'border-border'} rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent-cyan/30`}
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-secondary/70 mt-1">Number of sections (e.g., 3 for I, II, III)</p>
+                    {formErrors.total_sections && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.total_sections}</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Description */}
@@ -360,6 +389,7 @@ const BatchManagement = () => {
                       <div>
                         <h3 className="font-semibold text-primary">{batch.name}</h3>
                         <p className="text-sm text-secondary">Semester {batch.semester_number}</p>
+                        <p className="text-xs text-secondary/70">{batch.total_sections || 1} Section{(batch.total_sections || 1) > 1 ? 's' : ''}</p>
                       </div>
                     </div>
                     

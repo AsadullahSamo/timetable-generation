@@ -15,10 +15,10 @@ import {
 
 const menuItems = [
   { name: "Batches", icon: GraduationCap, path: "/components/Batches" },
-  { name: "Classes", icon: Users, path: "/components/Classes" },
   { name: "Subjects", icon: BookOpen, path: "/components/Subjects" },
   { name: "Teachers", icon: User, path: "/components/Teachers" },
   { name: "Classrooms", icon: Building2, path: "/components/Classrooms" },
+  { name: "Teacher Assignments", icon: Users, path: "/components/TeacherAssignments" },
   { name: "Department Config", icon: Settings, path: "/components/DepartmentConfig" },
   { name: "Constraints", icon: Sliders, path: "/components/Constraints" },
   { name: "Timetable", icon: Calendar, path: "/components/Timetable" }

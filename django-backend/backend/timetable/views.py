@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import ScheduleConfig, TimetableEntry
@@ -26,7 +26,8 @@ from .serializers import (
     TimetableSerializer,
     ConfigSerializer,
     ClassGroupSerializer,
-    BatchSerializer
+    BatchSerializer,
+    TeacherSubjectAssignmentSerializer
 )
 
 from .tasks import (
@@ -78,6 +79,69 @@ class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
     authentication_classes = []  # Temporarily disable authentication for testing
+
+class TeacherSubjectAssignmentViewSet(viewsets.ModelViewSet):
+    queryset = TeacherSubjectAssignment.objects.all()
+    serializer_class = TeacherSubjectAssignmentSerializer
+    authentication_classes = []  # Temporarily disable authentication for testing
+
+    def get_queryset(self):
+        queryset = TeacherSubjectAssignment.objects.all()
+        teacher_id = self.request.query_params.get('teacher', None)
+        subject_id = self.request.query_params.get('subject', None)
+        batch_id = self.request.query_params.get('batch', None)
+
+        if teacher_id is not None:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        if subject_id is not None:
+            queryset = queryset.filter(subject_id=subject_id)
+        if batch_id is not None:
+            queryset = queryset.filter(batch_id=batch_id)
+
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            # Handle validation errors and provide user-friendly messages
+            error_message = str(e)
+            if "already assigned" in error_message.lower():
+                return Response(
+                    {'error': error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif "sections" in error_message.lower() and "assigned" in error_message.lower():
+                return Response(
+                    {'error': error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                return Response(
+                    {'error': f'Failed to create assignment: {error_message}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+    def update(self, request, *args, **kwargs):
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            error_message = str(e)
+            if "already assigned" in error_message.lower():
+                return Response(
+                    {'error': error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif "sections" in error_message.lower() and "assigned" in error_message.lower():
+                return Response(
+                    {'error': error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                return Response(
+                    {'error': f'Failed to update assignment: {error_message}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
 class TimetableViewSet(viewsets.ModelViewSet):
     queryset = TimetableEntry.objects.all()

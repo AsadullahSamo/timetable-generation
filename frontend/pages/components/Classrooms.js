@@ -133,7 +133,7 @@ const Classrooms = () => {
       </Head>
 
       <div className="flex h-screen bg-background text-primary font-sans overflow-hidden">
-        <Navbar number={5} />
+        <Navbar number={4} />
         <div className="flex-1 p-8 max-w-7xl overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <div>

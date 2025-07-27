@@ -11,6 +11,7 @@ from .views import (
     ConfigViewSet,
     ClassRoomViewSet,  # Potential naming issue
     BatchViewSet,
+    TeacherSubjectAssignmentViewSet,
     LatestTimetableView,
     AdvancedTimetableView,
     SimpleTimetableView,
@@ -46,6 +47,7 @@ router.register(r'schedule-configs', ScheduleConfigViewSet, basename='schedule-c
 router.register(r'timetables', TimetableViewSet, basename='timetable')
 router.register(r'configs', ConfigViewSet, basename='config')
 router.register(r'batches', BatchViewSet, basename='batch')
+router.register(r'teacher-assignments', TeacherSubjectAssignmentViewSet, basename='teacher-assignment')
 
 urlpatterns = [
     # Basic timetable operations

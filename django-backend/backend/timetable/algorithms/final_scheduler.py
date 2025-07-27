@@ -12,7 +12,7 @@ import random
 from datetime import time, datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from django.db import models, transaction
-from ..models import Subject, Teacher, Classroom, TimetableEntry, ScheduleConfig
+from ..models import Subject, Teacher, Classroom, TimetableEntry, ScheduleConfig, TeacherSubjectAssignment, Batch
 
 
 class FinalUniversalScheduler:
@@ -274,7 +274,7 @@ class FinalUniversalScheduler:
         print(f"       🎯 Practical rule: 1 credit = 1 session/week (3 consecutive hours)")
 
         # Find available teacher
-        teachers = self._get_teachers_for_subject(subject)
+        teachers = self._get_teachers_for_subject(subject, class_group)
         if not teachers:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
@@ -315,7 +315,7 @@ class FinalUniversalScheduler:
         """Schedule theory subject - ENHANCED with strict credit hour compliance."""
         print(f"     📖 Scheduling theory: {subject.code} ({subject.credits} credits)")
 
-        teachers = self._get_teachers_for_subject(subject)
+        teachers = self._get_teachers_for_subject(subject, class_group)
         if not teachers:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
@@ -368,27 +368,62 @@ class FinalUniversalScheduler:
         else:
             print(f"     ✅ Fully scheduled {subject.code} across {scheduled} periods")
     
-    def _get_teachers_for_subject(self, subject: Subject) -> List[Teacher]:
-        """Get teachers for a subject - UNIVERSAL."""
+    def _get_teachers_for_subject(self, subject: Subject, class_group: str = None) -> List[Teacher]:
+        """Get teachers for a subject with section awareness."""
         teachers = []
-        
-        # Try many-to-many relationship
+
+        # First try to get teachers from TeacherSubjectAssignment (section-aware)
+        try:
+            # Extract batch and section from class_group (e.g., "21SW-I" -> batch="21SW", section="I")
+            if class_group and '-' in class_group:
+                batch_name, section = class_group.split('-', 1)
+
+                # Get batch object
+                try:
+                    batch = Batch.objects.get(name=batch_name)
+
+                    # Get assignments for this subject and batch
+                    assignments = TeacherSubjectAssignment.objects.filter(
+                        subject=subject,
+                        batch=batch
+                    )
+
+                    # Filter by section if specified
+                    section_teachers = []
+                    for assignment in assignments:
+                        if not assignment.sections or section in assignment.sections:
+                            section_teachers.append(assignment.teacher)
+
+                    if section_teachers:
+                        print(f"     📋 Found section-aware teachers for {subject.code} in {class_group}: {[t.name for t in section_teachers]}")
+                        return section_teachers
+
+                except Batch.DoesNotExist:
+                    print(f"     ⚠️  Batch {batch_name} not found, falling back to general assignment")
+                    pass
+
+            # Fallback: get all teachers assigned to this subject (any batch/section)
+            assignments = TeacherSubjectAssignment.objects.filter(subject=subject)
+            if assignments.exists():
+                teachers = [assignment.teacher for assignment in assignments]
+                print(f"     📋 Found general teachers for {subject.code}: {[t.name for t in teachers]}")
+                return teachers
+
+        except Exception as e:
+            print(f"     ⚠️  Error getting section-aware teachers: {e}")
+            pass
+
+        # Legacy fallback: try old many-to-many relationship
         try:
             teachers = list(subject.teacher_set.all())
             if teachers:
+                print(f"     📋 Using legacy teacher assignment for {subject.code}: {[t.name for t in teachers]}")
                 return teachers
         except:
             pass
-        
-        # Try reverse relationship
-        try:
-            teachers = [t for t in self.all_teachers if subject in t.subjects.all()]
-            if teachers:
-                return teachers
-        except:
-            pass
-        
-        # Fallback: return all teachers (let system decide)
+
+        # Final fallback: return all teachers (let system decide)
+        print(f"     ⚠️  No specific teachers found for {subject.code}, using fallback")
         return self.all_teachers[:3]  # Limit to first 3 to avoid over-assignment
 
     def _can_schedule_block(self, class_schedule: dict, day: str, start_period: int, duration: int, class_group: str) -> bool:
@@ -660,7 +695,7 @@ class FinalUniversalScheduler:
             subject = theory_subjects[i % len(theory_subjects)]
 
             # Find available teacher and classroom
-            teachers = self._get_teachers_for_subject(subject)
+            teachers = self._get_teachers_for_subject(subject, class_group)
             if teachers:
                 teacher = self._find_available_teacher(teachers, day, period, 1)
                 if teacher:

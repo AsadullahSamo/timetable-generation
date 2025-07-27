@@ -40,6 +40,7 @@ const TeachersConfig = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [activeTeacher, setActiveTeacher] = useState(null);
   const [subjects, setSubjects] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [filterSubject, setFilterSubject] = useState("");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [weekDays, setWeekDays] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
@@ -58,14 +59,16 @@ const TeachersConfig = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [teachersRes, subjectsRes, configRes] = await Promise.all([
+        const [teachersRes, subjectsRes, configRes, assignmentsRes] = await Promise.all([
           api.get("/api/timetable/teachers/"),
           api.get("/api/timetable/subjects/"),
-          api.get("/api/timetable/configs/")
+          api.get("/api/timetable/configs/"),
+          api.get("/api/timetable/teacher-assignments/")
         ]);
         
         setTeachers(teachersRes.data);
         setSubjects(subjectsRes.data);
+        setAssignments(assignmentsRes.data);
         
         if (configRes.data.length > 0) {
           // Get the latest config (highest ID) that has generated_periods
@@ -90,6 +93,11 @@ const TeachersConfig = () => {
     };
     fetchData();
   }, []);
+
+  // Get teacher assignments
+  const getTeacherAssignments = (teacherId) => {
+    return assignments.filter(assignment => assignment.teacher === teacherId);
+  };
 
   const handleDelete = async (id) => {
     setShowDeleteConfirm(id);
@@ -150,7 +158,7 @@ const TeachersConfig = () => {
       </Head>
 
       <div className="flex min-h-screen bg-background text-primary font-sans">
-        <Navbar number={4} />
+        <Navbar number={3} />
         <div className="flex-1 p-8 max-w-7xl">
           <div className="mb-8">
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
@@ -320,7 +328,7 @@ const TeachersConfig = () => {
                       <tr className="bg-background/95">
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Teacher Name</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Email</th>
-                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Subjects</th>
+                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Subject Assignments</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Max</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Availability</th>
                         <th className="px-4 py-3 text-center border border-border text-secondary font-medium">Actions</th>
@@ -351,21 +359,24 @@ const TeachersConfig = () => {
                               </div>
                             </td>
                             <td className="px-4 py-3 border border-border">
-                              <div className="flex flex-wrap gap-1">
-                                {teacher.subject_names?.length > 0 ? (
-                                  teacher.subject_names.map((subject, idx) => (
-                                    <span 
-                                      key={idx} 
-                                      className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-surface border border-border"
-                                    >
-                                      <BookMarked className="h-3 w-3 mr-1 text-accent-cyan" />
-                                      {subject}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-secondary text-sm italic">No subjects</span>
-                                )}
-                              </div>
+                              {(() => {
+                                const teacherAssignments = getTeacherAssignments(teacher.id);
+                                if (teacherAssignments.length === 0) {
+                                  return <span className="text-secondary/60 text-sm">No assignments</span>;
+                                }
+                                return (
+                                  <div className="space-y-1">
+                                    {teacherAssignments.map((assignment, index) => (
+                                      <div key={index} className="text-sm">
+                                        <span className="font-medium text-primary">{assignment.subject_name}</span>
+                                        <div className="text-secondary/70 text-xs">
+                                          {assignment.batch_name} - Sections: {assignment.sections?.join(', ') || 'All'}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="px-4 py-3 border border-border text-center">
                               <span className="flex items-center justify-center gap-1">

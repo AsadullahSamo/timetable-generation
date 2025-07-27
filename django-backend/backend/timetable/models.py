@@ -72,6 +72,7 @@ class Batch(models.Model):
     description = models.CharField(max_length=100, help_text="e.g., 8th Semester - Final Year")
     semester_number = models.PositiveIntegerField(help_text="e.g., 8 for 8th semester")
     academic_year = models.CharField(max_length=20, default="2024-2025")
+    total_sections = models.PositiveIntegerField(default=1, help_text="Number of sections in this batch (e.g., 3 for I, II, III)")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -79,7 +80,25 @@ class Batch(models.Model):
         ordering = ['-semester_number']  # Final year first
 
     def __str__(self):
-        return f"{self.name} - {self.description}"
+        return f"{self.name} - {self.description} ({self.total_sections} sections)"
+
+    def get_sections(self):
+        """Return list of section names for this batch"""
+        sections = []
+        for i in range(1, self.total_sections + 1):
+            if i == 1:
+                sections.append("I")
+            elif i == 2:
+                sections.append("II")
+            elif i == 3:
+                sections.append("III")
+            elif i == 4:
+                sections.append("IV")
+            elif i == 5:
+                sections.append("V")
+            else:
+                sections.append(str(i))
+        return sections
 
 class Subject(models.Model):
     name = models.CharField(max_length=100)
@@ -100,12 +119,73 @@ class Subject(models.Model):
 class Teacher(models.Model):
     name = models.CharField(max_length=255, default="")
     email = models.EmailField(unique=True, default="")
-    subjects = models.ManyToManyField('Subject', blank=True)
+    # Note: subjects relationship now handled through TeacherSubjectAssignment
     max_lessons_per_day = models.PositiveIntegerField(default=4)
     unavailable_periods = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.name
+
+    def get_subjects(self):
+        """Get all subjects this teacher is assigned to"""
+        return Subject.objects.filter(teachersubjectassignment__teacher=self).distinct()
+
+    def get_assignments(self):
+        """Get all teacher-subject assignments"""
+        return TeacherSubjectAssignment.objects.filter(teacher=self)
+
+class TeacherSubjectAssignment(models.Model):
+    """Intermediate model to handle teacher-subject assignments with section specificity"""
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE)
+    sections = models.JSONField(default=list, help_text="List of sections this teacher handles for this subject, e.g., ['I', 'II']")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['teacher', 'subject', 'batch']
+        verbose_name = "Teacher Subject Assignment"
+        verbose_name_plural = "Teacher Subject Assignments"
+
+    def clean(self):
+        """Validate that sections don't conflict with existing assignments"""
+        from django.core.exceptions import ValidationError
+
+        if not self.sections:
+            return  # No sections specified means all sections
+
+        # Check for conflicts with other assignments for the same subject and batch
+        existing_assignments = TeacherSubjectAssignment.objects.filter(
+            subject=self.subject,
+            batch=self.batch
+        ).exclude(pk=self.pk if self.pk else None)
+
+        for assignment in existing_assignments:
+            if not assignment.sections:  # Other assignment covers all sections
+                raise ValidationError(
+                    f"Teacher {assignment.teacher.name} is already assigned to all sections of {self.subject.name} in {self.batch.name}"
+                )
+
+            # Check for section overlap
+            overlapping_sections = set(self.sections) & set(assignment.sections)
+            if overlapping_sections:
+                raise ValidationError(
+                    f"Sections {', '.join(overlapping_sections)} are already assigned to {assignment.teacher.name} for {self.subject.name} in {self.batch.name}"
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        sections_str = ", ".join(self.sections) if self.sections else "All"
+        return f"{self.teacher.name} - {self.subject.name} ({self.batch.name} - Sections: {sections_str})"
+
+    def get_sections_display(self):
+        """Return formatted sections string"""
+        if not self.sections:
+            return "All Sections"
+        return f"Section{'s' if len(self.sections) > 1 else ''}: {', '.join(self.sections)}"
     
 
 class TimetableEntry(models.Model):

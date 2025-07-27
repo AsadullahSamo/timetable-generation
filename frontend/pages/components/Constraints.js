@@ -4,30 +4,27 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Navbar from './Navbar';
 import api from "../utils/api";
-import { 
-  Sliders, 
-  ArrowLeft, 
-  ArrowRight, 
-  Info, 
-  AlertCircle, 
+import {
+  Info,
+  ChevronDown,
+  Check,
+  ArrowLeft,
+  Sliders,
+  ArrowRight,
+  AlertCircle,
   Loader2,
   CheckCircle2,
-  XCircle,
-  ChevronDown,
-  Filter,
-  Clock,
-  Calendar,
   Users,
-  Building2,
-  CalendarClock,
-  BookOpen,
-  Check,
-  AlertTriangle,
-  GraduationCap,
-  Briefcase,
-  Timer,
-  CalendarDays
+  GraduationCap
 } from 'lucide-react';
+
+// Add global error handler for unhandled promise rejections
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    console.log('Unhandled promise rejection caught:', event.reason);
+    event.preventDefault(); // Prevent the default browser behavior
+  });
+}
 
 const Constraints = () => {
   const router = useRouter();
@@ -169,7 +166,6 @@ const Constraints = () => {
       category: 'general'
     }
   ]);
-  // const [loading, setLoading] = useState(false);
   const [showTooltip, setShowTooltip] = useState("");
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -196,12 +192,13 @@ const Constraints = () => {
   const validatePrerequisites = async () => {
     try {
       // Check if basic data exists
-      const [configRes, subjectsRes, teachersRes, classroomsRes, classesRes] = await Promise.all([
+      const [configRes, subjectsRes, teachersRes, classroomsRes, batchesRes, assignmentsRes] = await Promise.all([
         api.get('/api/timetable/configs/'),
         api.get('/api/timetable/subjects/'),
         api.get('/api/timetable/teachers/'),
         api.get('/api/timetable/classrooms/'),
-        api.get('/api/timetable/class-groups/')
+        api.get('/api/timetable/batches/'),
+        api.get('/api/timetable/teacher-assignments/')
       ]);
 
       const issues = [];
@@ -211,11 +208,16 @@ const Constraints = () => {
         issues.push('⚙️ Department Configuration: Set up working days, periods, and times');
       }
 
+      // Check batches
+      if (!batchesRes.data.length) {
+        issues.push('🎓 Batches: Add at least one batch (class)');
+      }
+
       // Check subjects
       if (!subjectsRes.data.length) {
         issues.push('📚 Subjects: Add at least one subject');
       } else {
-        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch);
+        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch || s.batch.trim() === '');
         if (subjectsWithoutBatch.length > 0) {
           issues.push(`📚 Subjects: ${subjectsWithoutBatch.length} subjects need batch assignment`);
         }
@@ -226,14 +228,14 @@ const Constraints = () => {
         issues.push('👨‍🏫 Teachers: Add at least one teacher');
       }
 
+      // Check teacher assignments
+      if (!assignmentsRes.data.length) {
+        issues.push('👨‍🏫 Teacher Assignments: Create teacher-subject-section assignments');
+      }
+
       // Check classrooms
       if (!classroomsRes.data.length) {
         issues.push('🏫 Classrooms: Add at least one classroom');
-      }
-
-      // Check classes
-      if (!classesRes.data.length) {
-        issues.push('👥 Classes: Add at least one class group');
       }
 
       return issues;
@@ -261,17 +263,19 @@ const Constraints = () => {
   };
 
   const handleGenerateTimetable = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
+    // Prevent Next.js error boundary from catching our errors
+    setLoading(true);
+    setError('');
+    setSuccess('');
 
+    try {
       console.log('🔍 Validating prerequisites...');
       const validationIssues = await validatePrerequisites();
 
       if (validationIssues.length > 0) {
         const issuesList = validationIssues.map(issue => `• ${issue}`).join('\n');
         setError(`⚠️ Please fix the following issues before generating timetables:\n\n${issuesList}`);
+        setLoading(false);
         return;
       }
 
@@ -294,55 +298,61 @@ const Constraints = () => {
           router.push('/components/Timetable');
         }, 2000);
       } else {
-        throw new Error('Failed to generate timetable');
+        handleTimetableError(new Error('Failed to generate timetable'));
       }
     } catch (error) {
-      console.error('❌ Timetable generation error:', error);
-      console.error('Error response:', error.response?.data);
-
-      // Enhanced error handling with specific user-friendly messages
-      let errorMessage = 'Timetable generation failed. ';
-
-      if (error.response?.data?.error) {
-        const apiError = error.response.data.error;
-
-        // Parse common error types and provide actionable solutions
-        if (apiError.includes('No valid schedule configuration found')) {
-          errorMessage = '⚠️ Missing Department Configuration: Please go to Department Config and set up your schedule (working days, periods, times) before generating timetables.';
-        } else if (apiError.includes('Teacher') && apiError.includes('returned more than one')) {
-          errorMessage = '⚠️ Duplicate Teacher Found: There are duplicate teachers in your database. Please check Teachers section and remove duplicates.';
-        } else if (apiError.includes('Subject') && apiError.includes('returned more than one')) {
-          errorMessage = '⚠️ Duplicate Subject Found: There are duplicate subjects in your database. Please check Subjects section and remove duplicates.';
-        } else if (apiError.includes('Classroom') && apiError.includes('returned more than one')) {
-          errorMessage = '⚠️ Duplicate Classroom Found: There are duplicate classrooms in your database. Please check Classrooms section and remove duplicates.';
-        } else if (apiError.includes('No subjects found')) {
-          errorMessage = '⚠️ No Subjects Added: Please add subjects in the Subjects section before generating timetables.';
-        } else if (apiError.includes('No teachers found')) {
-          errorMessage = '⚠️ No Teachers Added: Please add teachers in the Teachers section before generating timetables.';
-        } else if (apiError.includes('No classrooms found')) {
-          errorMessage = '⚠️ No Classrooms Added: Please add classrooms in the Classrooms section before generating timetables.';
-        } else if (apiError.includes('No class groups found')) {
-          errorMessage = '⚠️ No Classes Added: Please add class groups in the Classes section before generating timetables.';
-        } else if (apiError.includes('batch')) {
-          errorMessage = '⚠️ Batch Assignment Issue: Some subjects may not be assigned to batches. Please check Subjects section and assign all subjects to appropriate batches.';
-        } else if (apiError.includes('constraint')) {
-          errorMessage = '⚠️ Constraint Conflict: The selected constraints cannot be satisfied. Try adjusting or disabling some constraints.';
-        } else if (apiError.includes('schedule')) {
-          errorMessage = '⚠️ Scheduling Conflict: Unable to create a valid schedule with current data. Check for conflicts in teacher availability, classroom capacity, or time slots.';
-        } else {
-          // Show the raw error for unknown issues
-          errorMessage = `⚠️ Generation Error: ${apiError}`;
-        }
-      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
-        errorMessage = '🌐 Network Error: Cannot connect to the server. Please check if the backend is running.';
-      } else {
-        errorMessage = `⚠️ Unexpected Error: ${error.message}`;
-      }
-
-      setError(errorMessage);
+      handleTimetableError(error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTimetableError = (error) => {
+    console.error('❌ Timetable generation error:', error);
+    console.error('Error response:', error.response?.data);
+
+    // Enhanced error handling with specific user-friendly messages
+    let errorMessage = 'Timetable generation failed. ';
+
+    if (error.response?.data?.error) {
+      const apiError = error.response.data.error;
+      console.log('🔍 API Error detected:', apiError);
+
+      // Parse common error types and provide actionable solutions
+      if (apiError.includes('No valid schedule configuration found')) {
+        errorMessage = '⚠️ Missing Department Configuration: Please go to Department Config and set up your schedule (working days, periods, times) before generating timetables.';
+      } else if (apiError.includes('Teacher') && apiError.includes('returned more than one')) {
+        errorMessage = '⚠️ Duplicate Teacher Found: There are duplicate teachers in your database. Please check Teachers section and remove duplicates.';
+      } else if (apiError.includes('Subject') && apiError.includes('returned more than one')) {
+        errorMessage = '⚠️ Duplicate Subject Found: There are duplicate subjects in your database. Please check Subjects section and remove duplicates.';
+      } else if (apiError.includes('Classroom') && apiError.includes('returned more than one')) {
+        errorMessage = '⚠️ Duplicate Classroom Found: There are duplicate classrooms in your database. Please check Classrooms section and remove duplicates.';
+      } else if (apiError.includes('No subjects found')) {
+        errorMessage = '⚠️ No Subjects Added: Please add subjects in the Subjects section before generating timetables.';
+      } else if (apiError.includes('No teachers found')) {
+        errorMessage = '⚠️ No Teachers Added: Please add teachers in the Teachers section before generating timetables.';
+      } else if (apiError.includes('No classrooms found')) {
+        errorMessage = '⚠️ No Classrooms Added: Please add classrooms in the Classrooms section before generating timetables.';
+      } else if (apiError.includes('No class groups found')) {
+        errorMessage = '⚠️ No Classes Added: Please add class groups in the Classes section before generating timetables.';
+      } else if (apiError.includes('batch')) {
+        errorMessage = '⚠️ Batch Assignment Issue: Some subjects may not be assigned to batches. Please check Subjects section and assign all subjects to appropriate batches.';
+      } else if (apiError.includes('constraint')) {
+        errorMessage = '⚠️ Constraint Conflict: The selected constraints cannot be satisfied. Try adjusting or disabling some constraints.';
+      } else if (apiError.includes('schedule')) {
+        errorMessage = '⚠️ Scheduling Conflict: Unable to create a valid schedule with current data. Check for conflicts in teacher availability, classroom capacity, or time slots.';
+      } else {
+        // Show the raw error for unknown issues
+        errorMessage = `⚠️ Generation Error: ${apiError}`;
+      }
+    } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+      errorMessage = '🌐 Network Error: Cannot connect to the server. Please check if the backend is running.';
+    } else {
+      errorMessage = `⚠️ Unexpected Error: ${error.message}`;
+    }
+
+    console.log('🔍 Setting error message:', errorMessage);
+    setError(errorMessage);
   };
   
   const getImportanceIcon = (importance) => {
@@ -530,7 +540,13 @@ const Constraints = () => {
 
               <button
                 className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleGenerateTimetable}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleGenerateTimetable().catch(err => {
+                    console.error('Button click error caught:', err);
+                    handleTimetableError(err);
+                  });
+                }}
                 disabled={loading}
               >
                 {loading ? (

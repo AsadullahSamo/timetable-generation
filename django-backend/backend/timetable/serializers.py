@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from users.models import User
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment
 # from users.serializers import UserSerializer
 from datetime import datetime
 import traceback
@@ -26,12 +26,9 @@ class SubjectSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class TeacherSerializer(serializers.ModelSerializer):
-    # Accept subjects as an array of IDs on input
-    subjects = serializers.PrimaryKeyRelatedField(
-        queryset=Subject.objects.all(), many=True, required=False
-    )
-    # Add a read-only field to display subject names
+    # Add read-only fields to display assignments
     subject_names = serializers.SerializerMethodField(read_only=True)
+    assignments = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Teacher
@@ -39,14 +36,38 @@ class TeacherSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'email',
-            'subjects',
             'subject_names',
+            'assignments',
             'max_lessons_per_day',
             'unavailable_periods'
         ]
 
     def get_subject_names(self, obj):
-        return [subject.name for subject in obj.subjects.all()]
+        """Get subject names from TeacherSubjectAssignment"""
+        try:
+            assignments = obj.teachersubjectassignment_set.all()
+            subjects = set()
+            for assignment in assignments:
+                subjects.add(assignment.subject.name)
+            return list(subjects)
+        except:
+            return []
+
+    def get_assignments(self, obj):
+        """Get detailed assignment information"""
+        try:
+            assignments = obj.teachersubjectassignment_set.all()
+            assignment_list = []
+            for assignment in assignments:
+                assignment_list.append({
+                    'subject': assignment.subject.name,
+                    'subject_code': assignment.subject.code,
+                    'batch': assignment.batch.name,
+                    'sections': assignment.sections or []
+                })
+            return assignment_list
+        except:
+            return []
         
 
 class ClassroomSerializer(serializers.ModelSerializer):
@@ -108,8 +129,24 @@ class ClassGroupSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class BatchSerializer(serializers.ModelSerializer):
+    sections = serializers.SerializerMethodField()
+
     class Meta:
         model = Batch
+        fields = '__all__'
+
+    def get_sections(self, obj):
+        """Return list of section names for this batch"""
+        return obj.get_sections()
+
+class TeacherSubjectAssignmentSerializer(serializers.ModelSerializer):
+    teacher_name = serializers.CharField(source='teacher.name', read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    batch_name = serializers.CharField(source='batch.name', read_only=True)
+    sections_display = serializers.CharField(source='get_sections_display', read_only=True)
+
+    class Meta:
+        model = TeacherSubjectAssignment
         fields = '__all__'
 
 class SubjectDetailsSerializer(serializers.ModelSerializer):
