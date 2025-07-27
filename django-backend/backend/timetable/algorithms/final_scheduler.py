@@ -28,7 +28,6 @@ class FinalUniversalScheduler:
         self.start_time = config.start_time
         self.lesson_duration = config.lesson_duration
         # Get class groups from Batch model instead of config
-        from .models import Batch
         self.class_groups = [batch.name for batch in Batch.objects.all()]
 
         # Load ALL available data
@@ -157,7 +156,6 @@ class FinalUniversalScheduler:
 
     def _expand_class_groups_with_sections(self) -> List[str]:
         """ENHANCEMENT: Expand class groups to include sections based on Batch model."""
-        from .models import Batch
         expanded_groups = []
 
         for class_group in self.class_groups:
@@ -1202,7 +1200,6 @@ class FinalUniversalScheduler:
 
     def _create_thesis_day_entry(self, class_group: str, thesis_day: str) -> TimetableEntry:
         """Create a special Thesis Day entry for final year students."""
-        from timetable.models import Subject, Teacher, Classroom
 
         # FIX: Clean up any old thesis entries and create the correct one
         # Remove old problematic "THESIS" entries
