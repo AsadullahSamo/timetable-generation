@@ -27,8 +27,10 @@ class FinalUniversalScheduler:
         self.periods = [int(p) for p in config.periods]
         self.start_time = config.start_time
         self.lesson_duration = config.lesson_duration
-        self.class_groups = config.class_groups
-        
+        # Get class groups from Batch model instead of config
+        from .models import Batch
+        self.class_groups = [batch.name for batch in Batch.objects.all()]
+
         # Load ALL available data
         self.all_subjects = list(Subject.objects.all())
         self.all_teachers = list(Teacher.objects.all())
@@ -154,7 +156,8 @@ class FinalUniversalScheduler:
             print(f"🔍 Loaded {existing_entries.count()} existing entries to avoid conflicts")
 
     def _expand_class_groups_with_sections(self) -> List[str]:
-        """ENHANCEMENT: Expand class groups to include sections (I, II, III)."""
+        """ENHANCEMENT: Expand class groups to include sections based on Batch model."""
+        from .models import Batch
         expanded_groups = []
 
         for class_group in self.class_groups:
@@ -163,10 +166,17 @@ class FinalUniversalScheduler:
                 # Already has section, use as is
                 expanded_groups.append(class_group)
             else:
-                # Expand to include sections I, II, III
-                sections = ['I', 'II', 'III']
-                for section in sections:
-                    expanded_groups.append(f"{class_group}-{section}")
+                # Get the actual batch and its sections
+                try:
+                    batch = Batch.objects.get(name=class_group)
+                    sections = batch.get_sections()
+                    for section in sections:
+                        expanded_groups.append(f"{class_group}-{section}")
+                except Batch.DoesNotExist:
+                    # Fallback to default sections if batch not found
+                    sections = ['I', 'II', 'III']
+                    for section in sections:
+                        expanded_groups.append(f"{class_group}-{section}")
 
         return expanded_groups
 

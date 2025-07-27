@@ -8,7 +8,6 @@ import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Coffee, T
 const DepartmentConfig = () => {
   const router = useRouter();
   const [departmentName, setDepartmentName] = useState("");
-  const [classGroups, setClassGroups] = useState("");
   const [numPeriods, setNumPeriods] = useState(0);
   const [startTime, setStartTime] = useState("08:00");
   const [days] = useState(["Mon", "Tue", "Wed", "Thu", "Fri"]);
@@ -20,12 +19,13 @@ const DepartmentConfig = () => {
 
   // New states for subject-batch assignment
   const [subjects, setSubjects] = useState([]);
-  const [batchSubjects, setBatchSubjects] = useState({});
+  const [batches, setBatches] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
 
-  // Fetch subjects on component mount
+  // Fetch subjects and batches on component mount
   useEffect(() => {
     fetchSubjects();
+    fetchBatches();
   }, []);
 
   const fetchSubjects = async () => {
@@ -37,6 +37,16 @@ const DepartmentConfig = () => {
       console.error('Error fetching subjects:', error);
     } finally {
       setLoadingSubjects(false);
+    }
+  };
+
+  const fetchBatches = async () => {
+    try {
+      const response = await api.get('/api/timetable/batches/');
+      setBatches(response.data);
+    } catch (error) {
+      console.error('Error fetching batches:', error);
+      setError('Failed to fetch batches');
     }
   };
 
@@ -70,32 +80,34 @@ const DepartmentConfig = () => {
     setPeriods(newPeriods);
   };
 
-  // Helper functions for batch-subject assignment
-  const getBatchesFromClassGroups = () => {
-    if (!classGroups) return [];
-    return classGroups.split(',').map(batch => batch.trim()).filter(batch => batch);
+
+
+  const toggleSubjectForBatch = async (batchName, subjectId) => {
+    try {
+      const subject = subjects.find(s => s.id === subjectId);
+      const newBatch = subject.batch === batchName ? '' : batchName;
+
+      await api.patch(`/api/timetable/subjects/${subjectId}/`, {
+        batch: newBatch
+      });
+
+      // Update local state
+      setSubjects(prev => prev.map(s =>
+        s.id === subjectId ? { ...s, batch: newBatch } : s
+      ));
+
+      setSuccess(`Subject ${newBatch ? 'assigned to' : 'removed from'} ${batchName}`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('Error updating subject batch:', error);
+      setError('Failed to update subject assignment');
+      setTimeout(() => setError(''), 3000);
+    }
   };
 
-  const toggleSubjectForBatch = (batch, subjectId) => {
-    setBatchSubjects(prev => {
-      const newBatchSubjects = { ...prev };
-      if (!newBatchSubjects[batch]) {
-        newBatchSubjects[batch] = [];
-      }
-
-      const subjectIndex = newBatchSubjects[batch].indexOf(subjectId);
-      if (subjectIndex > -1) {
-        newBatchSubjects[batch].splice(subjectIndex, 1);
-      } else {
-        newBatchSubjects[batch].push(subjectId);
-      }
-
-      return newBatchSubjects;
-    });
-  };
-
-  const isSubjectAssignedToBatch = (batch, subjectId) => {
-    return batchSubjects[batch]?.includes(subjectId) || false;
+  const isSubjectAssignedToBatch = (batchName, subjectId) => {
+    const subject = subjects.find(s => s.id === subjectId);
+    return subject?.batch === batchName;
   };
 
   const validateConfiguration = () => {
@@ -103,10 +115,7 @@ const DepartmentConfig = () => {
       setError("Department name is required.");
       return false;
     }
-    if (!classGroups.trim()) {
-      setError("Class groups are required (e.g., 21SW,22SW,23SW,24SW).");
-      return false;
-    }
+
     if (numPeriods < 1) {
       setError("Number of periods must be at least 1.");
       return false;
@@ -191,7 +200,6 @@ const DepartmentConfig = () => {
 
       const response = await api.post("/api/timetable/schedule-configs/", {
         name: departmentName,
-        class_groups: classGroups.split(',').map(g => g.trim()),
         days,
         periods: Array.from({length: numPeriods}, (_, i) => (i + 1).toString()),
         start_time: formattedStartTime,
@@ -276,21 +284,7 @@ const DepartmentConfig = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-secondary block mb-2">Class Groups</label>
-                <input
-                  type="text"
-                  value={classGroups}
-                  onChange={(e) => setClassGroups(e.target.value)}
-                  className="w-full pl-4 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                  placeholder="e.g., 21SW,22SW,23SW,24SW"
-                  required
-                  disabled={loading}
-                />
-                <p className="text-xs text-secondary/70 mt-1">
-                  Enter class groups separated by commas (e.g., 21SW,22SW,23SW,24SW)
-                </p>
-              </div>
+
             </div>
           </section>
 
@@ -426,15 +420,15 @@ const DepartmentConfig = () => {
           </section>
 
           {/* Batch-Subject Assignment Section */}
-          {classGroups && subjects.length > 0 && (
+          {subjects.length > 0 && (
             <section className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-accent-cyan" />
-                  Subject Assignment to Batches
+                  Batch Subject Management
                 </h2>
                 <div className="text-sm text-secondary">
-                  Assign subjects to each batch
+                  Manage which subjects belong to each batch
                 </div>
               </div>
 
@@ -445,41 +439,104 @@ const DepartmentConfig = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {getBatchesFromClassGroups().map((batch) => (
-                    <div key={batch} className="bg-background/95 rounded-xl p-4 border border-border">
+                  {batches.map((batch) => (
+                    <div key={batch.name} className="bg-background/95 rounded-xl p-4 border border-border">
                       <div className="flex items-center gap-2 mb-4">
                         <Users className="h-4 w-4 text-accent-cyan" />
-                        <h3 className="font-medium text-primary">{batch}</h3>
+                        <h3 className="font-medium text-primary">{batch.name}</h3>
                         <span className="text-sm text-secondary">
-                          ({batchSubjects[batch]?.length || 0} subjects assigned)
+                          ({subjects.filter(s => s.batch === batch.name).length} subjects assigned)
+                        </span>
+                        <span className="text-xs text-secondary/70">
+                          {batch.description} • {batch.total_sections} sections
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {subjects.map((subject) => (
-                          <div
-                            key={subject.id}
-                            onClick={() => toggleSubjectForBatch(batch, subject.id)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                              isSubjectAssignedToBatch(batch, subject.id)
-                                ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
-                                : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="font-medium text-sm">{subject.code}</div>
-                                <div className="text-xs opacity-75">{subject.name}</div>
-                              </div>
-                              <div className="text-xs">
-                                {subject.credits} cr
-                                {subject.credits === 1 && (
-                                  <span className="ml-1 text-accent-pink">Pr</span>
-                                )}
-                              </div>
-                            </div>
+                      <div className="space-y-4">
+                        {/* Show assigned subjects */}
+                        <div>
+                          <h4 className="text-sm font-medium text-primary mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-accent-cyan rounded-full"></span>
+                            Assigned Subjects ({subjects.filter(subject => subject.batch === batch.name).length})
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {subjects
+                              .filter(subject => subject.batch === batch.name)
+                              .map((subject) => (
+                                <div
+                                  key={subject.id}
+                                  className="p-3 rounded-lg bg-accent-cyan/10 border border-accent-cyan/30 text-accent-cyan group hover:bg-accent-cyan/15 transition-all"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm">{subject.code}</div>
+                                      <div className="text-xs opacity-75 truncate">{subject.name}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2 ml-2">
+                                      <span className="text-xs whitespace-nowrap">
+                                        {subject.credits} cr
+                                        {subject.is_practical && (
+                                          <span className="ml-1 text-accent-pink font-medium">Lab</span>
+                                        )}
+                                      </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleSubjectForBatch(batch.name, subject.id);
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 text-accent-cyan hover:text-red-500 transition-all text-lg leading-none"
+                                        title="Remove from batch"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                           </div>
-                        ))}
+                          {subjects.filter(subject => subject.batch === batch.name).length === 0 && (
+                            <div className="text-sm text-secondary/70 italic p-4 text-center bg-surface/30 rounded-lg border border-dashed border-border">
+                              No subjects assigned to this batch yet
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Show unassigned subjects for assignment */}
+                        <div>
+                          <h4 className="text-sm font-medium text-primary mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-secondary/50 rounded-full"></span>
+                            Available Subjects ({subjects.filter(subject => !subject.batch || subject.batch === '').length})
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {subjects
+                              .filter(subject => !subject.batch || subject.batch === '')
+                              .map((subject) => (
+                                <div
+                                  key={subject.id}
+                                  onClick={() => toggleSubjectForBatch(batch.name, subject.id)}
+                                  className="p-3 rounded-lg bg-surface/50 border border-border text-secondary hover:border-accent-cyan/30 hover:text-primary cursor-pointer transition-all hover:bg-surface/70"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm">{subject.code}</div>
+                                      <div className="text-xs opacity-75 truncate">{subject.name}</div>
+                                    </div>
+                                    <div className="text-xs whitespace-nowrap ml-2">
+                                      {subject.credits} cr
+                                      {subject.is_practical && (
+                                        <span className="ml-1 text-accent-pink font-medium">Lab</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                          {subjects.filter(subject => !subject.batch || subject.batch === '').length === 0 && (
+                            <div className="text-sm text-secondary/70 italic p-4 text-center bg-surface/30 rounded-lg border border-dashed border-border">
+                              All subjects are assigned to batches
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

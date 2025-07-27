@@ -29,7 +29,7 @@ from django.db import transaction
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from timetable.models import Subject, Teacher
+from timetable.models import Subject, Teacher, Classroom, Batch, TeacherSubjectAssignment, Config
 
 
 class TimetableDataPopulator:
@@ -45,20 +45,23 @@ class TimetableDataPopulator:
         print("🗑️  CLEARING EXISTING DATA...")
         print("-" * 50)
         
-        # Clear assignments first (many-to-many relationships)
-        for teacher in Teacher.objects.all():
-            teacher.subjects.clear()
-        
-        # Delete all records
-        subjects_deleted = Subject.objects.count()
+        # Clear in proper order to avoid foreign key constraints
+        assignments_deleted = TeacherSubjectAssignment.objects.count()
         teachers_deleted = Teacher.objects.count()
-        
-        Subject.objects.all().delete()
+        subjects_deleted = Subject.objects.count()
+        classrooms_deleted = Classroom.objects.count()
+
+        TeacherSubjectAssignment.objects.all().delete()
         Teacher.objects.all().delete()
-        
+        Subject.objects.all().delete()
+        Classroom.objects.all().delete()
+        # Keep Batch and Config as they are structural
+
         print(f"✅ Deleted {teachers_deleted} teachers")
         print(f"✅ Deleted {subjects_deleted} subjects")
-        print("✅ Cleared all assignments")
+        print(f"✅ Deleted {classrooms_deleted} classrooms")
+        print(f"✅ Deleted {assignments_deleted} teacher assignments")
+        print("✅ Kept batches and configs (structural data)")
         
     def create_teachers(self):
         """Create all teachers from the 4 batch timetables."""
@@ -298,6 +301,91 @@ class TimetableDataPopulator:
 
         return len(unassigned_subjects) == 0 and len(missing_practicals) == 0
 
+    def create_classrooms(self):
+        """Create classrooms."""
+        print("\n🏫 CREATING CLASSROOMS...")
+        print("-" * 50)
+
+        classrooms_data = [
+            {'name': 'Room 101', 'capacity': 40, 'building': 'Main Block'},
+            {'name': 'Room 102', 'capacity': 35, 'building': 'Main Block'},
+            {'name': 'Room 103', 'capacity': 45, 'building': 'Main Block'},
+            {'name': 'Room 201', 'capacity': 40, 'building': 'Main Block'},
+            {'name': 'Room 202', 'capacity': 35, 'building': 'Main Block'},
+            {'name': 'Lab 1', 'capacity': 30, 'building': 'Lab Block'},
+            {'name': 'Lab 2', 'capacity': 30, 'building': 'Lab Block'},
+            {'name': 'Lab 3', 'capacity': 25, 'building': 'Lab Block'},
+            {'name': 'Seminar Hall', 'capacity': 100, 'building': 'Main Block'},
+            {'name': 'Conference Room', 'capacity': 20, 'building': 'Admin Block'},
+            {'name': 'Auditorium', 'capacity': 200, 'building': 'Main Block'},
+        ]
+
+        created_count = 0
+        for classroom_data in classrooms_data:
+            classroom, created = Classroom.objects.get_or_create(
+                name=classroom_data['name'],
+                defaults=classroom_data
+            )
+            if created:
+                created_count += 1
+                print(f"✅ Created: {classroom.name} (Capacity: {classroom.capacity})")
+            else:
+                print(f"⚪ Exists: {classroom.name}")
+
+        print(f"📊 Created {created_count} new classrooms")
+        return created_count
+
+    def create_batches(self):
+        """Create batches (class groups)."""
+        print("\n🎓 CREATING BATCHES...")
+        print("-" * 50)
+
+        batches_data = [
+            {
+                'name': '21SW',
+                'description': '8th Semester - Final Year',
+                'semester_number': 8,
+                'academic_year': '2024-2025',
+                'total_sections': 3
+            },
+            {
+                'name': '22SW',
+                'description': '6th Semester - Third Year',
+                'semester_number': 6,
+                'academic_year': '2024-2025',
+                'total_sections': 3
+            },
+            {
+                'name': '23SW',
+                'description': '4th Semester - Second Year',
+                'semester_number': 4,
+                'academic_year': '2024-2025',
+                'total_sections': 2
+            },
+            {
+                'name': '24SW',
+                'description': '2nd Semester - First Year',
+                'semester_number': 2,
+                'academic_year': '2024-2025',
+                'total_sections': 2
+            }
+        ]
+
+        created_count = 0
+        for batch_data in batches_data:
+            batch, created = Batch.objects.get_or_create(
+                name=batch_data['name'],
+                defaults=batch_data
+            )
+            if created:
+                created_count += 1
+                print(f"✅ Created: {batch.name} - {batch.description} ({batch.total_sections} sections)")
+            else:
+                print(f"⚪ Exists: {batch.name}")
+
+        print(f"📊 Created {created_count} new batches")
+        return created_count
+
     def run(self, clear_existing=False):
         """Main execution method."""
         print("🎓 TIMETABLE GENERATION SYSTEM - TEST DATA POPULATOR")
@@ -311,8 +399,10 @@ class TimetableDataPopulator:
                 if clear_existing:
                     self.clear_existing_data()
 
+                self.create_batches()
                 self.create_teachers()
                 self.create_subjects_and_assignments()
+                self.create_classrooms()
 
                 # Verify data
                 is_valid = self.verify_data()
