@@ -21,11 +21,15 @@ import os
 import sys
 import django
 
+# Add the project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from timetable.models import TimetableEntry, Teacher, Subject, Classroom, Batch, TeacherSubjectAssignment
+from timetable.models import TimetableEntry, Teacher, Subject, Classroom, Batch, TeacherSubjectAssignment, ScheduleConfig
 
 def cleanup_timetable_data():
     """Delete only timetable entries from the database"""
@@ -75,6 +79,7 @@ def cleanup_timetable_data():
     print(f'   ✅ Classrooms: {Classroom.objects.count()}')
     print(f'   ✅ Batches: {Batch.objects.count()}')
     print(f'   ✅ Teacher Assignments: {TeacherSubjectAssignment.objects.count()}')
+    print(f'   ✅ Schedule Configurations: {ScheduleConfig.objects.count()}')
     
     print('\n' + '=' * 40)
     print('✅ TIMETABLE CLEANUP COMPLETE!')
