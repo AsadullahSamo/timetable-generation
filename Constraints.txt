@@ -1,0 +1,17 @@
+📋 Current Constraints Respected by the Algorithm
+Here are all the constraints currently implemented and working:
+
+✅ Subject Frequency - Correct number of classes per week based on credits
+✅ Practical Blocks - 3-hour consecutive blocks for practical subjects
+✅ No Teacher Overlap - Teachers cannot be in multiple places at once
+✅ No Room Conflicts - Rooms cannot be double-booked
+✅ Cross-Semester Conflict Detection - Prevents scheduling conflicts across batches
+✅ Intelligent Teacher Assignment - Matches teachers to their assigned subjects
+✅ Friday Time Limits - Classes must not exceed 12:00/1:00 PM with practical, 11:00 AM without practical
+✅ Minimum Daily Classes - No day has only practical or only one class
+✅ Compact Scheduling - Classes wrap up quickly while respecting Friday constraints
+✅ Friday-Aware Scheduling - Monday-Thursday scheduling considers Friday limits proactively
+
+
+2. Thesis Day: Should be determined by Subject "Thesis" and should be scheduled on Wednesday for all sections of that batch (having Thesis subject) and on that day "Wednesday" there must not be any other subjects
+3. There can't be more than one theory class (3 or 2) credit hours) on a given day (while also respecting "Subject Frequency" based on credit hours, for a week with exception of practical)
