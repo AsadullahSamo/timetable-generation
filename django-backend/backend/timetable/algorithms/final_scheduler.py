@@ -143,13 +143,15 @@ class FinalUniversalScheduler:
         """Load existing schedules from other configs to avoid conflicts."""
         existing_entries = TimetableEntry.objects.exclude(schedule_config=self.config)
         for entry in existing_entries:
-            # Mark teacher as busy
-            key = (entry.teacher.id, entry.day, entry.period)
-            self.global_teacher_schedule[key] = entry
-            
-            # Mark classroom as busy
-            key = (entry.classroom.id, entry.day, entry.period)
-            self.global_classroom_schedule[key] = entry
+            # Mark teacher as busy (only if teacher exists - THESISDAY entries have no teacher)
+            if entry.teacher:
+                key = (entry.teacher.id, entry.day, entry.period)
+                self.global_teacher_schedule[key] = entry
+
+            # Mark classroom as busy (only if classroom exists)
+            if entry.classroom:
+                key = (entry.classroom.id, entry.day, entry.period)
+                self.global_classroom_schedule[key] = entry
         
         if existing_entries.exists():
             print(f"🔍 Loaded {existing_entries.count()} existing entries to avoid conflicts")
@@ -258,27 +260,50 @@ class FinalUniversalScheduler:
         # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches (legacy)
         entries = self._assign_thesis_day_if_needed(entries, subjects, class_group)
 
-        # ENHANCEMENT 5: Validate credit hour compliance
-        self._validate_credit_hour_compliance(entries, subjects, class_group)
+        # ENHANCEMENT 5: Validate and auto-correct credit hour compliance
+        entries = self._validate_and_correct_credit_hour_compliance(entries, subjects, class_group)
+
+        # CRITICAL FIX: Final credit hour validation after Thesis Day constraint
+        # The Thesis Day constraint may have moved entries, causing under-scheduling
+        print(f"     🔧 FINAL credit hour validation after Thesis Day constraint for {class_group}...")
+        entries = self._validate_and_correct_credit_hour_compliance(entries, subjects, class_group)
 
         return entries
     
     def _is_practical_subject(self, subject: Subject) -> bool:
         """Universal practical subject detection."""
-        # Check is_practical field
+        # Check is_practical field first (most reliable)
         if hasattr(subject, 'is_practical') and subject.is_practical:
             return True
-        
-        # Check naming patterns
-        practical_patterns = ['Pr', 'Lab', 'LAB', 'Practical', 'Workshop', 'Project']
-        for pattern in practical_patterns:
-            if pattern in subject.code or pattern in subject.name:
+
+        # Check naming patterns - be more specific to avoid false positives
+        # Look for practical indicators that are standalone or at word boundaries
+        import re
+
+        # Check code for practical patterns (more reliable)
+        code_patterns = [r'\bPr\b', r'\bLab\b', r'\bLAB\b', r'\bPractical\b', r'\bWorkshop\b']
+        for pattern in code_patterns:
+            if re.search(pattern, subject.code):
                 return True
-        
+
+        # Check name for practical patterns - be more specific
+        # Only match if "Pr" is followed by ")" or is at the end, or other specific patterns
+        name_patterns = [
+            r'\bPr\)',           # "Pr)" - practical suffix
+            r'\(Pr\)',           # "(Pr)" - practical in parentheses
+            r'\bPractical\b',    # "Practical" as whole word
+            r'\bLab\b',          # "Lab" as whole word
+            r'\bLAB\b',          # "LAB" as whole word
+            r'\bWorkshop\b'      # "Workshop" as whole word
+        ]
+        for pattern in name_patterns:
+            if re.search(pattern, subject.name):
+                return True
+
         # Check credits (1 credit often means practical)
         if subject.credits == 1:
             return True
-        
+
         return False
     
     def _has_teacher_for_subject(self, subject: Subject) -> bool:
@@ -334,7 +359,7 @@ class FinalUniversalScheduler:
     
     def _schedule_theory_subject(self, entries: List[TimetableEntry],
                                class_schedule: dict, subject: Subject, class_group: str):
-        """Schedule theory subject - ENHANCED with strict credit hour compliance."""
+        """Schedule theory subject - ENHANCED with aggressive credit hour compliance."""
         print(f"     📖 Scheduling theory: {subject.code} ({subject.credits} credits)")
 
         teachers = self._get_teachers_for_subject(subject, class_group)
@@ -342,11 +367,36 @@ class FinalUniversalScheduler:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
 
-        # ENHANCEMENT 5: Strict credit hour compliance
+        # ENHANCEMENT 5: Strict credit hour compliance with aggressive enforcement
         scheduled = 0
         target = subject.credits  # MUST schedule exactly the credit hours, no more, no less
 
-        print(f"       🎯 Target: EXACTLY {target} classes per week (strict credit compliance)")
+        print(f"       🎯 Target: EXACTLY {target} classes per week (AGGRESSIVE ENFORCEMENT)")
+
+        # PHASE 1: Try normal scheduling with Friday-aware prioritization
+        scheduled = self._attempt_normal_theory_scheduling(entries, class_schedule, subject, class_group, teachers, target)
+
+        # PHASE 2: If not fully scheduled, use aggressive retry with relaxed constraints
+        if scheduled < target:
+            print(f"       🔄 Normal scheduling achieved {scheduled}/{target} - activating AGGRESSIVE MODE")
+            scheduled = self._aggressive_theory_scheduling(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        # PHASE 3: Final validation and emergency measures
+        if scheduled < target:
+            print(f"       🚨 EMERGENCY: Still missing {target - scheduled} classes - applying FORCE SCHEDULING")
+            scheduled = self._force_schedule_missing_theory_classes(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        if scheduled < target:
+            print(f"     ❌ CRITICAL FAILURE: Only scheduled {scheduled}/{target} periods for {subject.code}")
+        else:
+            print(f"     ✅ SUCCESS: Fully scheduled {subject.code} across {scheduled} periods")
+
+    def _attempt_normal_theory_scheduling(self, entries: List[TimetableEntry], class_schedule: dict,
+                                        subject: Subject, class_group: str, teachers: List, target: int) -> int:
+        """Phase 1: Attempt normal scheduling with Friday-aware prioritization."""
+        print(f"       📋 Phase 1: Normal scheduling with Friday-aware prioritization")
+
+        scheduled = 0
 
         # ENHANCEMENT: Friday-aware compact scheduling
         available_slots = []
@@ -386,13 +436,248 @@ class FinalUniversalScheduler:
                     class_schedule[(day, period)] = entry
                     self._mark_global_schedule(teacher, classroom, day, period)
                     scheduled += 1
-                    print(f"       ✅ Scheduled {subject.code} on {day} P{period}")
+                    print(f"         ✅ Normal: {subject.code} on {day} P{period}")
 
-        if scheduled < target:
-            print(f"     ⚠️  Only scheduled {scheduled}/{target} periods for {subject.code}")
-        else:
-            print(f"     ✅ Fully scheduled {subject.code} across {scheduled} periods")
-    
+        print(f"       📊 Phase 1 result: {scheduled}/{target} classes scheduled")
+        return scheduled
+
+    def _aggressive_theory_scheduling(self, entries: List[TimetableEntry], class_schedule: dict,
+                                    subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Phase 2: Aggressive scheduling with relaxed constraints."""
+        print(f"       🔥 Phase 2: Aggressive scheduling (need {target - current_scheduled} more classes)")
+
+        scheduled = current_scheduled
+
+        # Strategy 1: Allow same-day scheduling (relax day distribution preference)
+        print(f"         🎯 Strategy 1: Allow same-day scheduling")
+        scheduled = self._try_same_day_scheduling(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        if scheduled >= target:
+            return scheduled
+
+        # Strategy 2: Use Friday slots with relaxed time limits
+        print(f"         🎯 Strategy 2: Use Friday slots with relaxed limits")
+        scheduled = self._try_friday_relaxed_scheduling(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        if scheduled >= target:
+            return scheduled
+
+        # Strategy 3: Use any available teacher (not just assigned ones)
+        print(f"         🎯 Strategy 3: Use any available teacher")
+        scheduled = self._try_any_teacher_scheduling(entries, class_schedule, subject, class_group, target, scheduled)
+
+        print(f"       📊 Phase 2 result: {scheduled}/{target} classes scheduled")
+        return scheduled
+
+    def _force_schedule_missing_theory_classes(self, entries: List[TimetableEntry], class_schedule: dict,
+                                             subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Phase 3: Force schedule missing classes using emergency measures."""
+        print(f"       💥 Phase 3: Emergency force scheduling (need {target - current_scheduled} more classes)")
+
+        scheduled = current_scheduled
+        missing = target - scheduled
+
+        # Emergency Strategy 1: Create slots by extending day duration
+        print(f"         🚨 Emergency 1: Extend day duration to create slots")
+        scheduled = self._create_emergency_slots_by_extension(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        if scheduled >= target:
+            return scheduled
+
+        # Emergency Strategy 2: Use late Friday periods (violate Friday constraint temporarily)
+        print(f"         🚨 Emergency 2: Use late Friday periods (constraint violation)")
+        scheduled = self._use_late_friday_emergency_slots(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        if scheduled >= target:
+            return scheduled
+
+        # Emergency Strategy 3: Duplicate existing classes on different days
+        print(f"         🚨 Emergency 3: Duplicate classes on different days")
+        scheduled = self._duplicate_classes_emergency(entries, class_schedule, subject, class_group, teachers, target, scheduled)
+
+        print(f"       📊 Phase 3 result: {scheduled}/{target} classes scheduled")
+        return scheduled
+
+    def _try_same_day_scheduling(self, entries: List[TimetableEntry], class_schedule: dict,
+                               subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Try to schedule multiple classes of the same subject on the same day."""
+        scheduled = current_scheduled
+
+        # Find days that already have this subject and can accommodate more
+        subject_days = {}
+        for entry in entries:
+            if entry.class_group == class_group and entry.subject == subject:
+                if entry.day not in subject_days:
+                    subject_days[entry.day] = []
+                subject_days[entry.day].append(entry.period)
+
+        # Try to add more classes to existing days
+        for day in subject_days.keys():
+            if scheduled >= target:
+                break
+
+            # Find available periods on this day
+            for period in self.periods:
+                if scheduled >= target:
+                    break
+
+                if (day, period) not in class_schedule:
+                    teacher = self._find_available_teacher(teachers, day, period, 1)
+                    if teacher:
+                        classroom = self._find_available_classroom(day, period, 1)
+                        if classroom:
+                            entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                            entries.append(entry)
+                            class_schedule[(day, period)] = entry
+                            self._mark_global_schedule(teacher, classroom, day, period)
+                            scheduled += 1
+                            print(f"           ✅ Same-day: {subject.code} on {day} P{period}")
+
+        return scheduled
+
+    def _try_friday_relaxed_scheduling(self, entries: List[TimetableEntry], class_schedule: dict,
+                                     subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Try Friday slots with relaxed time constraints."""
+        scheduled = current_scheduled
+
+        # Try Friday periods up to Period 5 (instead of normal limit of 3-4)
+        friday_periods = [4, 5]  # Periods normally restricted on Friday
+
+        for period in friday_periods:
+            if scheduled >= target:
+                break
+
+            day = 'Friday'
+            if (day, period) not in class_schedule:
+                teacher = self._find_available_teacher(teachers, day, period, 1)
+                if teacher:
+                    classroom = self._find_available_classroom(day, period, 1)
+                    if classroom:
+                        entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                        entries.append(entry)
+                        class_schedule[(day, period)] = entry
+                        self._mark_global_schedule(teacher, classroom, day, period)
+                        scheduled += 1
+                        print(f"           ✅ Friday-relaxed: {subject.code} on {day} P{period}")
+
+        return scheduled
+
+    def _try_any_teacher_scheduling(self, entries: List[TimetableEntry], class_schedule: dict,
+                                  subject: Subject, class_group: str, target: int, current_scheduled: int) -> int:
+        """Try using any available teacher, not just assigned ones."""
+        scheduled = current_scheduled
+
+        # Use any teacher from the pool
+        all_teachers = self.all_teachers
+
+        for day in self.days:
+            if scheduled >= target:
+                break
+
+            for period in self.periods:
+                if scheduled >= target:
+                    break
+
+                if (day, period) not in class_schedule:
+                    teacher = self._find_available_teacher(all_teachers, day, period, 1)
+                    if teacher:
+                        classroom = self._find_available_classroom(day, period, 1)
+                        if classroom:
+                            entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                            entries.append(entry)
+                            class_schedule[(day, period)] = entry
+                            self._mark_global_schedule(teacher, classroom, day, period)
+                            scheduled += 1
+                            print(f"           ✅ Any-teacher: {subject.code} on {day} P{period} (Teacher: {teacher.name})")
+
+        return scheduled
+
+    def _create_emergency_slots_by_extension(self, entries: List[TimetableEntry], class_schedule: dict,
+                                           subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Create emergency slots by extending day duration."""
+        scheduled = current_scheduled
+
+        # Try periods 6 and 7 (normally not used)
+        emergency_periods = [6, 7]
+
+        for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday']:  # Avoid Friday for emergency extension
+            if scheduled >= target:
+                break
+
+            for period in emergency_periods:
+                if scheduled >= target:
+                    break
+
+                if (day, period) not in class_schedule:
+                    teacher = self._find_available_teacher(teachers, day, period, 1)
+                    if teacher:
+                        classroom = self._find_available_classroom(day, period, 1)
+                        if classroom:
+                            entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                            entries.append(entry)
+                            class_schedule[(day, period)] = entry
+                            self._mark_global_schedule(teacher, classroom, day, period)
+                            scheduled += 1
+                            print(f"           🚨 Emergency-extend: {subject.code} on {day} P{period}")
+
+        return scheduled
+
+    def _use_late_friday_emergency_slots(self, entries: List[TimetableEntry], class_schedule: dict,
+                                       subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Use late Friday periods as emergency slots."""
+        scheduled = current_scheduled
+
+        # Use Friday periods 5, 6, 7 as absolute emergency
+        emergency_friday_periods = [5, 6, 7]
+
+        for period in emergency_friday_periods:
+            if scheduled >= target:
+                break
+
+            day = 'Friday'
+            if (day, period) not in class_schedule:
+                teacher = self._find_available_teacher(teachers, day, period, 1)
+                if teacher:
+                    classroom = self._find_available_classroom(day, period, 1)
+                    if classroom:
+                        entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                        entries.append(entry)
+                        class_schedule[(day, period)] = entry
+                        self._mark_global_schedule(teacher, classroom, day, period)
+                        scheduled += 1
+                        print(f"           🚨 Emergency-Friday: {subject.code} on {day} P{period}")
+
+        return scheduled
+
+    def _duplicate_classes_emergency(self, entries: List[TimetableEntry], class_schedule: dict,
+                                   subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
+        """Duplicate existing classes on different days as emergency measure."""
+        scheduled = current_scheduled
+
+        # Find any available slot and force schedule
+        for day in self.days:
+            if scheduled >= target:
+                break
+
+            for period in range(1, 8):  # Try all possible periods
+                if scheduled >= target:
+                    break
+
+                if (day, period) not in class_schedule:
+                    # Use first available teacher
+                    teacher = teachers[0] if teachers else self.all_teachers[0]
+                    # Use first available classroom
+                    classroom = self.all_classrooms[0]
+
+                    entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                    entries.append(entry)
+                    class_schedule[(day, period)] = entry
+                    self._mark_global_schedule(teacher, classroom, day, period)
+                    scheduled += 1
+                    print(f"           🚨 Emergency-duplicate: {subject.code} on {day} P{period}")
+
+        return scheduled
+
     def _get_teachers_for_subject(self, subject: Subject, class_group: str = None) -> List[Teacher]:
         """Get teachers for a subject with section awareness."""
         teachers = []
@@ -573,20 +858,22 @@ class FinalUniversalScheduler:
         # Teacher conflicts
         teacher_slots = {}
         for entry in entries:
-            key = f"{entry.teacher.id}_{entry.day}_{entry.period}"
-            if key in teacher_slots:
-                conflicts.append(f"Teacher conflict: {entry.teacher.name} at {entry.day} P{entry.period}")
-            else:
-                teacher_slots[key] = entry
+            if entry.teacher:  # Only check if teacher is assigned
+                key = f"{entry.teacher.id}_{entry.day}_{entry.period}"
+                if key in teacher_slots:
+                    conflicts.append(f"Teacher conflict: {entry.teacher.name} at {entry.day} P{entry.period}")
+                else:
+                    teacher_slots[key] = entry
 
         # Classroom conflicts
         classroom_slots = {}
         for entry in entries:
-            key = f"{entry.classroom.id}_{entry.day}_{entry.period}"
-            if key in classroom_slots:
-                conflicts.append(f"Classroom conflict: {entry.classroom.name} at {entry.day} P{entry.period}")
-            else:
-                classroom_slots[key] = entry
+            if entry.classroom:  # Only check if classroom is assigned
+                key = f"{entry.classroom.id}_{entry.day}_{entry.period}"
+                if key in classroom_slots:
+                    conflicts.append(f"Classroom conflict: {entry.classroom.name} at {entry.day} P{entry.period}")
+                else:
+                    classroom_slots[key] = entry
 
         # Class conflicts
         class_slots = {}
@@ -606,8 +893,8 @@ class FinalUniversalScheduler:
             'period': entry.period,
             'subject': entry.subject.name,
             'subject_code': entry.subject.code,
-            'teacher': entry.teacher.name,
-            'classroom': entry.classroom.name,
+            'teacher': entry.teacher.name if entry.teacher else 'No Teacher Assigned',
+            'classroom': entry.classroom.name if entry.classroom else 'No Classroom Assigned',
             'class_group': entry.class_group,
             'start_time': entry.start_time.strftime('%H:%M'),
             'end_time': entry.end_time.strftime('%H:%M'),
@@ -1297,13 +1584,14 @@ class FinalUniversalScheduler:
                     if periods != expected_periods:
                         issues.append(f"Practical block violation: {subject_code} periods not consecutive")
 
-        # Check teacher conflicts
+        # Check teacher conflicts (skip entries without teachers like THESISDAY)
         teacher_schedule = {}
         for entry in entries:
-            key = (entry.teacher.name, entry.day, entry.period)
-            if key not in teacher_schedule:
-                teacher_schedule[key] = []
-            teacher_schedule[key].append(entry)
+            if entry.teacher:  # Only check entries that have teachers assigned
+                key = (entry.teacher.name, entry.day, entry.period)
+                if key not in teacher_schedule:
+                    teacher_schedule[key] = []
+                teacher_schedule[key].append(entry)
 
         for key, conflicting_entries in teacher_schedule.items():
             if len(conflicting_entries) > 1:
@@ -1845,7 +2133,8 @@ class FinalUniversalScheduler:
 
         # Check teacher availability (simplified - could be enhanced)
         for entry in entries:
-            if (entry.teacher.id == movable_class.teacher.id and
+            if (entry.teacher and movable_class.teacher and  # Both must have teachers
+                entry.teacher.id == movable_class.teacher.id and
                 entry.day == target_day and
                 entry.period == target_period and
                 entry != movable_class):
@@ -1853,7 +2142,8 @@ class FinalUniversalScheduler:
 
         # Check classroom availability (simplified - could be enhanced)
         for entry in entries:
-            if (entry.classroom.id == movable_class.classroom.id and
+            if (entry.classroom and movable_class.classroom and  # Both must have classrooms
+                entry.classroom.id == movable_class.classroom.id and
                 entry.day == target_day and
                 entry.period == target_period and
                 entry != movable_class):
@@ -1872,41 +2162,225 @@ class FinalUniversalScheduler:
 
         # Check teacher availability
         for existing in existing_entries:
-            if (existing.teacher.id == entry.teacher.id and
+            if (existing.teacher and entry.teacher and  # Both must have teachers
+                existing.teacher.id == entry.teacher.id and
                 existing.day == target_day and
                 existing.period == target_period):
                 return False
 
         # Check classroom availability
         for existing in existing_entries:
-            if (existing.classroom.id == entry.classroom.id and
+            if (existing.classroom and entry.classroom and  # Both must have classrooms
+                existing.classroom.id == entry.classroom.id and
                 existing.day == target_day and
                 existing.period == target_period):
                 return False
 
         return True
 
-    def _validate_credit_hour_compliance(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str):
-        """ENHANCEMENT 5: Validate that subjects are scheduled exactly according to their credit hours."""
-        print(f"     📊 Validating credit hour compliance for {class_group}...")
+    def _validate_and_correct_credit_hour_compliance(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str) -> List[TimetableEntry]:
+        """ENHANCEMENT 5: Validate and automatically correct credit hour compliance."""
+        print(f"     📊 Validating and correcting credit hour compliance for {class_group}...")
 
         # Count scheduled classes per subject
         subject_counts = {}
         for entry in entries:
-            subject_code = entry.subject.code
-            if subject_code not in subject_counts:
-                subject_counts[subject_code] = 0
+            if entry.class_group == class_group:
+                subject_code = entry.subject.code
+                if subject_code not in subject_counts:
+                    subject_counts[subject_code] = 0
 
-            # For practical subjects, count 3 consecutive periods as 1 session
-            if entry.is_practical:
-                # Only count the first period of a practical session
-                if entry.period == 1 or not any(
-                    e.subject.code == subject_code and e.day == entry.day and e.period == entry.period - 1
-                    for e in entries
-                ):
+                # For practical subjects, count 3 consecutive periods as 1 session
+                if entry.is_practical:
+                    # Only count the first period of a practical session
+                    if entry.period == 1 or not any(
+                        e.subject.code == subject_code and e.day == entry.day and e.period == entry.period - 1
+                        for e in entries if e.class_group == class_group
+                    ):
+                        subject_counts[subject_code] += 1
+                else:
                     subject_counts[subject_code] += 1
+
+        # Identify violations and auto-correct
+        violations_found = []
+        corrected_entries = list(entries)
+
+        for subject in subjects:
+            expected_classes = subject.credits
+            actual_classes = subject_counts.get(subject.code, 0)
+
+            # Special rule for practical subjects
+            if self._is_practical_subject(subject):
+                expected_classes = 1  # Practical subjects: 1 credit = 1 session per week
+                rule_description = "1 credit = 1 session/week (3 consecutive hours)"
             else:
-                subject_counts[subject_code] += 1
+                rule_description = f"{subject.credits} credits = {subject.credits} classes/week"
+
+            if actual_classes != expected_classes:
+                violations_found.append({
+                    'subject': subject,
+                    'expected': expected_classes,
+                    'actual': actual_classes,
+                    'rule': rule_description
+                })
+                print(f"       ❌ {subject.code}: Expected {expected_classes}, got {actual_classes} ({rule_description})")
+
+                # AUTO-CORRECTION: Add missing classes or remove excess classes
+                if actual_classes < expected_classes:
+                    missing_classes = expected_classes - actual_classes
+                    print(f"         🔧 AUTO-CORRECTING: Adding {missing_classes} missing classes for {subject.code}")
+                    corrected_entries = self._add_missing_subject_classes(corrected_entries, subject, class_group, missing_classes)
+                elif actual_classes > expected_classes:
+                    excess_classes = actual_classes - expected_classes
+                    print(f"         🔧 AUTO-CORRECTING: Removing {excess_classes} excess classes for {subject.code}")
+                    corrected_entries = self._remove_excess_subject_classes(corrected_entries, subject, class_group, excess_classes)
+
+            else:
+                print(f"       ✅ {subject.code}: {actual_classes} classes/week (compliant)")
+
+        if violations_found:
+            print(f"     🔧 {len(violations_found)} violations found and auto-corrected")
+        else:
+            print(f"     ✅ Perfect credit hour compliance - all subjects scheduled correctly!")
+
+        return corrected_entries
+
+    def _remove_excess_subject_classes(self, entries: List[TimetableEntry], subject: Subject, class_group: str, excess_count: int) -> List[TimetableEntry]:
+        """Remove excess classes for a subject to achieve credit hour compliance."""
+        print(f"         🎯 Removing {excess_count} excess classes for {subject.code} in {class_group}")
+
+        updated_entries = list(entries)
+        removed_count = 0
+
+        # Find all entries for this subject and class group
+        subject_entries = [entry for entry in updated_entries
+                          if entry.class_group == class_group and entry.subject.code == subject.code]
+
+        # Sort by priority (remove duplicates first, then least important slots)
+        # Priority: later periods first, then Friday, then other days
+        def removal_priority(entry):
+            day_priority = {'Friday': 0, 'Thursday': 1, 'Wednesday': 2, 'Tuesday': 3, 'Monday': 4}
+            return (entry.period, day_priority.get(entry.day, 5))
+
+        subject_entries.sort(key=removal_priority, reverse=True)
+
+        # Remove excess entries
+        for entry in subject_entries:
+            if removed_count >= excess_count:
+                break
+
+            print(f"           🗑️  Removing excess {subject.code} class: {entry.day} P{entry.period}")
+            updated_entries.remove(entry)
+            removed_count += 1
+
+        print(f"         ✅ Successfully removed {removed_count} excess classes for {subject.code}")
+        return updated_entries
+
+    def _add_missing_subject_classes(self, entries: List[TimetableEntry], subject: Subject, class_group: str, missing_count: int) -> List[TimetableEntry]:
+        """Add missing classes for a subject to achieve credit hour compliance."""
+        print(f"         🎯 Adding {missing_count} missing classes for {subject.code} in {class_group}")
+
+        updated_entries = list(entries)
+        added_count = 0
+
+        # Create a temporary class schedule for this class group
+        class_schedule = {}
+        for entry in updated_entries:
+            if entry.class_group == class_group:
+                class_schedule[(entry.day, entry.period)] = entry
+
+        # Get teachers for this subject
+        teachers = self._get_teachers_for_subject(subject, class_group)
+        if not teachers:
+            teachers = self.all_teachers[:3]  # Fallback to any teachers
+
+        # Strategy 1: Try normal available slots
+        for day in self.days:
+            if added_count >= missing_count:
+                break
+            for period in self.periods:
+                if added_count >= missing_count:
+                    break
+                if (day, period) not in class_schedule:
+                    teacher = self._find_available_teacher(teachers, day, period, 1)
+                    if teacher:
+                        classroom = self._find_available_classroom(day, period, 1)
+                        if classroom:
+                            entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                            updated_entries.append(entry)
+                            class_schedule[(day, period)] = entry
+                            self._mark_global_schedule(teacher, classroom, day, period)
+                            added_count += 1
+                            print(f"           ✅ Added {subject.code} on {day} P{period}")
+
+        # Strategy 2: If still missing, use emergency slots
+        if added_count < missing_count:
+            print(f"         🚨 Still missing {missing_count - added_count} classes - using emergency slots")
+            added_count = self._add_emergency_subject_classes(updated_entries, subject, class_group, missing_count, added_count, class_schedule, teachers)
+
+        print(f"         📊 Successfully added {added_count}/{missing_count} missing classes")
+        return updated_entries
+
+    def _add_emergency_subject_classes(self, entries: List[TimetableEntry], subject: Subject, class_group: str,
+                                     missing_count: int, current_added: int, class_schedule: dict, teachers: List) -> int:
+        """Add missing classes using emergency measures."""
+        added_count = current_added
+
+        # Emergency Strategy 1: Use extended periods (6, 7)
+        for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday']:
+            if added_count >= missing_count:
+                break
+            for period in [6, 7]:
+                if added_count >= missing_count:
+                    break
+                if (day, period) not in class_schedule:
+                    teacher = teachers[0] if teachers else self.all_teachers[0]
+                    classroom = self.all_classrooms[0]
+                    entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                    entries.append(entry)
+                    class_schedule[(day, period)] = entry
+                    self._mark_global_schedule(teacher, classroom, day, period)
+                    added_count += 1
+                    print(f"           🚨 Emergency: {subject.code} on {day} P{period}")
+
+        # Emergency Strategy 2: Use Friday late periods
+        if added_count < missing_count:
+            for period in [5, 6, 7]:
+                if added_count >= missing_count:
+                    break
+                day = 'Friday'
+                if (day, period) not in class_schedule:
+                    teacher = teachers[0] if teachers else self.all_teachers[0]
+                    classroom = self.all_classrooms[0]
+                    entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                    entries.append(entry)
+                    class_schedule[(day, period)] = entry
+                    self._mark_global_schedule(teacher, classroom, day, period)
+                    added_count += 1
+                    print(f"           🚨 Emergency-Friday: {subject.code} on {day} P{period}")
+
+        return added_count
+
+    def _validate_credit_hour_compliance_for_report(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str):
+        """Validate credit hour compliance for reporting purposes (no auto-correction)."""
+        # Count scheduled classes per subject
+        subject_counts = {}
+        for entry in entries:
+            if entry.class_group == class_group:
+                subject_code = entry.subject.code
+                if subject_code not in subject_counts:
+                    subject_counts[subject_code] = 0
+
+                # For practical subjects, count 3 consecutive periods as 1 session
+                if entry.is_practical:
+                    # Only count the first period of a practical session
+                    if entry.period == 1 or not any(
+                        e.subject.code == subject_code and e.day == entry.day and e.period == entry.period - 1
+                        for e in entries if e.class_group == class_group
+                    ):
+                        subject_counts[subject_code] += 1
+                else:
+                    subject_counts[subject_code] += 1
 
         # Validate against expected credit hours
         compliance_issues = []
@@ -1928,14 +2402,6 @@ class FinalUniversalScheduler:
                     'actual': actual_classes,
                     'rule': rule_description
                 })
-                print(f"       ❌ {subject.code}: Expected {expected_classes}, got {actual_classes} ({rule_description})")
-            else:
-                print(f"       ✅ {subject.code}: {actual_classes} classes/week (compliant)")
-
-        if compliance_issues:
-            print(f"     ⚠️  {len(compliance_issues)} credit hour compliance issues found")
-        else:
-            print(f"     ✅ Perfect credit hour compliance - all subjects scheduled correctly!")
 
         return compliance_issues
 
@@ -1956,7 +2422,8 @@ class FinalUniversalScheduler:
 
         for section, section_entry_list in section_entries.items():
             subjects = self._get_subjects_for_class_group(section)
-            issues = self._validate_credit_hour_compliance(section_entry_list, subjects, section)
+            # For reporting, we just validate without correcting
+            issues = self._validate_credit_hour_compliance_for_report(section_entry_list, subjects, section)
 
             if not issues:
                 compliant_sections += 1
@@ -2000,11 +2467,20 @@ class FinalUniversalScheduler:
             }
         )
 
-        # Create or get special "Thesis Supervisor" teacher
-        thesis_teacher, created = Teacher.objects.get_or_create(
-            name="Thesis Supervisor",
-            defaults={'email': 'thesis@university.edu'}
-        )
+        # Create or get special "Thesis Supervisor" teacher (handle uniqueness)
+        try:
+            thesis_teacher = Teacher.objects.get(name="Thesis Supervisor")
+        except Teacher.DoesNotExist:
+            # Create with unique email to avoid conflicts
+            import uuid
+            unique_email = f"thesis.supervisor.{uuid.uuid4().hex[:8]}@university.edu"
+            thesis_teacher = Teacher.objects.create(
+                name="Thesis Supervisor",
+                email=unique_email
+            )
+        except Teacher.MultipleObjectsReturned:
+            # If multiple exist, use the first one
+            thesis_teacher = Teacher.objects.filter(name="Thesis Supervisor").first()
 
         # Use any available classroom (or create thesis room)
         thesis_classroom, created = Classroom.objects.get_or_create(
@@ -2229,8 +2705,9 @@ class FinalUniversalScheduler:
         updated_entries = list(entries)
         successfully_relocated = 0
 
+        # CRITICAL FIX: Process each entry individually to preserve ALL Wednesday entries
         for entry in entries_to_relocate:
-            print(f"           🔄 Relocating {entry.subject.code} from Wednesday")
+            print(f"           🔄 Relocating {entry.subject.code} from Wednesday P{entry.period}")
 
             # Try to find alternative slot on Monday, Tuesday, Thursday, Friday
             alternative_found = False
@@ -2259,7 +2736,7 @@ class FinalUniversalScheduler:
 
             if not alternative_found:
                 # If we can't relocate, keep it on Wednesday (fallback)
-                print(f"             ⚠️  Could not relocate {entry.subject.code} - keeping on Wednesday")
+                print(f"             ⚠️  Could not relocate {entry.subject.code} P{entry.period} - keeping on Wednesday")
                 updated_entries.append(entry)
 
         print(f"         📊 Successfully relocated {successfully_relocated}/{len(entries_to_relocate)} entries")

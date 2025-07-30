@@ -655,12 +655,31 @@ class TimetableView(APIView):
             for entry in timetable['entries']:
                 # Remove (PR) from subject name if present
                 subject_name = entry['subject'].replace(' (PR)', '')
+
+                # Handle teacher assignment (may be None for THESISDAY entries)
+                teacher = None
+                if entry['teacher'] and entry['teacher'] != 'No Teacher Assigned':
+                    try:
+                        teacher = Teacher.objects.get(name=entry['teacher'])
+                    except Teacher.DoesNotExist:
+                        logger.warning(f"Teacher '{entry['teacher']}' not found, setting to None")
+                        teacher = None
+
+                # Handle classroom assignment (may be None)
+                classroom = None
+                if entry['classroom'] and entry['classroom'] != 'No Classroom Assigned':
+                    try:
+                        classroom = Classroom.objects.get(name=entry['classroom'])
+                    except Classroom.DoesNotExist:
+                        logger.warning(f"Classroom '{entry['classroom']}' not found, setting to None")
+                        classroom = None
+
                 entries_to_create.append(TimetableEntry(
                     day=entry['day'],
                     period=entry['period'],
                     subject=Subject.objects.get(name=subject_name),
-                    teacher=Teacher.objects.get(name=entry['teacher']),
-                    classroom=Classroom.objects.get(name=entry['classroom']),
+                    teacher=teacher,
+                    classroom=classroom,
                     class_group=entry['class_group'],
                     start_time=entry['start_time'],
                     end_time=entry['end_time'],
