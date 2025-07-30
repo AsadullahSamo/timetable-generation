@@ -61,11 +61,11 @@ def cleanup_timetable_data():
         return
     
     print('\n🗑️  Deleting timetable entries...')
-    
+
     # Delete timetable entries
     deleted_count = TimetableEntry.objects.count()
     TimetableEntry.objects.all().delete()
-    
+
     print(f'   ✅ Deleted {deleted_count} timetable entries')
     
     # Verify deletion
