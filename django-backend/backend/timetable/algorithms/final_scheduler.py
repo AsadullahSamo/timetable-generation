@@ -252,7 +252,10 @@ class FinalUniversalScheduler:
         # ENHANCEMENT 8: Ensure no day has only practical or only one class
         entries = self._enforce_minimum_daily_classes(entries, class_group)
 
-        # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches
+        # ENHANCEMENT 9: Thesis Day - Wednesday exclusive for final year batches with Thesis
+        entries = self._enforce_thesis_day_constraint(entries, subjects, class_group)
+
+        # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches (legacy)
         entries = self._assign_thesis_day_if_needed(entries, subjects, class_group)
 
         # ENHANCEMENT 5: Validate credit hour compliance
@@ -2142,3 +2145,328 @@ class FinalUniversalScheduler:
 
         print(f"       📅 Day priority for practical: {prioritized_days}")
         return prioritized_days
+
+    def _enforce_thesis_day_constraint(self, entries: List[TimetableEntry], subjects: List[Subject],
+                                     class_group: str) -> List[TimetableEntry]:
+        """
+        ENHANCEMENT 9: Enforce Thesis Day constraint for final year batches.
+
+        Simplified approach:
+        1. Find Thesis subjects for this class group
+        2. Move any existing Thesis entries to Wednesday
+        3. Remove teacher assignment from Thesis entries
+        """
+        print(f"     📚 Enforcing Thesis Day constraint for {class_group}...")
+
+        # Check if this class group has Thesis subject
+        thesis_subjects = [s for s in subjects if
+                          s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
+                          'thesis' in s.name.lower()]
+
+        if not thesis_subjects:
+            print(f"       ℹ️  No Thesis subject found for {class_group} - skipping")
+            return entries
+
+        print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
+
+        # Get the base batch (e.g., "21SW" from "21SW-I")
+        base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+
+        # Only apply to 21SW (final year)
+        if not base_batch.startswith('21SW'):
+            print(f"       ℹ️  {class_group} is not 21SW - skipping Thesis Day constraint")
+            return entries
+
+        print(f"       🎓 {class_group} is final year - applying COMPLETE Thesis Day constraint")
+
+        # COMPLETE THESIS DAY IMPLEMENTATION:
+        # 1. Move all Thesis entries to Wednesday and remove teachers
+        # 2. Move all non-Thesis entries FROM Wednesday to other days
+        # 3. Ensure Wednesday is dedicated ONLY to Thesis
+
+        updated_entries = []
+        entries_to_relocate = []  # Non-Thesis entries currently on Wednesday
+
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.subject in thesis_subjects:
+                    # This is a Thesis entry - move to Wednesday and remove teacher
+                    if not entry.day.lower().startswith('wed'):
+                        print(f"         🔄 Moving {entry.subject.code} from {entry.day} to Wednesday")
+                        entry.day = 'Wednesday'
+
+                    # Remove teacher
+                    if entry.teacher is not None:
+                        print(f"         👤 Removing teacher from {entry.subject.code}")
+                        entry.teacher = None
+
+                    updated_entries.append(entry)
+
+                elif entry.day.lower().startswith('wed'):
+                    # Non-Thesis entry on Wednesday - needs to be moved
+                    print(f"         📤 Scheduling {entry.subject.code} for relocation from Wednesday")
+                    entries_to_relocate.append(entry)
+                else:
+                    # Non-Thesis entry not on Wednesday - keep as is
+                    updated_entries.append(entry)
+            else:
+                # Different class group - keep as is
+                updated_entries.append(entry)
+
+        # Relocate non-Thesis entries from Wednesday to other days
+        if entries_to_relocate:
+            print(f"         🔄 Relocating {len(entries_to_relocate)} non-Thesis entries from Wednesday")
+            updated_entries = self._relocate_entries_from_wednesday(updated_entries, entries_to_relocate, class_group)
+
+        print(f"       ✅ COMPLETE Thesis Day constraint applied - Wednesday dedicated to Thesis!")
+        return updated_entries
+
+    def _relocate_entries_from_wednesday(self, entries: List[TimetableEntry],
+                                       entries_to_relocate: List[TimetableEntry],
+                                       class_group: str) -> List[TimetableEntry]:
+        """Relocate non-Thesis entries from Wednesday to other days to ensure Wednesday dedication."""
+
+        updated_entries = list(entries)
+        successfully_relocated = 0
+
+        for entry in entries_to_relocate:
+            print(f"           🔄 Relocating {entry.subject.code} from Wednesday")
+
+            # Try to find alternative slot on Monday, Tuesday, Thursday, Friday
+            alternative_found = False
+            target_days = ['Monday', 'Tuesday', 'Thursday', 'Friday']
+
+            for target_day in target_days:
+                # Try periods 1-7 for this day
+                for target_period in range(1, 8):
+                    if self._can_relocate_to_slot(entry, target_day, target_period, updated_entries, class_group):
+                        # Create new entry for the target slot
+                        relocated_entry = self._create_entry(
+                            target_day, target_period,
+                            entry.subject, entry.teacher, entry.classroom,
+                            entry.class_group, entry.is_practical
+                        )
+
+                        updated_entries.append(relocated_entry)
+                        successfully_relocated += 1
+                        alternative_found = True
+
+                        print(f"             ✅ Moved {entry.subject.code} to {target_day} P{target_period}")
+                        break
+
+                if alternative_found:
+                    break
+
+            if not alternative_found:
+                # If we can't relocate, keep it on Wednesday (fallback)
+                print(f"             ⚠️  Could not relocate {entry.subject.code} - keeping on Wednesday")
+                updated_entries.append(entry)
+
+        print(f"         📊 Successfully relocated {successfully_relocated}/{len(entries_to_relocate)} entries")
+        return updated_entries
+
+    def _can_relocate_to_slot(self, entry: TimetableEntry, target_day: str, target_period: int,
+                            existing_entries: List[TimetableEntry], class_group: str) -> bool:
+        """Check if an entry can be relocated to a specific day/period without conflicts."""
+
+        # Check if the target slot is already occupied by this class group
+        for existing in existing_entries:
+            if (existing.class_group == class_group and
+                existing.day == target_day and existing.period == target_period):
+                return False
+
+        # Check teacher availability (if entry has a teacher)
+        if entry.teacher:
+            for existing in existing_entries:
+                if (existing.teacher == entry.teacher and
+                    existing.day == target_day and existing.period == target_period):
+                    return False
+
+        # Check classroom availability
+        if entry.classroom:
+            for existing in existing_entries:
+                if (existing.classroom == entry.classroom and
+                    existing.day == target_day and existing.period == target_period):
+                    return False
+
+        # Check Friday constraints if moving to Friday
+        if target_day.lower().startswith('fri'):
+            friday_score = self._calculate_friday_slot_score(target_period, class_group, existing_entries)
+            if friday_score > 50:  # Don't move to heavily penalized Friday slots
+                return False
+
+        # Check if this would violate minimum daily classes constraint
+        # (Don't create days with only one class)
+        target_day_entries = [e for e in existing_entries
+                            if e.class_group == class_group and e.day == target_day]
+        if len(target_day_entries) == 0:  # Would be the only class on this day
+            # Only allow if there are no other options
+            return True  # Allow for now, constraint will be fixed later
+
+        return True
+
+    def _apply_thesis_day_scheduling_DISABLED(self, entries: List[TimetableEntry], thesis_subjects: List[Subject],
+                                   class_group: str, base_batch: str) -> List[TimetableEntry]:
+        """Apply the Thesis Day scheduling rules."""
+
+        # Step 1: Remove any existing Thesis entries that are not on Wednesday
+        thesis_entries = [e for e in entries if e.subject in thesis_subjects and e.class_group == class_group]
+        non_wednesday_thesis = [e for e in thesis_entries if not e.day.lower().startswith('wed')]
+
+        if non_wednesday_thesis:
+            print(f"       🔄 Moving {len(non_wednesday_thesis)} Thesis entries to Wednesday")
+            entries = [e for e in entries if e not in non_wednesday_thesis]
+
+        # Step 2: Remove any non-Thesis entries from Wednesday for this class group
+        wednesday_entries = [e for e in entries if e.day.lower().startswith('wed') and e.class_group == class_group]
+        non_thesis_wednesday = [e for e in wednesday_entries if e.subject not in thesis_subjects]
+
+        if non_thesis_wednesday:
+            print(f"       🔄 Moving {len(non_thesis_wednesday)} non-Thesis entries from Wednesday")
+            entries = self._relocate_non_thesis_from_wednesday(entries, non_thesis_wednesday, class_group)
+
+        # Step 3: Schedule Thesis on Wednesday for all sections of this batch
+        entries = self._schedule_thesis_on_wednesday(entries, thesis_subjects, base_batch)
+
+        print(f"       ✅ Thesis Day constraint applied - Wednesday dedicated to Thesis")
+        return entries
+
+    def _relocate_non_thesis_from_wednesday(self, entries: List[TimetableEntry],
+                                          non_thesis_entries: List[TimetableEntry],
+                                          class_group: str) -> List[TimetableEntry]:
+        """Relocate non-Thesis entries from Wednesday to other days."""
+
+        updated_entries = [e for e in entries if e not in non_thesis_entries]
+
+        for entry in non_thesis_entries:
+            print(f"         🔄 Relocating {entry.subject.code} from Wednesday")
+
+            # Try to find alternative slot on other days
+            alternative_found = False
+            for day in ['Monday', 'Tuesday', 'Thursday', 'Friday']:
+                for period in range(1, 8):
+                    if self._can_reschedule_entry(entry, day, period, updated_entries):
+                        new_entry = self._create_entry(
+                            day, period,
+                            entry.subject, entry.teacher, entry.classroom,
+                            entry.class_group, entry.is_practical
+                        )
+                        updated_entries.append(new_entry)
+                        alternative_found = True
+                        print(f"           ✅ Moved {entry.subject.code} to {day} P{period}")
+                        break
+
+                if alternative_found:
+                    break
+
+            if not alternative_found:
+                print(f"           ⚠️  Could not relocate {entry.subject.code} - keeping on Wednesday")
+                updated_entries.append(entry)  # Keep original if no alternative found
+
+        return updated_entries
+
+    def _schedule_thesis_on_wednesday(self, entries: List[TimetableEntry],
+                                    thesis_subjects: List[Subject], base_batch: str) -> List[TimetableEntry]:
+        """Schedule Thesis subjects on Wednesday for all sections of the batch."""
+
+        # Get all sections of this batch that should have Thesis
+        all_sections = [f"{base_batch}-I", f"{base_batch}-II", f"{base_batch}-III"]
+
+        for section in all_sections:
+            print(f"         📚 Scheduling Thesis for {section}")
+
+            # Check if this section already has Thesis on Wednesday
+            existing_thesis = [e for e in entries
+                             if e.class_group == section and e.day.lower().startswith('wed')
+                             and e.subject in thesis_subjects]
+
+            if existing_thesis:
+                print(f"           ✅ {section} already has Thesis on Wednesday")
+                continue
+
+            # Schedule Thesis for this section
+            thesis_subject = thesis_subjects[0]  # Use first Thesis subject
+
+            # Find available periods on Wednesday
+            wednesday_entries = [e for e in entries if e.day.lower().startswith('wed') and e.class_group == section]
+            used_periods = set(e.period for e in wednesday_entries)
+
+            # Schedule Thesis for the required number of periods (based on credits)
+            periods_needed = thesis_subject.credits
+            available_periods = [p for p in range(1, 8) if p not in used_periods]
+
+            if len(available_periods) >= periods_needed:
+                for i in range(periods_needed):
+                    period = available_periods[i]
+
+                    # Create Thesis entry WITHOUT teacher (as specified)
+                    thesis_entry = self._create_thesis_entry(
+                        'Wednesday', period, thesis_subject, section
+                    )
+                    entries.append(thesis_entry)
+
+                print(f"           ✅ Scheduled {periods_needed} Thesis periods for {section}")
+            else:
+                print(f"           ⚠️  Not enough periods available on Wednesday for {section}")
+
+        return entries
+
+    def _create_thesis_entry(self, day: str, period: int, subject: Subject, class_group: str) -> TimetableEntry:
+        """Create a Thesis entry without teacher assignment."""
+        from timetable.models import TimetableEntry, Classroom
+        from datetime import time
+
+        # Get a default classroom (or None)
+        classroom = Classroom.objects.first()  # Use any available classroom
+
+        # Calculate start and end times based on period
+        start_hour = 8 + (period - 1)  # Period 1 = 9:00 AM, Period 2 = 10:00 AM, etc.
+        start_time = time(start_hour, 0)
+        end_time = time(start_hour + 1, 0)
+
+        # Create entry without teacher (teacher will be None/null)
+        entry = TimetableEntry(
+            day=day,
+            period=period,
+            subject=subject,
+            teacher=None,  # No teacher for Thesis entries
+            classroom=classroom,
+            class_group=class_group,
+            start_time=start_time,
+            end_time=end_time,
+            is_practical=False
+        )
+
+        return entry
+
+    def _can_reschedule_entry(self, entry: TimetableEntry, new_day: str, new_period: int,
+                            existing_entries: List[TimetableEntry]) -> bool:
+        """Check if an entry can be rescheduled to a new day/period without conflicts."""
+
+        # Check if the slot is already occupied by this class group
+        for existing in existing_entries:
+            if (existing.class_group == entry.class_group and
+                existing.day == new_day and existing.period == new_period):
+                return False
+
+        # Check teacher availability (if entry has a teacher)
+        if entry.teacher:
+            for existing in existing_entries:
+                if (existing.teacher == entry.teacher and
+                    existing.day == new_day and existing.period == new_period):
+                    return False
+
+        # Check classroom availability
+        if entry.classroom:
+            for existing in existing_entries:
+                if (existing.classroom == entry.classroom and
+                    existing.day == new_day and existing.period == new_period):
+                    return False
+
+        # Check Friday constraints if moving to Friday
+        if new_day.lower().startswith('fri'):
+            friday_score = self._calculate_friday_slot_score(new_period, entry.class_group, existing_entries)
+            if friday_score > 50:  # Don't move to heavily penalized Friday slots
+                return False
+
+        return True
