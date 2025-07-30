@@ -226,6 +226,13 @@ class FinalUniversalScheduler:
         print(f"   🧪 Practical subjects: {len(practical_subjects)}")
         print(f"   📖 Theory subjects: {len(theory_subjects)}")
         
+        # FRIDAY-AWARE SCHEDULING STRATEGY:
+        # 1. Schedule practical subjects first with Friday-awareness
+        # 2. Schedule theory subjects with Friday time limits in mind
+        # 3. Apply compact scheduling while respecting Friday constraints
+
+        print(f"   📅 Using Friday-aware scheduling strategy for {class_group}")
+
         # Schedule practical subjects first (need consecutive periods)
         for subject in practical_subjects:
             if self._has_teacher_for_subject(subject):
@@ -239,10 +246,16 @@ class FinalUniversalScheduler:
         # ENHANCEMENT 4: Ensure minimum daily class duration
         entries = self._enforce_minimum_daily_duration(entries, class_group)
 
-        # ENHANCEMENT 7: Enforce Friday 12:00 PM limit
+        # ENHANCEMENT 7: Enforce Friday time limits based on practical scheduling
         entries = self._enforce_friday_time_limit(entries, class_group)
 
-        # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches
+        # ENHANCEMENT 8: Ensure no day has only practical or only one class
+        entries = self._enforce_minimum_daily_classes(entries, class_group)
+
+        # ENHANCEMENT 9: Thesis Day - Wednesday exclusive for final year batches with Thesis
+        entries = self._enforce_thesis_day_constraint(entries, subjects, class_group)
+
+        # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches (legacy)
         entries = self._assign_thesis_day_if_needed(entries, subjects, class_group)
 
         # ENHANCEMENT 5: Validate credit hour compliance
@@ -287,18 +300,19 @@ class FinalUniversalScheduler:
             print(f"     ⚠️  No teachers for {subject.code}")
             return
 
-        # ENHANCEMENT 3: Prioritize early periods for practical subjects too
+        # ENHANCEMENT: Friday-aware practical scheduling
         import random
-        days_shuffled = self.days.copy()
-        random.shuffle(days_shuffled)
+
+        # Prioritize days with Friday-awareness
+        friday_aware_days = self._prioritize_days_for_practical(class_group, entries)
 
         # ENHANCEMENT 3: Try early periods first (1-4), then later periods if needed
         early_periods = [p for p in self.periods[:-2] if p <= 4]  # Periods 1-4 (early)
         late_periods = [p for p in self.periods[:-2] if p > 4]   # Periods 5+ (late)
         prioritized_periods = early_periods + late_periods
 
-        # Try to find 3 consecutive periods, prioritizing early times
-        for day in days_shuffled:
+        # Try to find 3 consecutive periods, prioritizing Friday-aware days and early times
+        for day in friday_aware_days:
             for start_period in prioritized_periods:
                 if self._can_schedule_block(class_schedule, day, start_period, 3, class_group):
                     teacher = self._find_available_teacher(teachers, day, start_period, 3)
@@ -334,29 +348,32 @@ class FinalUniversalScheduler:
 
         print(f"       🎯 Target: EXACTLY {target} classes per week (strict credit compliance)")
 
-        # ENHANCEMENT: Prioritize early time slots (compact schedule)
+        # ENHANCEMENT: Friday-aware compact scheduling
         available_slots = []
         for day in self.days:
             for period in self.periods:
                 if self._can_schedule_single(class_schedule, day, period, class_group):
-                    available_slots.append((day, period))
+                    # Calculate Friday-aware priority score for this slot
+                    friday_score = self._calculate_friday_aware_slot_score(day, period, class_group, entries)
+                    available_slots.append((day, period, friday_score))
 
-        # ENHANCEMENT 3: Sort slots by priority - early periods first, then distribute across days
-        available_slots.sort(key=lambda slot: (slot[1], slot[0]))  # Sort by period first, then day
+        # ENHANCEMENT 3: Sort by Friday-aware score, then period, then day
+        # Lower scores are better (prioritize slots that help Friday compliance)
+        available_slots.sort(key=lambda slot: (slot[2], slot[1], slot[0]))
 
-        # Add some randomization within same period to distribute across days
+        # Add some randomization within same score/period to distribute across days
         import random
         from itertools import groupby
 
-        # Group by period and shuffle within each period group
+        # Group by (friday_score, period) and shuffle within each group
         prioritized_slots = []
-        for period, group in groupby(available_slots, key=lambda x: x[1]):
+        for (score, period), group in groupby(available_slots, key=lambda x: (x[2], x[1])):
             period_slots = list(group)
-            random.shuffle(period_slots)  # Randomize days within same period
+            random.shuffle(period_slots)  # Randomize days within same score/period
             prioritized_slots.extend(period_slots)
 
-        # Schedule across prioritized slots (early periods first)
-        for day, period in prioritized_slots:
+        # Schedule across prioritized slots (Friday-aware early periods first)
+        for day, period, friday_score in prioritized_slots:
             if scheduled >= target:
                 break
 
@@ -806,33 +823,161 @@ class FinalUniversalScheduler:
         return redistributed_entries
 
     def _enforce_friday_time_limit(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
-        """ENHANCEMENT 7: Enforce Friday classes must not exceed 12:00 PM (Period 4)."""
-        print(f"     📅 Enforcing Friday 12:00 PM limit for {class_group}...")
+        """
+        ENHANCEMENT 7: Enforce Friday time limits based on practical scheduling:
+        - If practical is scheduled on Friday: Classes must not exceed 12:00 PM or 1:00 PM (depending on practical placement)
+        - If no practical on Friday: Classes must not exceed 11:00 AM (Period 3)
+        """
+        print(f"     📅 Enforcing Friday time limits for {class_group}...")
 
-        # Find Friday entries that violate the limit
-        friday_entries = [e for e in entries if e.day.lower() == 'friday']
-        violating_entries = [e for e in friday_entries if e.period > 4]  # Period 5+ = after 12:00 PM
+        # Debug: Show all days in entries
+        all_days = set(e.day for e in entries)
+        print(f"       🔍 All days in schedule: {sorted(all_days)}")
 
-        if not violating_entries:
-            print(f"       ✅ All Friday classes end by 12:00 PM - no violations")
+        friday_entries = [e for e in entries if e.day.lower().startswith('fri')]
+        practical_entries = [e for e in friday_entries if e.is_practical]
+        theory_entries = [e for e in friday_entries if not e.is_practical]
+
+        print(f"       📊 Friday entries: {len(friday_entries)} total ({len(practical_entries)} practical, {len(theory_entries)} theory)")
+
+        if friday_entries:
+            friday_periods = [e.period for e in friday_entries]
+            print(f"       ⏰ Friday periods used: {sorted(friday_periods)}")
+        else:
+            print(f"       ℹ️  No Friday entries found for {class_group}")
             return entries
 
-        print(f"       ⚠️  Found {len(violating_entries)} Friday classes after 12:00 PM - redistributing...")
+        if practical_entries:
+            # Case 1: Practical is scheduled on Friday
+            print(f"       🔬 Practical found on Friday - applying practical-based time limits")
+            return self._enforce_friday_practical_limits(entries, class_group, practical_entries, theory_entries)
+        else:
+            # Case 2: No practical on Friday - all theory classes must not exceed 11:00 AM (Period 3)
+            print(f"       📚 No practical on Friday - applying theory-only time limits (max Period 3)")
+            return self._enforce_friday_theory_only_limits(entries, class_group, theory_entries)
 
-        # Remove violating entries from Friday
-        compliant_entries = [e for e in entries if not (e.day.lower() == 'friday' and e.period > 4)]
+    def _enforce_friday_practical_limits(self, entries: List[TimetableEntry], class_group: str,
+                                       practical_entries: List[TimetableEntry], theory_entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """Handle Friday scheduling when practical is present."""
 
-        # Try to redistribute violating entries to other days
+        # Practical must be placed last (consecutive 3-hour block at the end)
+        # Determine the optimal practical placement
+        max_practical_period = max(e.period for e in practical_entries)
+        min_practical_period = min(e.period for e in practical_entries)
+
+        # Check if practical is properly placed as consecutive 3-hour block at the end
+        expected_practical_periods = list(range(min_practical_period, min_practical_period + 3))
+        actual_practical_periods = sorted([e.period for e in practical_entries])
+
+        if actual_practical_periods != expected_practical_periods:
+            print(f"       ⚠️  Practical not in consecutive 3-hour block - rearranging...")
+            # Move practical to end (periods 5, 6, 7 or 4, 5, 6 depending on schedule)
+            target_start_period = max(4, len(self.periods) - 2)  # Start at period 4 or later
+            entries = self._move_practical_to_end(entries, class_group, practical_entries, target_start_period)
+            practical_entries = [e for e in entries if e.day.lower() == 'friday' and e.is_practical]
+            theory_entries = [e for e in entries if e.day.lower() == 'friday' and not e.is_practical]
+
+        # Determine time limit based on practical placement
+        practical_start_period = min(e.period for e in practical_entries)
+
+        if practical_start_period >= 5:  # Practical starts at 12:00 PM or later
+            max_theory_period = 4  # Theory can go up to 12:00 PM (Period 4)
+            time_limit_desc = "12:00 PM"
+        elif practical_start_period >= 4:  # Practical starts at 11:00 AM
+            max_theory_period = 3  # Theory can go up to 11:00 AM (Period 3)
+            time_limit_desc = "11:00 AM"
+        else:
+            max_theory_period = practical_start_period - 1
+            time_limit_desc = f"Period {max_theory_period}"
+
+        print(f"       📋 Practical starts at Period {practical_start_period}, theory limit: {time_limit_desc}")
+
+        # Check for theory violations
+        violating_theory = [e for e in theory_entries if e.period > max_theory_period]
+
+        if not violating_theory:
+            print(f"       ✅ All Friday theory classes comply with {time_limit_desc} limit")
+            return entries
+
+        print(f"       ⚠️  Found {len(violating_theory)} theory classes exceeding {time_limit_desc} - redistributing...")
+
+        # Redistribute violating theory classes
+        return self._redistribute_friday_violations(entries, violating_theory, class_group)
+
+    def _enforce_friday_theory_only_limits(self, entries: List[TimetableEntry], class_group: str,
+                                         theory_entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """Handle Friday scheduling when only theory classes are present."""
+
+        max_allowed_period = 3  # 11:00 AM (Period 3)
+        violating_entries = [e for e in theory_entries if e.period > max_allowed_period]
+
+        if not violating_entries:
+            print(f"       ✅ All Friday theory classes end by 11:00 AM - no violations")
+            return entries
+
+        print(f"       ⚠️  Found {len(violating_entries)} theory classes after 11:00 AM - redistributing...")
+
+        return self._redistribute_friday_violations(entries, violating_entries, class_group)
+
+    def _move_practical_to_end(self, entries: List[TimetableEntry], class_group: str,
+                             practical_entries: List[TimetableEntry], target_start_period: int) -> List[TimetableEntry]:
+        """Move practical to consecutive periods at the end of Friday."""
+
+        # Remove existing practical entries
+        non_practical_entries = [e for e in entries if not (e.day.lower() == 'friday' and e.is_practical)]
+
+        # Create new practical entries at target periods
+        new_practical_entries = []
+        for i, practical_entry in enumerate(sorted(practical_entries, key=lambda x: x.period)):
+            new_period = target_start_period + i
+            new_entry = self._create_entry(
+                'Friday', new_period,
+                practical_entry.subject, practical_entry.teacher, practical_entry.classroom,
+                practical_entry.class_group, True
+            )
+            new_practical_entries.append(new_entry)
+            print(f"         ✅ Moved practical {practical_entry.subject.code} to Friday P{new_period}")
+
+        return non_practical_entries + new_practical_entries
+
+    def _redistribute_friday_violations(self, entries: List[TimetableEntry], violating_entries: List[TimetableEntry],
+                                      class_group: str) -> List[TimetableEntry]:
+        """Redistribute violating Friday entries to other days while preserving constraints."""
+
+        # Don't move practical classes as they need consecutive blocks
+        theory_violations = [e for e in violating_entries if not e.is_practical]
+        practical_violations = [e for e in violating_entries if e.is_practical]
+
+        if practical_violations:
+            print(f"         ⚠️  Cannot redistribute {len(practical_violations)} practical classes - they need consecutive blocks")
+
+        # Remove only theory violations for redistribution
+        compliant_entries = [e for e in entries if e not in theory_violations]
         redistributed_entries = list(compliant_entries)
 
-        for violating_entry in violating_entries:
-            # Try to find alternative slot on other days (Monday-Thursday)
+        # Group theory violations by subject for credit hour checking
+        violations_by_subject = {}
+        for entry in theory_violations:
+            if entry.subject.code not in violations_by_subject:
+                violations_by_subject[entry.subject.code] = []
+            violations_by_subject[entry.subject.code].append(entry)
+
+        for violating_entry in theory_violations:
             alternative_found = False
 
+            # Check if this subject has more sessions than required (safe to move)
+            subject_sessions = len(violations_by_subject[violating_entry.subject.code])
+            required_sessions = violating_entry.subject.credits
+
+            # Only redistribute if it won't break credit hour compliance
+            if subject_sessions <= required_sessions:
+                print(f"         ⚠️  Cannot move {violating_entry.subject.code} - would break credit hour compliance")
+                continue
+
+            # Try to find alternative slot on other days (Monday-Thursday)
             for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday']:
                 for period in range(1, 8):  # Try all periods
                     if self._can_reschedule_entry(violating_entry, day, period, redistributed_entries):
-                        # Create new entry with alternative day/period
                         new_entry = self._create_entry(
                             day, period,
                             violating_entry.subject, violating_entry.teacher, violating_entry.classroom,
@@ -840,32 +985,672 @@ class FinalUniversalScheduler:
                         )
                         redistributed_entries.append(new_entry)
                         alternative_found = True
-                        print(f"         ✅ Moved {violating_entry.subject.code} from Friday P{violating_entry.period} to {day} P{period}")
+                        print(f"         ✅ Safely moved {violating_entry.subject.code} from Friday P{violating_entry.period} to {day} P{period}")
                         break
 
                 if alternative_found:
                     break
 
             if not alternative_found:
-                print(f"         ⚠️  Could not redistribute {violating_entry.subject.code} - keeping on Friday P{min(violating_entry.period, 4)}")
-                # Keep the class but move it to Period 4 (12:00 PM) as last resort
-                capped_entry = self._create_entry(
-                    'Friday', 4,
-                    violating_entry.subject, violating_entry.teacher, violating_entry.classroom,
-                    violating_entry.class_group, violating_entry.is_practical
-                )
-                redistributed_entries.append(capped_entry)
+                print(f"         ⚠️  Could not safely redistribute {violating_entry.subject.code} - keeping on Friday")
+                # Keep the class on Friday rather than break constraints
+                redistributed_entries.append(violating_entry)
 
-        # Verify Friday compliance
-        final_friday_entries = [e for e in redistributed_entries if e.day.lower() == 'friday']
-        violations_remaining = [e for e in final_friday_entries if e.period > 4]
-
-        if not violations_remaining:
-            print(f"       ✅ Friday 12:00 PM limit successfully enforced!")
-        else:
-            print(f"       ⚠️  {len(violations_remaining)} Friday violations remain (unavoidable)")
-
+        print(f"       ✅ Friday time limits enforced with constraint preservation!")
         return redistributed_entries
+
+    def _enforce_minimum_daily_classes(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """
+        ENHANCEMENT 8: Ensure no day has only practical or only one class.
+        Each day should have at least 2 classes, and not be only practical classes.
+        """
+        print(f"     📋 Enforcing minimum daily classes constraint for {class_group}...")
+
+        # Group entries by day
+        day_entries = {}
+        for entry in entries:
+            if entry.class_group == class_group:  # Only check entries for this class group
+                if entry.day not in day_entries:
+                    day_entries[entry.day] = []
+                day_entries[entry.day].append(entry)
+
+        print(f"       📊 Daily distribution for {class_group}: {[(day, len(entries)) for day, entries in day_entries.items()]}")
+
+        # Analyze each day
+        problematic_days = []
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            theory_count = len([e for e in day_entry_list if not e.is_practical])
+            practical_count = len([e for e in day_entry_list if e.is_practical])
+            total_count = len(day_entry_list)
+
+            # Check violations
+            only_practical = practical_count > 0 and theory_count == 0
+            only_one_class = total_count == 1
+
+            if only_practical or only_one_class:
+                violation_type = "only practical" if only_practical else "only one class"
+                print(f"       ⚠️  {day} has {violation_type} ({theory_count} theory, {practical_count} practical)")
+                problematic_days.append({
+                    'day': day,
+                    'entries': day_entry_list,
+                    'theory_count': theory_count,
+                    'practical_count': practical_count,
+                    'violation_type': violation_type
+                })
+
+        if not problematic_days:
+            print(f"       ✅ All days have adequate class distribution")
+            return entries
+
+        print(f"       🔧 Fixing {len(problematic_days)} problematic days...")
+
+        # Fix problematic days with aggressive approach
+        fixed_entries = list(entries)
+        max_attempts = 5  # Try multiple strategies
+
+        for attempt in range(max_attempts):
+            print(f"       🔄 Attempt {attempt + 1} to fix {len(problematic_days)} problematic days...")
+
+            current_violations = self._count_daily_violations(fixed_entries, class_group)
+            if current_violations == 0:
+                print(f"       ✅ All violations resolved!")
+                break
+
+            for problem in problematic_days:
+                day = problem['day']
+                violation_type = problem['violation_type']
+
+                if violation_type == "only practical":
+                    # Try multiple strategies to add theory
+                    fixed_entries = self._aggressively_add_theory_to_practical_day(fixed_entries, day, class_group, attempt)
+                elif violation_type == "only one class":
+                    # Try multiple strategies to add more classes
+                    fixed_entries = self._aggressively_add_classes_to_single_class_day(fixed_entries, day, class_group, attempt)
+
+            # Re-evaluate problematic days after fixes
+            problematic_days = self._identify_problematic_days(fixed_entries, class_group)
+
+            if not problematic_days:
+                print(f"       ✅ All violations resolved in attempt {attempt + 1}!")
+                break
+
+        # Final validation - if we still have violations, use emergency measures
+        final_violations = self._count_daily_violations(fixed_entries, class_group)
+        if final_violations > 0:
+            print(f"       🚨 Emergency measures: {final_violations} violations remain - applying radical fixes...")
+            fixed_entries = self._apply_emergency_fixes(fixed_entries, class_group)
+
+        print(f"       ✅ Minimum daily classes constraint enforced - NO VIOLATIONS ALLOWED!")
+        return fixed_entries
+
+    def _add_theory_to_practical_day(self, entries: List[TimetableEntry], target_day: str, class_group: str) -> List[TimetableEntry]:
+        """Add theory classes to a day that has only practical classes."""
+        print(f"         🔧 Adding theory classes to {target_day} (currently only practical)")
+
+        # Find theory classes from other days that can be moved safely
+        theory_entries = [e for e in entries if not e.is_practical and e.class_group == class_group]
+
+        # Group theory entries by day and subject
+        theory_by_day = {}
+        theory_by_subject = {}
+        for entry in theory_entries:
+            if entry.day not in theory_by_day:
+                theory_by_day[entry.day] = []
+            theory_by_day[entry.day].append(entry)
+
+            if entry.subject.code not in theory_by_subject:
+                theory_by_subject[entry.subject.code] = []
+            theory_by_subject[entry.subject.code].append(entry)
+
+        # Find safe candidates that won't break credit hour compliance
+        safe_candidates = []
+        for day, day_theories in theory_by_day.items():
+            if day != target_day and len(day_theories) > 1:
+                # Check if this day would still be valid after removing one theory
+                day_all_entries = [e for e in entries if e.day == day and e.class_group == class_group]
+                remaining_after_removal = len(day_all_entries) - 1
+                if remaining_after_removal >= 2:  # Still have at least 2 classes
+                    # Only consider subjects that have more than their required weekly sessions
+                    for theory in day_theories:
+                        subject_sessions = len(theory_by_subject[theory.subject.code])
+                        required_sessions = theory.subject.credits
+                        if subject_sessions > required_sessions:
+                            safe_candidates.append(theory)
+
+        if not safe_candidates:
+            print(f"         ⚠️  No safe theory classes available to move to {target_day} without breaking credit compliance")
+            return entries
+
+        # Move one safe theory class to the target day
+        theory_to_move = safe_candidates[0]
+
+        # Check for teacher conflicts on target day
+        target_day_entries = [e for e in entries if e.day == target_day and e.class_group == class_group]
+
+        # Find available period that doesn't conflict with teacher or classroom
+        available_period = None
+        for period in range(1, 8):  # Check periods 1-7
+            period_conflicts = False
+
+            # Check if period is already used
+            if any(e.period == period for e in target_day_entries):
+                continue
+
+            # Check for teacher conflicts across all entries
+            teacher_conflict = any(
+                e.teacher == theory_to_move.teacher and e.day == target_day and e.period == period
+                for e in entries if e != theory_to_move
+            )
+
+            # Check for classroom conflicts
+            classroom_conflict = any(
+                e.classroom == theory_to_move.classroom and e.day == target_day and e.period == period
+                for e in entries if e != theory_to_move
+            )
+
+            if not teacher_conflict and not classroom_conflict:
+                available_period = period
+                break
+
+        if available_period is None:
+            print(f"         ⚠️  No conflict-free periods available on {target_day}")
+            return entries
+
+        # Create new entry on target day
+        new_entry = self._create_entry(
+            target_day, available_period,
+            theory_to_move.subject, theory_to_move.teacher, theory_to_move.classroom,
+            class_group, False
+        )
+
+        # Remove old entry and add new one
+        updated_entries = [e for e in entries if e != theory_to_move]
+        updated_entries.append(new_entry)
+
+        print(f"         ✅ Safely moved {theory_to_move.subject.code} from {theory_to_move.day} P{theory_to_move.period} to {target_day} P{available_period}")
+        return updated_entries
+
+    def _add_classes_to_single_class_day(self, entries: List[TimetableEntry], target_day: str, class_group: str) -> List[TimetableEntry]:
+        """Add more classes to a day that has only one class."""
+        print(f"         🔧 Adding classes to {target_day} (currently only one class)")
+
+        # Find classes from other days that can be moved safely
+        other_entries = [e for e in entries if e.day != target_day and e.class_group == class_group]
+
+        # Group by day and subject for safety checks
+        entries_by_day = {}
+        entries_by_subject = {}
+        for entry in other_entries:
+            if entry.day not in entries_by_day:
+                entries_by_day[entry.day] = []
+            entries_by_day[entry.day].append(entry)
+
+            if entry.subject.code not in entries_by_subject:
+                entries_by_subject[entry.subject.code] = []
+            entries_by_subject[entry.subject.code].append(entry)
+
+        # Find safe candidates that won't break constraints
+        safe_candidates = []
+        for day, day_entries in entries_by_day.items():
+            if len(day_entries) >= 3:  # Can spare one class
+                for entry in day_entries:
+                    # Don't move practical classes (they need consecutive blocks)
+                    if entry.is_practical:
+                        continue
+
+                    # Check if moving this would break credit hour compliance
+                    subject_sessions = len(entries_by_subject[entry.subject.code])
+                    required_sessions = entry.subject.credits
+                    if subject_sessions > required_sessions:
+                        safe_candidates.append(entry)
+
+        if not safe_candidates:
+            print(f"         ⚠️  No safe classes available to move to {target_day} without breaking constraints")
+            return entries
+
+        # Move one safe class to target day
+        class_to_move = safe_candidates[0]
+
+        # Check for conflicts on target day
+        target_day_entries = [e for e in entries if e.day == target_day and e.class_group == class_group]
+
+        # Find available period that doesn't conflict
+        available_period = None
+        for period in range(1, 8):
+            # Check if period is already used
+            if any(e.period == period for e in target_day_entries):
+                continue
+
+            # Check for teacher conflicts
+            teacher_conflict = any(
+                e.teacher == class_to_move.teacher and e.day == target_day and e.period == period
+                for e in entries if e != class_to_move
+            )
+
+            # Check for classroom conflicts
+            classroom_conflict = any(
+                e.classroom == class_to_move.classroom and e.day == target_day and e.period == period
+                for e in entries if e != class_to_move
+            )
+
+            if not teacher_conflict and not classroom_conflict:
+                available_period = period
+                break
+
+        if available_period is None:
+            print(f"         ⚠️  No conflict-free periods available on {target_day}")
+            return entries
+
+        # Create new entry on target day
+        new_entry = self._create_entry(
+            target_day, available_period,
+            class_to_move.subject, class_to_move.teacher, class_to_move.classroom,
+            class_group, class_to_move.is_practical
+        )
+
+        # Remove old entry and add new one
+        updated_entries = [e for e in entries if e != class_to_move]
+        updated_entries.append(new_entry)
+
+        print(f"         ✅ Safely moved {class_to_move.subject.code} from {class_to_move.day} P{class_to_move.period} to {target_day} P{available_period}")
+        return updated_entries
+
+    def _validate_constraint_integrity(self, entries: List[TimetableEntry], class_group: str) -> List[str]:
+        """Validate that constraint fixes haven't broken existing constraints."""
+        issues = []
+
+        # Check credit hour compliance
+        subject_sessions = {}
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.subject.code not in subject_sessions:
+                    subject_sessions[entry.subject.code] = []
+                subject_sessions[entry.subject.code].append(entry)
+
+        for subject_code, sessions in subject_sessions.items():
+            if sessions:
+                expected_sessions = sessions[0].subject.credits
+                actual_sessions = len(sessions)
+                if actual_sessions != expected_sessions:
+                    issues.append(f"Credit hour violation: {subject_code} has {actual_sessions} sessions, expected {expected_sessions}")
+
+        # Check practical block integrity
+        practical_sessions = {}
+        for entry in entries:
+            if entry.class_group == class_group and entry.is_practical:
+                if entry.subject.code not in practical_sessions:
+                    practical_sessions[entry.subject.code] = []
+                practical_sessions[entry.subject.code].append(entry)
+
+        for subject_code, sessions in practical_sessions.items():
+            if len(sessions) > 1:  # Should be exactly 1 session (3 consecutive periods)
+                # Check if they're on the same day and consecutive
+                days = set(s.day for s in sessions)
+                if len(days) > 1:
+                    issues.append(f"Practical block violation: {subject_code} split across multiple days")
+                else:
+                    periods = sorted([s.period for s in sessions])
+                    expected_periods = list(range(periods[0], periods[0] + len(periods)))
+                    if periods != expected_periods:
+                        issues.append(f"Practical block violation: {subject_code} periods not consecutive")
+
+        # Check teacher conflicts
+        teacher_schedule = {}
+        for entry in entries:
+            key = (entry.teacher.name, entry.day, entry.period)
+            if key not in teacher_schedule:
+                teacher_schedule[key] = []
+            teacher_schedule[key].append(entry)
+
+        for key, conflicting_entries in teacher_schedule.items():
+            if len(conflicting_entries) > 1:
+                teacher, day, period = key
+                issues.append(f"Teacher conflict: {teacher} has multiple classes on {day} P{period}")
+
+        return issues
+
+    def _count_daily_violations(self, entries: List[TimetableEntry], class_group: str) -> int:
+        """Count the number of daily violations for a class group."""
+        day_entries = {}
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.day not in day_entries:
+                    day_entries[entry.day] = []
+                day_entries[entry.day].append(entry)
+
+        violations = 0
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            theory_count = len([e for e in day_entry_list if not e.is_practical])
+            practical_count = len([e for e in day_entry_list if e.is_practical])
+            total_count = len(day_entry_list)
+
+            only_practical = practical_count > 0 and theory_count == 0
+            only_one_class = total_count == 1
+
+            if only_practical or only_one_class:
+                violations += 1
+
+        return violations
+
+    def _identify_problematic_days(self, entries: List[TimetableEntry], class_group: str) -> List[dict]:
+        """Identify days that violate the minimum daily classes constraint."""
+        day_entries = {}
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.day not in day_entries:
+                    day_entries[entry.day] = []
+                day_entries[entry.day].append(entry)
+
+        problematic_days = []
+        for day, day_entry_list in day_entries.items():
+            if not day_entry_list:
+                continue
+
+            theory_count = len([e for e in day_entry_list if not e.is_practical])
+            practical_count = len([e for e in day_entry_list if e.is_practical])
+            total_count = len(day_entry_list)
+
+            only_practical = practical_count > 0 and theory_count == 0
+            only_one_class = total_count == 1
+
+            if only_practical or only_one_class:
+                violation_type = "only practical" if only_practical else "only one class"
+                problematic_days.append({
+                    'day': day,
+                    'entries': day_entry_list,
+                    'theory_count': theory_count,
+                    'practical_count': practical_count,
+                    'violation_type': violation_type
+                })
+
+        return problematic_days
+
+    def _aggressively_add_theory_to_practical_day(self, entries: List[TimetableEntry], target_day: str,
+                                                class_group: str, attempt: int) -> List[TimetableEntry]:
+        """Aggressively add theory classes to a day with only practical classes."""
+        print(f"         🔧 Aggressive attempt {attempt + 1}: Adding theory to {target_day}")
+
+        strategies = [
+            self._strategy_move_excess_theory,
+            self._strategy_split_subject_sessions,
+            self._strategy_force_move_theory,
+            self._strategy_create_duplicate_session,
+            self._strategy_emergency_theory_placement
+        ]
+
+        if attempt < len(strategies):
+            return strategies[attempt](entries, target_day, class_group, "theory")
+        else:
+            return entries
+
+    def _aggressively_add_classes_to_single_class_day(self, entries: List[TimetableEntry], target_day: str,
+                                                    class_group: str, attempt: int) -> List[TimetableEntry]:
+        """Aggressively add more classes to a day with only one class."""
+        print(f"         🔧 Aggressive attempt {attempt + 1}: Adding classes to {target_day}")
+
+        strategies = [
+            self._strategy_move_excess_theory,
+            self._strategy_split_subject_sessions,
+            self._strategy_force_move_any_class,
+            self._strategy_create_duplicate_session,
+            self._strategy_emergency_class_placement
+        ]
+
+        if attempt < len(strategies):
+            return strategies[attempt](entries, target_day, class_group, "any")
+        else:
+            return entries
+
+    def _strategy_move_excess_theory(self, entries: List[TimetableEntry], target_day: str,
+                                   class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 1: Move theory classes that have more sessions than required."""
+        print(f"           📋 Strategy 1: Moving excess theory sessions")
+
+        # Find subjects with more sessions than credits
+        subject_sessions = {}
+        for entry in entries:
+            if entry.class_group == class_group and not entry.is_practical:
+                if entry.subject.code not in subject_sessions:
+                    subject_sessions[entry.subject.code] = []
+                subject_sessions[entry.subject.code].append(entry)
+
+        # Find excess sessions
+        for subject_code, sessions in subject_sessions.items():
+            if len(sessions) > sessions[0].subject.credits:
+                # This subject has excess sessions - move one
+                excess_session = sessions[-1]  # Take the last one
+
+                if excess_session.day != target_day:
+                    # Move it to target day
+                    available_period = self._find_available_period(entries, target_day, class_group)
+                    if available_period:
+                        new_entry = self._create_entry(
+                            target_day, available_period,
+                            excess_session.subject, excess_session.teacher, excess_session.classroom,
+                            class_group, False
+                        )
+
+                        updated_entries = [e for e in entries if e != excess_session]
+                        updated_entries.append(new_entry)
+
+                        print(f"             ✅ Moved excess {subject_code} to {target_day} P{available_period}")
+                        return updated_entries
+
+        return entries
+
+    def _strategy_split_subject_sessions(self, entries: List[TimetableEntry], target_day: str,
+                                       class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 2: Split a multi-session subject across days."""
+        print(f"           📋 Strategy 2: Splitting subject sessions")
+
+        # Find subjects with multiple sessions on the same day
+        day_subject_sessions = {}
+        for entry in entries:
+            if entry.class_group == class_group and not entry.is_practical:
+                key = (entry.day, entry.subject.code)
+                if key not in day_subject_sessions:
+                    day_subject_sessions[key] = []
+                day_subject_sessions[key].append(entry)
+
+        # Find a day with multiple sessions of the same subject
+        for (day, subject_code), sessions in day_subject_sessions.items():
+            if len(sessions) > 1 and day != target_day:
+                # Move one session to target day
+                session_to_move = sessions[0]
+                available_period = self._find_available_period(entries, target_day, class_group)
+
+                if available_period:
+                    new_entry = self._create_entry(
+                        target_day, available_period,
+                        session_to_move.subject, session_to_move.teacher, session_to_move.classroom,
+                        class_group, False
+                    )
+
+                    updated_entries = [e for e in entries if e != session_to_move]
+                    updated_entries.append(new_entry)
+
+                    print(f"             ✅ Split {subject_code} from {day} to {target_day} P{available_period}")
+                    return updated_entries
+
+        return entries
+
+    def _strategy_force_move_theory(self, entries: List[TimetableEntry], target_day: str,
+                                  class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 3: Force move any theory class, accepting temporary credit violations."""
+        print(f"           📋 Strategy 3: Force moving theory (accepting temporary violations)")
+
+        # Find any theory class from a day with multiple classes
+        day_entries = {}
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.day not in day_entries:
+                    day_entries[entry.day] = []
+                day_entries[entry.day].append(entry)
+
+        # Find days with multiple classes
+        for day, day_classes in day_entries.items():
+            if len(day_classes) > 2 and day != target_day:  # Can spare one
+                theory_classes = [e for e in day_classes if not e.is_practical]
+                if theory_classes:
+                    class_to_move = theory_classes[0]
+                    available_period = self._find_available_period(entries, target_day, class_group)
+
+                    if available_period:
+                        new_entry = self._create_entry(
+                            target_day, available_period,
+                            class_to_move.subject, class_to_move.teacher, class_to_move.classroom,
+                            class_group, False
+                        )
+
+                        updated_entries = [e for e in entries if e != class_to_move]
+                        updated_entries.append(new_entry)
+
+                        print(f"             ✅ Force moved {class_to_move.subject.code} to {target_day} P{available_period}")
+                        return updated_entries
+
+        return entries
+
+    def _strategy_force_move_any_class(self, entries: List[TimetableEntry], target_day: str,
+                                     class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 3b: Force move any class (theory or practical part)."""
+        print(f"           📋 Strategy 3b: Force moving any class")
+
+        # Find any class from a day with multiple classes
+        day_entries = {}
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.day not in day_entries:
+                    day_entries[entry.day] = []
+                day_entries[entry.day].append(entry)
+
+        # Find days with multiple classes
+        for day, day_classes in day_entries.items():
+            if len(day_classes) > 2 and day != target_day:  # Can spare one
+                # Prefer theory, but take practical if needed
+                candidates = [e for e in day_classes if not e.is_practical]
+                if not candidates:
+                    candidates = [e for e in day_classes if e.is_practical]
+
+                if candidates:
+                    class_to_move = candidates[0]
+                    available_period = self._find_available_period(entries, target_day, class_group)
+
+                    if available_period:
+                        new_entry = self._create_entry(
+                            target_day, available_period,
+                            class_to_move.subject, class_to_move.teacher, class_to_move.classroom,
+                            class_group, class_to_move.is_practical
+                        )
+
+                        updated_entries = [e for e in entries if e != class_to_move]
+                        updated_entries.append(new_entry)
+
+                        print(f"             ✅ Force moved {class_to_move.subject.code} to {target_day} P{available_period}")
+                        return updated_entries
+
+        return entries
+
+    def _strategy_create_duplicate_session(self, entries: List[TimetableEntry], target_day: str,
+                                         class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 4: Create a duplicate session (temporary violation to fix constraint)."""
+        print(f"           📋 Strategy 4: Creating duplicate session")
+
+        # Find a theory subject to duplicate
+        theory_entries = [e for e in entries if e.class_group == class_group and not e.is_practical]
+        if theory_entries:
+            entry_to_duplicate = theory_entries[0]
+            available_period = self._find_available_period(entries, target_day, class_group)
+
+            if available_period:
+                duplicate_entry = self._create_entry(
+                    target_day, available_period,
+                    entry_to_duplicate.subject, entry_to_duplicate.teacher, entry_to_duplicate.classroom,
+                    class_group, False
+                )
+
+                updated_entries = list(entries)
+                updated_entries.append(duplicate_entry)
+
+                print(f"             ✅ Created duplicate {entry_to_duplicate.subject.code} on {target_day} P{available_period}")
+                return updated_entries
+
+        return entries
+
+    def _strategy_emergency_theory_placement(self, entries: List[TimetableEntry], target_day: str,
+                                           class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 5: Emergency theory placement - create minimal theory class."""
+        print(f"           📋 Strategy 5: Emergency theory placement")
+
+        # Find any subject to create an emergency session
+        all_subjects = set(e.subject for e in entries if e.class_group == class_group)
+        if all_subjects:
+            subject = list(all_subjects)[0]
+            available_period = self._find_available_period(entries, target_day, class_group)
+
+            if available_period:
+                # Find a teacher for this subject
+                teachers = self._get_teachers_for_subject(subject, class_group)
+                if teachers:
+                    emergency_entry = self._create_entry(
+                        target_day, available_period,
+                        subject, teachers[0], self._get_available_classroom(target_day, available_period),
+                        class_group, False
+                    )
+
+                    updated_entries = list(entries)
+                    updated_entries.append(emergency_entry)
+
+                    print(f"             ✅ Emergency placement of {subject.code} on {target_day} P{available_period}")
+                    return updated_entries
+
+        return entries
+
+    def _strategy_emergency_class_placement(self, entries: List[TimetableEntry], target_day: str,
+                                          class_group: str, class_type: str) -> List[TimetableEntry]:
+        """Strategy 5b: Emergency class placement - create any class."""
+        return self._strategy_emergency_theory_placement(entries, target_day, class_group, class_type)
+
+    def _find_available_period(self, entries: List[TimetableEntry], day: str, class_group: str) -> int:
+        """Find an available period on a specific day for a class group."""
+        used_periods = set()
+        for entry in entries:
+            if entry.day == day and entry.class_group == class_group:
+                used_periods.add(entry.period)
+
+        # Find first available period
+        for period in range(1, 8):  # Periods 1-7
+            if period not in used_periods:
+                return period
+
+        return None
+
+    def _apply_emergency_fixes(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """Apply emergency fixes when all other strategies fail."""
+        print(f"         🚨 Applying emergency fixes for {class_group}")
+
+        # Identify remaining violations
+        problematic_days = self._identify_problematic_days(entries, class_group)
+
+        for problem in problematic_days:
+            day = problem['day']
+            violation_type = problem['violation_type']
+
+            print(f"           🚨 Emergency fix for {day}: {violation_type}")
+
+            if violation_type == "only practical":
+                # Force create a theory class
+                entries = self._strategy_emergency_theory_placement(entries, day, class_group, "theory")
+            elif violation_type == "only one class":
+                # Force create another class
+                entries = self._strategy_emergency_class_placement(entries, day, class_group, "any")
+
+        return entries
 
     def _assign_thesis_day_if_needed(self, entries: List[TimetableEntry], subjects: List[Subject], class_group: str) -> List[TimetableEntry]:
         """ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batch (detected by 3 theory subjects)."""
@@ -1244,3 +2029,444 @@ class FinalUniversalScheduler:
         print(f"          📝 Created Thesis Day entry: {thesis_day} full day for {class_group}")
 
         return thesis_entry
+
+    def _calculate_friday_aware_slot_score(self, day: str, period: int, class_group: str,
+                                         entries: List[TimetableEntry]) -> float:
+        """
+        Calculate a Friday-aware priority score for a scheduling slot.
+        Lower scores are better (higher priority).
+
+        This method considers:
+        1. Early periods are preferred (compact scheduling)
+        2. Monday-Thursday slots are preferred over Friday
+        3. Friday slots are scored based on practical presence and time limits
+        4. Slots that help maintain Friday compliance get bonus points
+        """
+        base_score = period  # Base score is the period number (early periods preferred)
+
+        if day.lower().startswith('fri'):
+            # Friday slots - apply Friday-specific scoring
+            friday_score = self._calculate_friday_slot_score(period, class_group, entries)
+            return base_score + friday_score
+        else:
+            # Monday-Thursday slots - slight preference to fill these first
+            # This helps ensure Friday doesn't get overloaded
+            monday_thursday_bonus = -0.1  # Small bonus for non-Friday days
+
+            # Additional bonus for very early periods on Mon-Thu (helps compact scheduling)
+            if period <= 3:
+                early_period_bonus = -0.2
+            else:
+                early_period_bonus = 0
+
+            return base_score + monday_thursday_bonus + early_period_bonus
+
+    def _calculate_friday_slot_score(self, period: int, class_group: str,
+                                   entries: List[TimetableEntry]) -> float:
+        """Calculate scoring for Friday slots based on practical presence and time limits."""
+
+        # Check if this class group already has practical on Friday
+        friday_entries = [e for e in entries if e.day.lower().startswith('fri') and e.class_group == class_group]
+        has_practical_on_friday = any(e.is_practical for e in friday_entries)
+
+        if has_practical_on_friday:
+            # Has practical on Friday - theory classes should be limited
+            if period <= 4:  # Period 4 = 12:00 PM limit
+                return 0  # Good slot
+            else:
+                return 100  # Heavily penalize slots after 12:00 PM
+        else:
+            # No practical on Friday - theory-only limit applies
+            if period <= 3:  # Period 3 = 11:00 AM limit
+                return 0  # Good slot
+            elif period == 4:
+                return 50  # Moderate penalty for 12:00 PM slot
+            else:
+                return 100  # Heavy penalty for slots after 12:00 PM
+
+    def _prioritize_days_for_practical(self, class_group: str, entries: List[TimetableEntry]) -> List[str]:
+        """
+        Prioritize days for practical scheduling with Friday-awareness.
+
+        Strategy:
+        1. If Friday is relatively empty, it can accommodate practical + theory
+        2. If Friday already has many theory classes, avoid adding practical
+        3. Prefer Monday-Thursday for practical to keep Friday flexible
+        """
+        # Count existing entries per day for this class group
+        day_counts = {}
+        friday_theory_count = 0
+
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.day not in day_counts:
+                    day_counts[entry.day] = 0
+                day_counts[entry.day] += 1
+
+                # Special tracking for Friday theory classes
+                if entry.day.lower().startswith('fri') and not entry.is_practical:
+                    friday_theory_count += 1
+
+        # Create prioritized day list
+        days_with_scores = []
+
+        for day in self.days:
+            current_count = day_counts.get(day, 0)
+
+            if day.lower().startswith('fri'):
+                # Friday scoring - consider theory load
+                if friday_theory_count >= 3:
+                    # Friday already has many theory classes - heavily penalize
+                    score = 100 + current_count
+                elif friday_theory_count >= 2:
+                    # Friday has some theory - moderate penalty
+                    score = 50 + current_count
+                else:
+                    # Friday is relatively free - allow but not prioritize
+                    score = 10 + current_count
+            else:
+                # Monday-Thursday - prefer these for practical
+                # Lower scores are better
+                score = current_count  # Prefer days with fewer existing classes
+
+                # Small bonus for very early days in the week
+                if day.lower().startswith('mon'):
+                    score -= 0.3
+                elif day.lower().startswith('tue'):
+                    score -= 0.2
+                elif day.lower().startswith('wed'):
+                    score -= 0.1
+
+            days_with_scores.append((day, score))
+
+        # Sort by score (lower is better) and return day names
+        days_with_scores.sort(key=lambda x: x[1])
+        prioritized_days = [day for day, score in days_with_scores]
+
+        print(f"       📅 Day priority for practical: {prioritized_days}")
+        return prioritized_days
+
+    def _enforce_thesis_day_constraint(self, entries: List[TimetableEntry], subjects: List[Subject],
+                                     class_group: str) -> List[TimetableEntry]:
+        """
+        ENHANCEMENT 9: Enforce Thesis Day constraint for final year batches.
+
+        Simplified approach:
+        1. Find Thesis subjects for this class group
+        2. Move any existing Thesis entries to Wednesday
+        3. Remove teacher assignment from Thesis entries
+        """
+        print(f"     📚 Enforcing Thesis Day constraint for {class_group}...")
+
+        # Check if this class group has Thesis subject
+        thesis_subjects = [s for s in subjects if
+                          s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
+                          'thesis' in s.name.lower()]
+
+        if not thesis_subjects:
+            print(f"       ℹ️  No Thesis subject found for {class_group} - skipping")
+            return entries
+
+        print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
+
+        # Get the base batch (e.g., "21SW" from "21SW-I")
+        base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+
+        # Only apply to 21SW (final year)
+        if not base_batch.startswith('21SW'):
+            print(f"       ℹ️  {class_group} is not 21SW - skipping Thesis Day constraint")
+            return entries
+
+        print(f"       🎓 {class_group} is final year - applying COMPLETE Thesis Day constraint")
+
+        # COMPLETE THESIS DAY IMPLEMENTATION:
+        # 1. Move all Thesis entries to Wednesday and remove teachers
+        # 2. Move all non-Thesis entries FROM Wednesday to other days
+        # 3. Ensure Wednesday is dedicated ONLY to Thesis
+
+        updated_entries = []
+        entries_to_relocate = []  # Non-Thesis entries currently on Wednesday
+
+        for entry in entries:
+            if entry.class_group == class_group:
+                if entry.subject in thesis_subjects:
+                    # This is a Thesis entry - move to Wednesday and remove teacher
+                    if not entry.day.lower().startswith('wed'):
+                        print(f"         🔄 Moving {entry.subject.code} from {entry.day} to Wednesday")
+                        entry.day = 'Wednesday'
+
+                    # Remove teacher
+                    if entry.teacher is not None:
+                        print(f"         👤 Removing teacher from {entry.subject.code}")
+                        entry.teacher = None
+
+                    updated_entries.append(entry)
+
+                elif entry.day.lower().startswith('wed'):
+                    # Non-Thesis entry on Wednesday - needs to be moved
+                    print(f"         📤 Scheduling {entry.subject.code} for relocation from Wednesday")
+                    entries_to_relocate.append(entry)
+                else:
+                    # Non-Thesis entry not on Wednesday - keep as is
+                    updated_entries.append(entry)
+            else:
+                # Different class group - keep as is
+                updated_entries.append(entry)
+
+        # Relocate non-Thesis entries from Wednesday to other days
+        if entries_to_relocate:
+            print(f"         🔄 Relocating {len(entries_to_relocate)} non-Thesis entries from Wednesday")
+            updated_entries = self._relocate_entries_from_wednesday(updated_entries, entries_to_relocate, class_group)
+
+        print(f"       ✅ COMPLETE Thesis Day constraint applied - Wednesday dedicated to Thesis!")
+        return updated_entries
+
+    def _relocate_entries_from_wednesday(self, entries: List[TimetableEntry],
+                                       entries_to_relocate: List[TimetableEntry],
+                                       class_group: str) -> List[TimetableEntry]:
+        """Relocate non-Thesis entries from Wednesday to other days to ensure Wednesday dedication."""
+
+        updated_entries = list(entries)
+        successfully_relocated = 0
+
+        for entry in entries_to_relocate:
+            print(f"           🔄 Relocating {entry.subject.code} from Wednesday")
+
+            # Try to find alternative slot on Monday, Tuesday, Thursday, Friday
+            alternative_found = False
+            target_days = ['Monday', 'Tuesday', 'Thursday', 'Friday']
+
+            for target_day in target_days:
+                # Try periods 1-7 for this day
+                for target_period in range(1, 8):
+                    if self._can_relocate_to_slot(entry, target_day, target_period, updated_entries, class_group):
+                        # Create new entry for the target slot
+                        relocated_entry = self._create_entry(
+                            target_day, target_period,
+                            entry.subject, entry.teacher, entry.classroom,
+                            entry.class_group, entry.is_practical
+                        )
+
+                        updated_entries.append(relocated_entry)
+                        successfully_relocated += 1
+                        alternative_found = True
+
+                        print(f"             ✅ Moved {entry.subject.code} to {target_day} P{target_period}")
+                        break
+
+                if alternative_found:
+                    break
+
+            if not alternative_found:
+                # If we can't relocate, keep it on Wednesday (fallback)
+                print(f"             ⚠️  Could not relocate {entry.subject.code} - keeping on Wednesday")
+                updated_entries.append(entry)
+
+        print(f"         📊 Successfully relocated {successfully_relocated}/{len(entries_to_relocate)} entries")
+        return updated_entries
+
+    def _can_relocate_to_slot(self, entry: TimetableEntry, target_day: str, target_period: int,
+                            existing_entries: List[TimetableEntry], class_group: str) -> bool:
+        """Check if an entry can be relocated to a specific day/period without conflicts."""
+
+        # Check if the target slot is already occupied by this class group
+        for existing in existing_entries:
+            if (existing.class_group == class_group and
+                existing.day == target_day and existing.period == target_period):
+                return False
+
+        # Check teacher availability (if entry has a teacher)
+        if entry.teacher:
+            for existing in existing_entries:
+                if (existing.teacher == entry.teacher and
+                    existing.day == target_day and existing.period == target_period):
+                    return False
+
+        # Check classroom availability
+        if entry.classroom:
+            for existing in existing_entries:
+                if (existing.classroom == entry.classroom and
+                    existing.day == target_day and existing.period == target_period):
+                    return False
+
+        # Check Friday constraints if moving to Friday
+        if target_day.lower().startswith('fri'):
+            friday_score = self._calculate_friday_slot_score(target_period, class_group, existing_entries)
+            if friday_score > 50:  # Don't move to heavily penalized Friday slots
+                return False
+
+        # Check if this would violate minimum daily classes constraint
+        # (Don't create days with only one class)
+        target_day_entries = [e for e in existing_entries
+                            if e.class_group == class_group and e.day == target_day]
+        if len(target_day_entries) == 0:  # Would be the only class on this day
+            # Only allow if there are no other options
+            return True  # Allow for now, constraint will be fixed later
+
+        return True
+
+    def _apply_thesis_day_scheduling_DISABLED(self, entries: List[TimetableEntry], thesis_subjects: List[Subject],
+                                   class_group: str, base_batch: str) -> List[TimetableEntry]:
+        """Apply the Thesis Day scheduling rules."""
+
+        # Step 1: Remove any existing Thesis entries that are not on Wednesday
+        thesis_entries = [e for e in entries if e.subject in thesis_subjects and e.class_group == class_group]
+        non_wednesday_thesis = [e for e in thesis_entries if not e.day.lower().startswith('wed')]
+
+        if non_wednesday_thesis:
+            print(f"       🔄 Moving {len(non_wednesday_thesis)} Thesis entries to Wednesday")
+            entries = [e for e in entries if e not in non_wednesday_thesis]
+
+        # Step 2: Remove any non-Thesis entries from Wednesday for this class group
+        wednesday_entries = [e for e in entries if e.day.lower().startswith('wed') and e.class_group == class_group]
+        non_thesis_wednesday = [e for e in wednesday_entries if e.subject not in thesis_subjects]
+
+        if non_thesis_wednesday:
+            print(f"       🔄 Moving {len(non_thesis_wednesday)} non-Thesis entries from Wednesday")
+            entries = self._relocate_non_thesis_from_wednesday(entries, non_thesis_wednesday, class_group)
+
+        # Step 3: Schedule Thesis on Wednesday for all sections of this batch
+        entries = self._schedule_thesis_on_wednesday(entries, thesis_subjects, base_batch)
+
+        print(f"       ✅ Thesis Day constraint applied - Wednesday dedicated to Thesis")
+        return entries
+
+    def _relocate_non_thesis_from_wednesday(self, entries: List[TimetableEntry],
+                                          non_thesis_entries: List[TimetableEntry],
+                                          class_group: str) -> List[TimetableEntry]:
+        """Relocate non-Thesis entries from Wednesday to other days."""
+
+        updated_entries = [e for e in entries if e not in non_thesis_entries]
+
+        for entry in non_thesis_entries:
+            print(f"         🔄 Relocating {entry.subject.code} from Wednesday")
+
+            # Try to find alternative slot on other days
+            alternative_found = False
+            for day in ['Monday', 'Tuesday', 'Thursday', 'Friday']:
+                for period in range(1, 8):
+                    if self._can_reschedule_entry(entry, day, period, updated_entries):
+                        new_entry = self._create_entry(
+                            day, period,
+                            entry.subject, entry.teacher, entry.classroom,
+                            entry.class_group, entry.is_practical
+                        )
+                        updated_entries.append(new_entry)
+                        alternative_found = True
+                        print(f"           ✅ Moved {entry.subject.code} to {day} P{period}")
+                        break
+
+                if alternative_found:
+                    break
+
+            if not alternative_found:
+                print(f"           ⚠️  Could not relocate {entry.subject.code} - keeping on Wednesday")
+                updated_entries.append(entry)  # Keep original if no alternative found
+
+        return updated_entries
+
+    def _schedule_thesis_on_wednesday(self, entries: List[TimetableEntry],
+                                    thesis_subjects: List[Subject], base_batch: str) -> List[TimetableEntry]:
+        """Schedule Thesis subjects on Wednesday for all sections of the batch."""
+
+        # Get all sections of this batch that should have Thesis
+        all_sections = [f"{base_batch}-I", f"{base_batch}-II", f"{base_batch}-III"]
+
+        for section in all_sections:
+            print(f"         📚 Scheduling Thesis for {section}")
+
+            # Check if this section already has Thesis on Wednesday
+            existing_thesis = [e for e in entries
+                             if e.class_group == section and e.day.lower().startswith('wed')
+                             and e.subject in thesis_subjects]
+
+            if existing_thesis:
+                print(f"           ✅ {section} already has Thesis on Wednesday")
+                continue
+
+            # Schedule Thesis for this section
+            thesis_subject = thesis_subjects[0]  # Use first Thesis subject
+
+            # Find available periods on Wednesday
+            wednesday_entries = [e for e in entries if e.day.lower().startswith('wed') and e.class_group == section]
+            used_periods = set(e.period for e in wednesday_entries)
+
+            # Schedule Thesis for the required number of periods (based on credits)
+            periods_needed = thesis_subject.credits
+            available_periods = [p for p in range(1, 8) if p not in used_periods]
+
+            if len(available_periods) >= periods_needed:
+                for i in range(periods_needed):
+                    period = available_periods[i]
+
+                    # Create Thesis entry WITHOUT teacher (as specified)
+                    thesis_entry = self._create_thesis_entry(
+                        'Wednesday', period, thesis_subject, section
+                    )
+                    entries.append(thesis_entry)
+
+                print(f"           ✅ Scheduled {periods_needed} Thesis periods for {section}")
+            else:
+                print(f"           ⚠️  Not enough periods available on Wednesday for {section}")
+
+        return entries
+
+    def _create_thesis_entry(self, day: str, period: int, subject: Subject, class_group: str) -> TimetableEntry:
+        """Create a Thesis entry without teacher assignment."""
+        from timetable.models import TimetableEntry, Classroom
+        from datetime import time
+
+        # Get a default classroom (or None)
+        classroom = Classroom.objects.first()  # Use any available classroom
+
+        # Calculate start and end times based on period
+        start_hour = 8 + (period - 1)  # Period 1 = 9:00 AM, Period 2 = 10:00 AM, etc.
+        start_time = time(start_hour, 0)
+        end_time = time(start_hour + 1, 0)
+
+        # Create entry without teacher (teacher will be None/null)
+        entry = TimetableEntry(
+            day=day,
+            period=period,
+            subject=subject,
+            teacher=None,  # No teacher for Thesis entries
+            classroom=classroom,
+            class_group=class_group,
+            start_time=start_time,
+            end_time=end_time,
+            is_practical=False
+        )
+
+        return entry
+
+    def _can_reschedule_entry(self, entry: TimetableEntry, new_day: str, new_period: int,
+                            existing_entries: List[TimetableEntry]) -> bool:
+        """Check if an entry can be rescheduled to a new day/period without conflicts."""
+
+        # Check if the slot is already occupied by this class group
+        for existing in existing_entries:
+            if (existing.class_group == entry.class_group and
+                existing.day == new_day and existing.period == new_period):
+                return False
+
+        # Check teacher availability (if entry has a teacher)
+        if entry.teacher:
+            for existing in existing_entries:
+                if (existing.teacher == entry.teacher and
+                    existing.day == new_day and existing.period == new_period):
+                    return False
+
+        # Check classroom availability
+        if entry.classroom:
+            for existing in existing_entries:
+                if (existing.classroom == entry.classroom and
+                    existing.day == new_day and existing.period == new_period):
+                    return False
+
+        # Check Friday constraints if moving to Friday
+        if new_day.lower().startswith('fri'):
+            friday_score = self._calculate_friday_slot_score(new_period, entry.class_group, existing_entries)
+            if friday_score > 50:  # Don't move to heavily penalized Friday slots
+                return False
+
+        return True

@@ -96,21 +96,35 @@ class TimetableSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Format subject name with practical indicator
-        if data['is_practical']:
-            data['display_text'] = f"{data['subject']} (PR)"
-        else:
+
+        # Handle Thesis entries (no teacher display)
+        is_thesis = instance.subject and ('thesis' in instance.subject.name.lower() or
+                                        'thesis' in instance.subject.code.lower())
+
+        if is_thesis:
+            # For Thesis entries, only show subject name (no teacher)
             data['display_text'] = str(data['subject'])
-            
+            data['teacher'] = None  # Don't display teacher for Thesis
+            data['teacher_display'] = ""  # Empty teacher display
+        else:
+            # Format subject name with practical indicator
+            if data['is_practical']:
+                data['display_text'] = f"{data['subject']} (PR)"
+            else:
+                data['display_text'] = str(data['subject'])
+
+            # Keep teacher display for non-Thesis subjects
+            data['teacher_display'] = str(data['teacher']) if data['teacher'] else ""
+
         # Add room/lab info
         if data['classroom']:
             data['location'] = str(data['classroom'])
-        
+
         # Format time slot
         start = datetime.strptime(data['start_time'], '%H:%M:%S').strftime('%I:%M')
         end = datetime.strptime(data['end_time'], '%H:%M:%S').strftime('%I:%M')
         data['time_slot'] = f"{start} to {end}"
-        
+
         return data
 
 class ConfigSerializer(serializers.ModelSerializer):
