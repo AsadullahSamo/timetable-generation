@@ -227,7 +227,13 @@ class FinalUniversalScheduler:
         
         print(f"   🧪 Practical subjects: {len(practical_subjects)}")
         print(f"   📖 Theory subjects: {len(theory_subjects)}")
-        
+
+        # CRITICAL FIX: For final year sections with Thesis, apply Thesis Day constraint FIRST
+        # This reserves Wednesday for Thesis before scheduling other subjects
+        if self._is_final_year_with_thesis(class_group, subjects):
+            print(f"   🎓 Final year with Thesis detected - applying Thesis Day constraint FIRST")
+            entries = self._enforce_thesis_day_constraint_early(entries, subjects, class_group)
+
         # FRIDAY-AWARE SCHEDULING STRATEGY:
         # 1. Schedule practical subjects first with Friday-awareness
         # 2. Schedule theory subjects with Friday time limits in mind
@@ -239,9 +245,14 @@ class FinalUniversalScheduler:
         for subject in practical_subjects:
             if self._has_teacher_for_subject(subject):
                 self._schedule_practical_subject(entries, class_schedule, subject, class_group)
-        
+
         # Schedule theory subjects
         for subject in theory_subjects:
+            # Skip Thesis subjects if already scheduled by early constraint
+            if self._is_thesis_subject(subject) and self._is_final_year_with_thesis(class_group, [subject]):
+                print(f"     📚 Skipping {subject.code} - already scheduled by early Thesis Day constraint")
+                continue
+
             if self._has_teacher_for_subject(subject):
                 self._schedule_theory_subject(entries, class_schedule, subject, class_group)
 
@@ -255,7 +266,11 @@ class FinalUniversalScheduler:
         entries = self._enforce_minimum_daily_classes(entries, class_group)
 
         # ENHANCEMENT 9: Thesis Day - Wednesday exclusive for final year batches with Thesis
-        entries = self._enforce_thesis_day_constraint(entries, subjects, class_group)
+        # Skip if already handled early for final year with Thesis
+        if not self._is_final_year_with_thesis(class_group, subjects):
+            entries = self._enforce_thesis_day_constraint(entries, subjects, class_group)
+        else:
+            print(f"     📚 Skipping late Thesis Day constraint for {class_group} - already handled early")
 
         # ENHANCEMENT 6: Intelligent Thesis Day assignment for final year batches (legacy)
         entries = self._assign_thesis_day_if_needed(entries, subjects, class_group)
@@ -269,7 +284,66 @@ class FinalUniversalScheduler:
         entries = self._validate_and_correct_credit_hour_compliance(entries, subjects, class_group)
 
         return entries
-    
+
+    def _is_final_year_with_thesis(self, class_group: str, subjects: List[Subject]) -> bool:
+        """Check if this is a final year section with Thesis subjects."""
+        # Get the base batch (e.g., "21SW" from "21SW-I")
+        base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+
+        # Check if it's 21SW (final year)
+        if not base_batch.startswith('21SW'):
+            return False
+
+        # Check if it has Thesis subjects
+        thesis_subjects = [s for s in subjects if
+                          s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
+                          'thesis' in s.name.lower()]
+
+        return len(thesis_subjects) > 0
+
+    def _is_thesis_subject(self, subject: Subject) -> bool:
+        """Check if a subject is a Thesis subject."""
+        return (subject.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
+                'thesis' in subject.name.lower())
+
+    def _enforce_thesis_day_constraint_early(self, entries: List[TimetableEntry], subjects: List[Subject],
+                                           class_group: str) -> List[TimetableEntry]:
+        """
+        Apply Thesis Day constraint EARLY - before scheduling other subjects.
+        This reserves Wednesday for Thesis and creates placeholder entries.
+        """
+        print(f"     🎓 EARLY Thesis Day constraint for {class_group} - reserving Wednesday")
+
+        # Find Thesis subjects
+        thesis_subjects = [s for s in subjects if
+                          s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
+                          'thesis' in s.name.lower()]
+
+        if not thesis_subjects:
+            return entries
+
+        print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
+
+        # Create placeholder Thesis entries on Wednesday to reserve the day
+        # This will guide other subjects to avoid Wednesday
+        updated_entries = list(entries)
+
+        for thesis_subject in thesis_subjects:
+            # Schedule EXACTLY the required number of Thesis classes on Wednesday
+            required_classes = thesis_subject.credits  # Usually 3 for THESISDAY
+            for period in range(1, required_classes + 1):  # P1, P2, P3 for 3-credit
+                thesis_entry = self._create_entry(
+                    'Wednesday', period,
+                    thesis_subject, None, None,  # No teacher/classroom for Thesis
+                    class_group, False  # Not practical
+                )
+                updated_entries.append(thesis_entry)
+                print(f"       📅 Reserved Wednesday P{period} for {thesis_subject.code}")
+
+        print(f"     ✅ Wednesday reserved for Thesis - other subjects will avoid this day")
+        print(f"     🔒 Thesis subjects fully scheduled - preventing additional scheduling")
+        return updated_entries
+
     def _is_practical_subject(self, subject: Subject) -> bool:
         """Universal practical subject detection."""
         # Check is_practical field first (most reliable)
@@ -738,6 +812,14 @@ class FinalUniversalScheduler:
 
     def _can_schedule_block(self, class_schedule: dict, day: str, start_period: int, duration: int, class_group: str) -> bool:
         """Check if block can be scheduled."""
+        # CRITICAL FIX: For final year sections, avoid Wednesday if it's reserved for Thesis
+        if day.lower().startswith('wed'):
+            # Get the base batch (e.g., "21SW" from "21SW-I")
+            base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+            if base_batch.startswith('21SW'):
+                print(f"         🚫 Avoiding Wednesday block - reserved for Thesis in {class_group}")
+                return False
+
         for i in range(duration):
             period = start_period + i
             if period not in self.periods:
@@ -748,7 +830,19 @@ class FinalUniversalScheduler:
 
     def _can_schedule_single(self, class_schedule: dict, day: str, period: int, class_group: str) -> bool:
         """Check if single period can be scheduled."""
-        return (day, period) not in class_schedule
+        # Basic availability check
+        if (day, period) in class_schedule:
+            return False
+
+        # CRITICAL FIX: For final year sections, avoid Wednesday if it's reserved for Thesis
+        if day.lower().startswith('wed'):
+            # Get the base batch (e.g., "21SW" from "21SW-I")
+            base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+            if base_batch.startswith('21SW'):
+                print(f"         🚫 Avoiding Wednesday P{period} - reserved for Thesis in {class_group}")
+                return False
+
+        return True
 
     def _find_available_teacher(self, teachers: List[Teacher], day: str, start_period: int, duration: int) -> Optional[Teacher]:
         """Find available teacher."""
@@ -2705,9 +2799,58 @@ class FinalUniversalScheduler:
         updated_entries = list(entries)
         successfully_relocated = 0
 
-        # CRITICAL FIX: Process each entry individually to preserve ALL Wednesday entries
+        # CRITICAL FIX: Group practical subjects by subject to maintain 3-consecutive-block structure
+        practical_groups = {}
+        theory_entries = []
+
         for entry in entries_to_relocate:
-            print(f"           🔄 Relocating {entry.subject.code} from Wednesday P{entry.period}")
+            if entry.is_practical:
+                if entry.subject.code not in practical_groups:
+                    practical_groups[entry.subject.code] = []
+                practical_groups[entry.subject.code].append(entry)
+            else:
+                theory_entries.append(entry)
+
+        # Process practical subjects as groups (maintain 3-consecutive blocks)
+        for subject_code, practical_entries in practical_groups.items():
+            print(f"           🧪 Relocating practical {subject_code} (3-block unit) from Wednesday")
+
+            # Sort by period to maintain order
+            practical_entries.sort(key=lambda x: x.period)
+
+            # Try to find 3 consecutive slots on other days
+            alternative_found = False
+            target_days = ['Monday', 'Tuesday', 'Thursday', 'Friday']
+
+            for target_day in target_days:
+                # Try periods 1-5 (need 3 consecutive: P1-P3, P2-P4, P3-P5, P4-P6, P5-P7)
+                for start_period in range(1, 6):
+                    if self._can_relocate_practical_block(practical_entries[0], target_day, start_period, updated_entries, class_group):
+                        # Create new entries for the 3 consecutive periods
+                        for i, original_entry in enumerate(practical_entries):
+                            relocated_entry = self._create_entry(
+                                target_day, start_period + i,
+                                original_entry.subject, original_entry.teacher, original_entry.classroom,
+                                original_entry.class_group, original_entry.is_practical
+                            )
+                            updated_entries.append(relocated_entry)
+
+                        successfully_relocated += len(practical_entries)
+                        alternative_found = True
+                        print(f"             ✅ Moved practical {subject_code} to {target_day} P{start_period}-{start_period+2}")
+                        break
+
+                if alternative_found:
+                    break
+
+            if not alternative_found:
+                # If we can't relocate the practical block, keep it on Wednesday
+                print(f"             ⚠️  Could not relocate practical {subject_code} - keeping on Wednesday")
+                updated_entries.extend(practical_entries)
+
+        # Process theory entries individually
+        for entry in theory_entries:
+            print(f"           🔄 Relocating theory {entry.subject.code} from Wednesday P{entry.period}")
 
             # Try to find alternative slot on Monday, Tuesday, Thursday, Friday
             alternative_found = False
@@ -2728,7 +2871,7 @@ class FinalUniversalScheduler:
                         successfully_relocated += 1
                         alternative_found = True
 
-                        print(f"             ✅ Moved {entry.subject.code} to {target_day} P{target_period}")
+                        print(f"             ✅ Moved theory {entry.subject.code} to {target_day} P{target_period}")
                         break
 
                 if alternative_found:
@@ -2736,11 +2879,49 @@ class FinalUniversalScheduler:
 
             if not alternative_found:
                 # If we can't relocate, keep it on Wednesday (fallback)
-                print(f"             ⚠️  Could not relocate {entry.subject.code} P{entry.period} - keeping on Wednesday")
+                print(f"             ⚠️  Could not relocate theory {entry.subject.code} P{entry.period} - keeping on Wednesday")
                 updated_entries.append(entry)
 
         print(f"         📊 Successfully relocated {successfully_relocated}/{len(entries_to_relocate)} entries")
         return updated_entries
+
+    def _can_relocate_practical_block(self, entry: TimetableEntry, target_day: str, start_period: int,
+                                    existing_entries: List[TimetableEntry], class_group: str) -> bool:
+        """Check if a practical subject (3 consecutive periods) can be relocated to a specific day/start_period."""
+
+        # Check all 3 consecutive periods (start_period, start_period+1, start_period+2)
+        for period_offset in range(3):
+            target_period = start_period + period_offset
+
+            # Check if the target slot is already occupied by this class group
+            for existing in existing_entries:
+                if (existing.class_group == class_group and
+                    existing.day == target_day and existing.period == target_period):
+                    return False
+
+            # Check teacher availability (if entry has a teacher)
+            if entry.teacher:
+                for existing in existing_entries:
+                    if (existing.teacher and entry.teacher and
+                        existing.teacher.id == entry.teacher.id and
+                        existing.day == target_day and existing.period == target_period):
+                        return False
+
+            # Check classroom availability
+            if entry.classroom:
+                for existing in existing_entries:
+                    if (existing.classroom and entry.classroom and
+                        existing.classroom.id == entry.classroom.id and
+                        existing.day == target_day and existing.period == target_period):
+                        return False
+
+            # Check Friday constraints if moving to Friday
+            if target_day.lower().startswith('fri'):
+                friday_score = self._calculate_friday_slot_score(target_period, class_group, existing_entries)
+                if friday_score > 50:  # Don't move to heavily penalized Friday slots
+                    return False
+
+        return True
 
     def _can_relocate_to_slot(self, entry: TimetableEntry, target_day: str, target_period: int,
                             existing_entries: List[TimetableEntry], class_group: str) -> bool:
