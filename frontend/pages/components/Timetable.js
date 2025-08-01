@@ -78,11 +78,11 @@ const Timetable = () => {
       color: 'bg-yellow-500'
     },
     {
-      id: 'room_conflicts',
-      name: 'Room Usage',
-      description: 'Show classroom assignments and usage patterns',
-      icon: '🏫',
-      color: 'bg-green-500'
+      id: 'room_double_booking',
+      name: 'Room Conflicts',
+      description: 'Detect and fix room double-booking conflicts where multiple classes are assigned to the same room at the same time',
+      icon: '🚫',
+      color: 'bg-red-500'
     },
     {
       id: 'friday_time_limits',
@@ -99,11 +99,11 @@ const Timetable = () => {
       color: 'bg-pink-500'
     },
     {
-      id: 'senior_batch_lab_assignment',
-      name: 'Senior Lab Priority',
-      description: 'Show senior batches assigned to labs (even for theory)',
-      icon: '🎓',
-      color: 'bg-amber-500'
+      id: 'practical_same_lab',
+      name: 'Same Lab Rule',
+      description: 'Ensure all 3 blocks of each practical subject use the same lab (universal rule enforcement)',
+      icon: '🔬',
+      color: 'bg-purple-500'
     }
   ];
 
@@ -384,6 +384,97 @@ const Timetable = () => {
 
         console.log('Filtered entries for senior lab:', filtered.length);
         break;
+
+      case 'room_double_booking': {
+        // Show entries that have room conflicts (multiple classes in same room at same time)
+        const roomConflicts = analysisData?.conflicts || [];
+
+        if (roomConflicts.length === 0) {
+          filtered = [];
+        } else {
+          // Get all entries involved in room conflicts
+          const conflictEntries = [];
+
+          roomConflicts.forEach(conflict => {
+            conflict.conflicting_classes.forEach(classInfo => {
+              // Find matching entries
+              const matchingEntries = timetableData.entries.filter(entry =>
+                entry.class_group === classInfo.class_group &&
+                entry.subject === classInfo.subject &&
+                entry.day === conflict.day &&
+                entry.period === conflict.period
+              );
+
+              matchingEntries.forEach(entry => {
+                conflictEntries.push({
+                  ...entry,
+                  constraintInfo: {
+                    type: 'Room Double-Booking Conflict',
+                    details: `${conflict.room_name} has ${conflict.conflict_count} classes at ${conflict.day} P${conflict.period}`,
+                    status: 'error'
+                  }
+                });
+              });
+            });
+          });
+
+          filtered = conflictEntries;
+        }
+        break;
+      }
+
+      case 'practical_same_lab': {
+        // Show practical entries that violate the same-lab rule
+        const sameLab = analysisData?.violations || [];
+
+        if (sameLab.length === 0) {
+          // No violations, show compliant practicals
+          const compliantPracticals = analysisData?.compliant_practicals || [];
+          filtered = [];
+
+          compliantPracticals.forEach(practical => {
+            const matchingEntries = timetableData.entries.filter(entry =>
+              entry.class_group === practical.class_group &&
+              entry.subject === practical.subject
+            );
+
+            matchingEntries.forEach(entry => {
+              filtered.push({
+                ...entry,
+                constraintInfo: {
+                  type: 'Same Lab Rule - Compliant',
+                  details: `All ${practical.total_blocks} blocks in ${practical.lab_name}`,
+                  status: 'success'
+                }
+              });
+            });
+          });
+        } else {
+          // Show violations
+          const violationEntries = [];
+
+          sameLab.forEach(violation => {
+            const matchingEntries = timetableData.entries.filter(entry =>
+              entry.class_group === violation.class_group &&
+              entry.subject === violation.subject
+            );
+
+            matchingEntries.forEach(entry => {
+              violationEntries.push({
+                ...entry,
+                constraintInfo: {
+                  type: 'Same Lab Rule Violation',
+                  details: `Using ${violation.labs_used} different labs for ${violation.total_blocks} blocks`,
+                  status: 'error'
+                }
+              });
+            });
+          });
+
+          filtered = violationEntries;
+        }
+        break;
+      }
 
       default:
         filtered = timetableData.entries;

@@ -13,6 +13,7 @@ from datetime import time, datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from django.db import models, transaction
 from ..models import Subject, Teacher, Classroom, TimetableEntry, ScheduleConfig, TeacherSubjectAssignment, Batch
+from ..room_allocator import RoomAllocator
 
 
 class FinalUniversalScheduler:
@@ -34,7 +35,8 @@ class FinalUniversalScheduler:
         self.all_subjects = list(Subject.objects.all())
         self.all_teachers = list(Teacher.objects.all())
         self.all_classrooms = list(Classroom.objects.all())
-        
+        self.room_allocator = RoomAllocator()  # Initialize intelligent room allocation
+
         # Create default classroom if none exist
         if not self.all_classrooms:
             classroom = Classroom.objects.create(
@@ -43,12 +45,13 @@ class FinalUniversalScheduler:
                 building="Main Building"
             )
             self.all_classrooms = [classroom]
-        
+
         # Tracking structures
         self.global_teacher_schedule = {}  # Global teacher availability
         self.global_classroom_schedule = {}  # Global classroom availability
-        
+
         print(f"📊 Final Scheduler: {len(self.all_subjects)} subjects, {len(self.all_teachers)} teachers, {len(self.all_classrooms)} classrooms")
+        print(f"🏛️ Room Allocation: {len(self.room_allocator.labs)} labs, {len(self.room_allocator.regular_rooms)} regular rooms, seniority-based system active")
     
     def generate_timetable(self) -> Dict:
         """Generate complete timetable - ENHANCED VERSION with Section Support."""
@@ -71,6 +74,13 @@ class FinalUniversalScheduler:
             # STEP 4: Generate timetables for all class groups (including sections)
             all_entries = []
 
+            # BULLETPROOF: Initialize current session entries for conflict detection
+            self._current_session_entries = []
+
+            # BULLETPROOF: Set global reference for room allocator access
+            import sys
+            sys.modules[__name__]._current_scheduler_instance = self
+
             for class_group in expanded_class_groups:
                 print(f"\n📋 Generating for {class_group}...")
 
@@ -81,6 +91,9 @@ class FinalUniversalScheduler:
                 # Generate entries for this class group
                 entries = self._generate_for_class_group(class_group, subjects)
                 all_entries.extend(entries)
+
+                # BULLETPROOF: Update current session entries for conflict detection
+                self._current_session_entries.extend(entries)
 
                 print(f"   ✅ Generated {len(entries)} entries for {class_group}")
 
@@ -416,9 +429,48 @@ class FinalUniversalScheduler:
                 if self._can_schedule_block(class_schedule, day, start_period, 3, class_group):
                     teacher = self._find_available_teacher(teachers, day, start_period, 3)
                     if teacher:
-                        classroom = self._find_available_classroom(day, start_period, 3)
+                        # CRITICAL: Check if this practical already has a lab assigned
+                        existing_lab = self._find_existing_lab_for_practical(subject, class_group)
+
+                        if existing_lab:
+                            # Verify existing lab is available for all 3 periods
+                            lab_available = True
+                            for i in range(3):
+                                period = start_period + i
+                                if (existing_lab.id, day, period) in self.global_classroom_schedule:
+                                    # Check if it's the same practical subject
+                                    existing_entry = self.global_classroom_schedule[(existing_lab.id, day, period)]
+
+                                    # Handle both boolean and entry objects for backward compatibility
+                                    if isinstance(existing_entry, bool):
+                                        # If it's just marked as busy, assume conflict
+                                        lab_available = False
+                                        break
+                                    elif hasattr(existing_entry, 'class_group') and hasattr(existing_entry, 'subject'):
+                                        # It's an entry object, check if it's the same practical
+                                        if (existing_entry.class_group != class_group or
+                                            existing_entry.subject.code != subject.code):
+                                            lab_available = False
+                                            break
+                                    else:
+                                        # Unknown type, assume conflict
+                                        lab_available = False
+                                        break
+
+                            if lab_available:
+                                classroom = existing_lab
+                                print(f"     🔄 Continuing practical {subject.code} in existing lab {classroom.name}")
+                            else:
+                                print(f"     ⚠️  Existing lab {existing_lab.name} not available for {subject.code}")
+                                continue
+                        else:
+                            # Find new lab for this practical
+                            classroom = self._find_available_classroom(day, start_period, 3, class_group, subject)
+                            if classroom:
+                                print(f"     🆕 New practical {subject.code} assigned to lab {classroom.name}")
+
                         if classroom:
-                            # Schedule 3 consecutive periods
+                            # Schedule 3 consecutive periods in SAME lab
                             for i in range(3):
                                 period = start_period + i
                                 entry = self._create_entry(day, period, subject, teacher, classroom, class_group, True)
@@ -426,7 +478,7 @@ class FinalUniversalScheduler:
                                 class_schedule[(day, period)] = entry
                                 self._mark_global_schedule(teacher, classroom, day, period)
 
-                            print(f"     ✅ Scheduled {subject.code}: {day} P{start_period}-{start_period+2}")
+                            print(f"     ✅ Scheduled {subject.code}: {day} P{start_period}-{start_period+2} in {classroom.name}")
                             return
 
         print(f"     ❌ Could not schedule practical {subject.code}")
@@ -503,7 +555,7 @@ class FinalUniversalScheduler:
 
             teacher = self._find_available_teacher(teachers, day, period, 1)
             if teacher:
-                classroom = self._find_available_classroom(day, period, 1)
+                classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                 if classroom:
                     entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                     entries.append(entry)
@@ -598,7 +650,7 @@ class FinalUniversalScheduler:
                 if (day, period) not in class_schedule:
                     teacher = self._find_available_teacher(teachers, day, period, 1)
                     if teacher:
-                        classroom = self._find_available_classroom(day, period, 1)
+                        classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                         if classroom:
                             entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                             entries.append(entry)
@@ -625,7 +677,7 @@ class FinalUniversalScheduler:
             if (day, period) not in class_schedule:
                 teacher = self._find_available_teacher(teachers, day, period, 1)
                 if teacher:
-                    classroom = self._find_available_classroom(day, period, 1)
+                    classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                     if classroom:
                         entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                         entries.append(entry)
@@ -655,7 +707,7 @@ class FinalUniversalScheduler:
                 if (day, period) not in class_schedule:
                     teacher = self._find_available_teacher(all_teachers, day, period, 1)
                     if teacher:
-                        classroom = self._find_available_classroom(day, period, 1)
+                        classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                         if classroom:
                             entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                             entries.append(entry)
@@ -685,7 +737,7 @@ class FinalUniversalScheduler:
                 if (day, period) not in class_schedule:
                     teacher = self._find_available_teacher(teachers, day, period, 1)
                     if teacher:
-                        classroom = self._find_available_classroom(day, period, 1)
+                        classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                         if classroom:
                             entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                             entries.append(entry)
@@ -712,7 +764,7 @@ class FinalUniversalScheduler:
             if (day, period) not in class_schedule:
                 teacher = self._find_available_teacher(teachers, day, period, 1)
                 if teacher:
-                    classroom = self._find_available_classroom(day, period, 1)
+                    classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                     if classroom:
                         entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                         entries.append(entry)
@@ -857,9 +909,53 @@ class FinalUniversalScheduler:
                 return teacher
         return None
 
-    def _find_available_classroom(self, day: str, start_period: int, duration: int) -> Optional[Classroom]:
-        """Find available classroom."""
-        for classroom in self.all_classrooms:
+    def _find_available_classroom(self, day: str, start_period: int, duration: int,
+                                 class_group: str = None, subject: Subject = None) -> Optional[Classroom]:
+        """
+        Find available classroom using intelligent room allocation system.
+        Senior batches get labs for ALL classes. Junior batches use regular rooms for theory.
+        """
+        if not class_group or not subject:
+            # Fallback to basic allocation if missing information
+            return self._find_basic_available_classroom(day, start_period, duration)
+
+        # BULLETPROOF: Get ALL entries (both in-memory and database) for accurate conflict detection
+        current_entries = self._get_all_current_entries()
+
+        is_senior = self.room_allocator.is_senior_batch(class_group)
+
+        # SENIOR BATCHES: Get labs for ALL classes (theory and practical)
+        if is_senior:
+            if subject.is_practical and duration == 3:
+                # Senior practical: 3-block lab allocation
+                return self.room_allocator.allocate_room_for_practical(
+                    day, start_period, class_group, subject, current_entries
+                )
+            else:
+                # Senior theory: single period lab allocation
+                return self.room_allocator.allocate_room_for_theory(
+                    day, start_period, class_group, subject, current_entries
+                )
+
+        # JUNIOR BATCHES: Labs only for practicals, regular rooms for theory
+        else:
+            if subject.is_practical and duration == 3:
+                # Junior practical: 3-block lab allocation (if available after senior reservation)
+                return self.room_allocator.allocate_room_for_practical(
+                    day, start_period, class_group, subject, current_entries
+                )
+            else:
+                # Junior theory: regular rooms only
+                return self.room_allocator.allocate_room_for_theory(
+                    day, start_period, class_group, subject, current_entries
+                )
+
+    def _find_basic_available_classroom(self, day: str, start_period: int, duration: int) -> Optional[Classroom]:
+        """Basic classroom finding for fallback scenarios."""
+        # Sort classrooms by priority (labs first for practicals, regular rooms first for theory)
+        sorted_classrooms = sorted(self.all_classrooms, key=lambda c: (c.building_priority, c.name))
+
+        for classroom in sorted_classrooms:
             available = True
             for i in range(duration):
                 period = start_period + i
@@ -868,7 +964,46 @@ class FinalUniversalScheduler:
                     break
             if available:
                 return classroom
-        return self.all_classrooms[0]  # Fallback
+
+        # Fallback: return first available classroom even if not ideal
+        return sorted_classrooms[0] if sorted_classrooms else None
+
+    def _find_existing_lab_for_practical(self, subject: Subject, class_group: str) -> Optional[Classroom]:
+        """
+        Find if this practical subject already has a lab assigned for this class group.
+        Ensures ALL 3 blocks of a practical are in the SAME lab.
+        """
+        # Use the room allocator's method which is already implemented and working
+        # BULLETPROOF: Get all entries for this class_group and subject (both in-memory and database)
+        all_entries = self._get_all_current_entries()
+        current_entries = [
+            entry for entry in all_entries
+            if entry.class_group == class_group and entry.subject == subject
+        ]
+
+        return self.room_allocator._find_existing_lab_for_practical(class_group, subject, current_entries)
+
+    def _get_all_current_entries(self) -> List[TimetableEntry]:
+        """
+        BULLETPROOF: Get all current entries including both in-memory and database entries.
+        This ensures the room allocator sees ALL scheduled classes for accurate conflict detection.
+        """
+        # Get all database entries
+        db_entries = list(TimetableEntry.objects.all())
+
+        # Get all in-memory entries from current scheduling session
+        in_memory_entries = []
+
+        # Check if we have a current scheduling session with in-memory entries
+        if hasattr(self, '_current_session_entries'):
+            in_memory_entries = self._current_session_entries
+
+        # Combine both lists
+        all_entries = db_entries + in_memory_entries
+
+        print(f"    📊 BULLETPROOF conflict check: {len(db_entries)} database + {len(in_memory_entries)} in-memory = {len(all_entries)} total entries")
+
+        return all_entries
 
     def _create_entry(self, day: str, period: int, subject: Subject, teacher: Teacher,
                      classroom: Classroom, class_group: str, is_practical: bool) -> TimetableEntry:
@@ -892,7 +1027,7 @@ class FinalUniversalScheduler:
     def _mark_global_schedule(self, teacher: Teacher, classroom: Classroom, day: str, period: int):
         """Mark teacher and classroom as busy."""
         self.global_teacher_schedule[(teacher.id, day, period)] = True
-        self.global_classroom_schedule[(classroom.id, day, period)] = True
+        # Note: classroom schedule is marked when actual entry is created, not here
 
     def _calculate_start_time(self, period: int) -> time:
         """Calculate start time for period."""
@@ -1105,7 +1240,7 @@ class FinalUniversalScheduler:
             if teachers:
                 teacher = self._find_available_teacher(teachers, day, period, 1)
                 if teacher:
-                    classroom = self._find_available_classroom(day, period, 1)
+                    classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                     if classroom:
                         entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                         filler_entries.append(entry)
@@ -2398,7 +2533,7 @@ class FinalUniversalScheduler:
                 if (day, period) not in class_schedule:
                     teacher = self._find_available_teacher(teachers, day, period, 1)
                     if teacher:
-                        classroom = self._find_available_classroom(day, period, 1)
+                        classroom = self._find_available_classroom(day, period, 1, class_group, subject)
                         if classroom:
                             entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
                             updated_entries.append(entry)

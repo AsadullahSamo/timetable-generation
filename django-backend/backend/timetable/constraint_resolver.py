@@ -6,6 +6,7 @@ Fixes constraint violations without breaking other constraints.
 from typing import List, Dict, Any, Tuple
 from timetable.models import TimetableEntry, Subject, Teacher, Classroom, ScheduleConfig
 from timetable.constraint_validator import ConstraintValidator
+from timetable.room_allocator import RoomAllocator
 from datetime import time, timedelta
 from collections import defaultdict
 import random
@@ -16,6 +17,7 @@ class IntelligentConstraintResolver:
     
     def __init__(self):
         self.validator = ConstraintValidator()
+        self.room_allocator = RoomAllocator()  # Initialize room allocation system
         self.max_iterations = 50  # Increased for persistent resolution
         self.schedule_config = None
         self.aggressive_mode = True  # Enable aggressive mode for 0 violations
@@ -36,6 +38,13 @@ class IntelligentConstraintResolver:
             'Teacher Assignments': self._resolve_teacher_assignments,
             'Friday Aware Scheduling': self._resolve_friday_aware_scheduling,
         }
+
+        # Room allocation optimization strategies
+        self.room_optimization_strategies = [
+            self.optimize_room_allocation,
+            self._optimize_practical_lab_allocation,
+            self._optimize_senior_batch_priority,
+        ]
 
     def _get_schedule_config(self):
         """Get the current schedule configuration."""
@@ -641,12 +650,35 @@ class IntelligentConstraintResolver:
 
         return None
 
-    def _find_conflict_free_classroom(self, entries: List[TimetableEntry], day: str, period: int):
-        """Find a classroom that is available at the given time."""
+    def _find_conflict_free_classroom(self, entries: List[TimetableEntry], day: str, period: int,
+                                     class_group: str = None, subject: Subject = None):
+        """
+        Find a classroom that is available at the given time using intelligent allocation.
+        Considers room type, seniority, and allocation rules.
+        """
+        if not class_group or not subject:
+            # Fallback to basic allocation if missing information
+            return self._find_basic_available_classroom(entries, day, period)
+
+        # Use intelligent room allocation based on subject type
+        if subject.is_practical:
+            # Practical subjects need labs with 3-block allocation
+            return self.room_allocator.allocate_room_for_practical(
+                day, period, class_group, subject, entries
+            )
+        else:
+            # Theory subjects use seniority-based allocation
+            return self.room_allocator.allocate_room_for_theory(
+                day, period, class_group, subject, entries
+            )
+
+    def _find_basic_available_classroom(self, entries: List[TimetableEntry], day: str, period: int):
+        """Basic classroom finding for fallback scenarios."""
         from .models import Classroom
 
-        # Get all classrooms
-        all_classrooms = Classroom.objects.all()
+        # Get all classrooms ordered by priority
+        all_classrooms = list(Classroom.objects.all())
+        all_classrooms.sort(key=lambda room: (room.building_priority, room.name))
 
         for classroom in all_classrooms:
             # Check if classroom is free at this time
@@ -1611,61 +1643,329 @@ class IntelligentConstraintResolver:
         return current_entries
 
     def _resolve_room_conflicts(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
-        """Resolve room conflicts by reassigning classrooms."""
+        """
+        Resolve room conflicts using intelligent room allocation system.
+        Handles multiple conflict types: double-booking, type mismatches, seniority violations.
+        """
         print(f"    🔧 Resolving room conflict: {violation['description']}")
 
         current_entries = list(entries)
+        conflict_subtype = violation.get('subtype', 'double_booking')
+
+        # Handle different types of room conflicts
+        if conflict_subtype == 'double_booking':
+            current_entries = self._resolve_double_booking_conflict(current_entries, violation)
+        elif conflict_subtype == 'type_mismatch':
+            current_entries = self._resolve_room_type_mismatch(current_entries, violation)
+        elif conflict_subtype == 'seniority_violation':
+            current_entries = self._resolve_seniority_violation(current_entries, violation)
+        elif conflict_subtype == 'lab_reservation_violation':
+            current_entries = self._resolve_lab_reservation_violation(current_entries, violation)
+        else:
+            # Fallback to comprehensive resolution
+            current_entries = self._resolve_comprehensive_room_conflicts(current_entries)
+
+        return current_entries
+
+    def _resolve_double_booking_conflict(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
+        """Resolve double-booking conflicts using seniority-based priority."""
         classroom_name = violation.get('classroom')
         day = violation.get('day')
         period = violation.get('period')
 
         if not all([classroom_name, day, period]):
-            return current_entries
+            return entries
 
-        # Find all conflicting entries for this classroom at this time
-        conflicting_entries = []
-        for entry in current_entries:
+        # Find conflicting entries
+        conflicting_entries = [
+            entry for entry in entries
             if (entry.classroom and entry.classroom.name == classroom_name and
-                entry.day == day and entry.period == period):
-                conflicting_entries.append(entry)
+                entry.day == day and entry.period == period)
+        ]
 
         if len(conflicting_entries) <= 1:
-            return current_entries  # No conflict or already resolved
+            return entries
 
-        # Try to find alternative classrooms for conflicting classes (except the first one)
-        from .models import Classroom
+        # Sort by batch priority (senior batches keep their rooms)
+        sorted_entries = sorted(
+            conflicting_entries,
+            key=lambda e: self.room_allocator.get_batch_priority(e.class_group)
+        )
 
-        for entry in conflicting_entries[1:]:  # Keep first entry, reassign others
-            # Find available classrooms
-            available_classrooms = Classroom.objects.all()
+        # Keep highest priority entry, reassign others
+        entries_to_reassign = sorted_entries[1:]
 
-            for classroom in available_classrooms:
-                if classroom == entry.classroom:
-                    continue  # Skip current classroom
-
-                # Check if this classroom is available at this time
-                room_conflict = any(e for e in current_entries
-                                  if e.classroom == classroom and
-                                     e.day == day and e.period == period)
-
-                if not room_conflict:
-                    # Check if classroom is suitable (capacity, type)
-                    if self._is_classroom_suitable(classroom, entry):
-                        entry.classroom = classroom
-                        print(f"        ✅ Reassigned {entry.subject.code} to {classroom.name}")
-                        break
+        for entry in entries_to_reassign:
+            success = self._reassign_entry_to_suitable_room(entry, entries)
+            if success:
+                print(f"        ✅ Reassigned {entry.class_group} from double-booked {classroom_name}")
             else:
-                # If no alternative classroom found, try to move the class
-                moved = self._move_class_to_available_slot(current_entries, entry)
-                if moved:
-                    print(f"        ✅ Moved {entry.subject.code} for {entry.class_group} to different time")
+                print(f"        ❌ Could not reassign {entry.class_group} from {classroom_name}")
 
-        return current_entries
+        return entries
+
+    def _resolve_room_type_mismatch(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
+        """Resolve room type mismatches (e.g., practical in non-lab room)."""
+        # Find the entry with type mismatch
+        target_entry = None
+        for entry in entries:
+            if (entry.classroom and entry.classroom.name == violation.get('classroom') and
+                entry.day == violation.get('day') and entry.period == violation.get('period')):
+                target_entry = entry
+                break
+
+        if not target_entry:
+            return entries
+
+        # Find appropriate room based on subject type
+        if target_entry.subject and target_entry.subject.is_practical:
+            # Practical needs lab
+            new_room = self.room_allocator.allocate_room_for_practical(
+                target_entry.day, target_entry.period, target_entry.class_group,
+                target_entry.subject, entries
+            )
+        else:
+            # Theory can use regular room
+            new_room = self.room_allocator.allocate_room_for_theory(
+                target_entry.day, target_entry.period, target_entry.class_group,
+                target_entry.subject, entries
+            )
+
+        if new_room:
+            old_room = target_entry.classroom.name
+            target_entry.classroom = new_room
+            print(f"        ✅ Fixed type mismatch: moved {target_entry.class_group} from {old_room} to {new_room.name}")
+
+        return entries
+
+    def _resolve_seniority_violation(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
+        """Resolve seniority violations (junior batch in lab for theory)."""
+        # Find the violating entry
+        target_entry = None
+        for entry in entries:
+            if (entry.classroom and entry.classroom.name == violation.get('classroom') and
+                entry.day == violation.get('day') and entry.period == violation.get('period') and
+                entry.class_group == violation.get('class_group')):
+                target_entry = entry
+                break
+
+        if not target_entry:
+            return entries
+
+        # Try to move junior batch to regular room
+        regular_room = self.room_allocator.allocate_room_for_theory(
+            target_entry.day, target_entry.period, target_entry.class_group,
+            target_entry.subject, entries
+        )
+
+        if regular_room and not regular_room.is_lab:
+            old_room = target_entry.classroom.name
+            target_entry.classroom = regular_room
+            print(f"        ✅ Fixed seniority violation: moved junior batch {target_entry.class_group} from lab {old_room} to {regular_room.name}")
+
+        return entries
+
+    def _resolve_lab_reservation_violation(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
+        """Resolve lab reservation violations by moving theory classes from labs."""
+        day = violation.get('day')
+        period = violation.get('period')
+
+        if not day or not period:
+            return entries
+
+        # Find theory classes in labs at this time
+        theory_in_labs = [
+            entry for entry in entries
+            if (entry.day == day and entry.period == period and
+                entry.classroom and entry.classroom.is_lab and
+                entry.subject and not entry.subject.is_practical)
+        ]
+
+        # Move junior batch theory classes out of labs first
+        for entry in theory_in_labs:
+            is_senior = self.room_allocator.is_senior_batch(entry.class_group)
+            if not is_senior:
+                regular_room = self.room_allocator.get_available_regular_rooms_for_time(day, period, entries)
+                if regular_room:
+                    old_room = entry.classroom.name
+                    entry.classroom = regular_room[0]
+                    print(f"        ✅ Freed lab for reservation: moved {entry.class_group} from {old_room} to {regular_room[0].name}")
+                    break
+
+        return entries
+
+    def _resolve_comprehensive_room_conflicts(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """Comprehensive room conflict resolution using room allocator."""
+        conflicts = self.room_allocator.find_room_conflicts(entries)
+
+        resolved_count = 0
+        for conflict in conflicts:
+            if self.room_allocator.resolve_room_conflict(conflict, entries):
+                resolved_count += 1
+                print(f"        ✅ Resolved room conflict in {conflict['classroom']}")
+
+        print(f"    📊 Comprehensive Resolution: {resolved_count}/{len(conflicts)} conflicts resolved")
+        return entries
+
+    def _reassign_entry_to_suitable_room(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> bool:
+        """Reassign an entry to a suitable room based on subject type and seniority."""
+        if not entry.subject:
+            return False
+
+        new_room = None
+        if entry.subject.is_practical:
+            new_room = self.room_allocator.allocate_room_for_practical(
+                entry.day, entry.period, entry.class_group, entry.subject, entries
+            )
+        else:
+            new_room = self.room_allocator.allocate_room_for_theory(
+                entry.day, entry.period, entry.class_group, entry.subject, entries
+            )
+
+        if new_room:
+            entry.classroom = new_room
+            return True
+
+        return False
+
+    def optimize_room_allocation(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """
+        Optimize overall room allocation using intelligent swapping.
+        Improves seniority-based allocation and lab utilization.
+        """
+        print("    🔄 Optimizing room allocation with intelligent swapping...")
+
+        # Perform batch room optimization
+        optimization_results = self.room_allocator.batch_room_optimization(entries)
+
+        print(f"    📊 Room Optimization Results:")
+        print(f"       🔄 Swaps performed: {optimization_results['swaps_performed']}")
+        print(f"       🎓 Senior batches improved: {optimization_results['senior_batches_improved']}")
+        print(f"       📚 Junior batches moved: {optimization_results['junior_batches_moved']}")
+
+        # Log detailed improvements
+        for detail in optimization_results['details']:
+            if detail['swaps'] > 0:
+                print(f"       ✅ {detail['time_slot']}: {detail['swaps']} swaps")
+
+        return entries
+
+    def resolve_senior_batch_lab_access(self, entries: List[TimetableEntry],
+                                      senior_class_group: str) -> List[TimetableEntry]:
+        """
+        Ensure senior batches get priority access to labs by swapping with junior batches.
+        """
+        print(f"    🎓 Ensuring lab access for senior batch: {senior_class_group}")
+
+        # Find senior batch entries that need better room allocation
+        senior_entries = [
+            entry for entry in entries
+            if (entry.class_group == senior_class_group and entry.classroom)
+        ]
+
+        swaps_made = 0
+        for senior_entry in senior_entries:
+            # Check if senior entry could benefit from a lab
+            needs_lab = (
+                (senior_entry.subject and senior_entry.subject.is_practical) or
+                (senior_entry.subject and not senior_entry.subject.is_practical and not senior_entry.classroom.is_lab)
+            )
+
+            if needs_lab:
+                if self.room_allocator.intelligent_room_swap(entries, senior_entry, 'lab'):
+                    swaps_made += 1
+
+        if swaps_made > 0:
+            print(f"    ✅ Made {swaps_made} room swaps to improve senior batch lab access")
+        else:
+            print(f"    ℹ️  No beneficial swaps found for {senior_class_group}")
+
+        return entries
+
+    def _resolve_specific_room_conflict(self, entries: List[TimetableEntry], violation: Dict):
+        """Resolve a specific room conflict with enhanced seniority-based logic."""
+        classroom_name = violation['classroom']
+        day = violation['day']
+        period = violation['period']
+
+        # Find conflicting entries
+        conflicting_entries = [
+            entry for entry in entries
+            if (entry.classroom and entry.classroom.name == classroom_name and
+                entry.day == day and entry.period == period)
+        ]
+
+        if len(conflicting_entries) <= 1:
+            return
+
+        # Sort by batch priority (senior batches keep their rooms)
+        sorted_entries = sorted(
+            conflicting_entries,
+            key=lambda e: self.room_allocator.get_batch_priority(e.class_group)
+        )
+
+        # Keep highest priority entry, reassign others
+        entries_to_reassign = sorted_entries[1:]
+
+        for entry in entries_to_reassign:
+            new_room = None
+
+            if entry.subject and entry.subject.is_practical:
+                # Practical classes need labs with 3-block allocation
+                new_room = self.room_allocator.allocate_room_for_practical(
+                    day, period, entry.class_group, entry.subject, entries
+                )
+            else:
+                # Theory classes use seniority-based allocation
+                new_room = self.room_allocator.allocate_room_for_theory(
+                    day, period, entry.class_group, entry.subject, entries
+                )
+
+            if new_room:
+                old_room = entry.classroom.name if entry.classroom else 'None'
+                entry.classroom = new_room
+                print(f"        ✅ Seniority-based reassignment: {entry.class_group} moved from {old_room} to {new_room.name}")
+            else:
+                # Last resort: move to different time slot
+                moved = self._move_class_to_available_slot(entries, entry)
+                if moved:
+                    print(f"        ✅ Moved {entry.class_group} to different time slot")
 
     def _is_classroom_suitable(self, classroom, entry) -> bool:
-        """Check if a classroom is suitable for a class."""
-        # Basic suitability check - can be enhanced
-        return True  # For now, assume all classrooms are suitable
+        """
+        Check if a classroom is suitable for a class using comprehensive criteria.
+        Enforces senior batch lab priority and junior batch regular room assignment.
+        """
+        if not classroom or not entry:
+            return False
+
+        # Check capacity (assume 30 students per section as default)
+        section_size = 30  # This could be made configurable
+        if not classroom.can_accommodate_section_size(section_size):
+            return False
+
+        is_senior = self.room_allocator.is_senior_batch(entry.class_group)
+
+        # SENIOR BATCHES: Must get labs for ALL classes (theory and practical)
+        if is_senior:
+            if not classroom.is_lab:
+                print(f"    🚫 Senior batch {entry.class_group} cannot use regular room {classroom.name}")
+                return False
+            return True
+
+        # JUNIOR BATCHES: Should use regular rooms, labs only for practicals
+        else:
+            if entry.subject and entry.subject.is_practical:
+                # Practicals need labs
+                if not classroom.is_lab:
+                    return False
+            else:
+                # Theory classes should use regular rooms
+                if classroom.is_lab:
+                    print(f"    🚫 Junior batch {entry.class_group} should not use lab {classroom.name} for theory")
+                    return False
+
+        return True
 
     def _resolve_compact_scheduling(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
         """Resolve compact scheduling violations by filling gaps and making schedule compact."""
@@ -3216,3 +3516,194 @@ class IntelligentConstraintResolver:
         # Redirect to the new session-based method
         sessions_to_remove = max(1, classes_to_remove // 3)  # Convert periods to sessions
         return self._remove_excess_practical_sessions(entries, class_group, subject_code, sessions_to_remove)
+
+    def _optimize_practical_lab_allocation(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """Optimize practical class lab allocation to ensure proper 3-block scheduling."""
+        print("    🧪 Optimizing practical lab allocation...")
+
+        # Analyze practical scheduling capacity
+        analysis = self.room_allocator.analyze_practical_scheduling_capacity(entries)
+
+        print(f"       📊 Practical Analysis: {analysis['practical_sessions_scheduled']}/{analysis['practical_sessions_needed']} sessions scheduled")
+
+        # Check for practical scheduling violations
+        violations_found = 0
+        for entry in entries:
+            if entry.subject and entry.subject.is_practical:
+                if not entry.classroom or not entry.classroom.is_lab:
+                    violations_found += 1
+                    # Try to move practical to lab
+                    new_lab = self.room_allocator.allocate_room_for_practical(
+                        entry.day, entry.period, entry.class_group, entry.subject, entries
+                    )
+                    if new_lab:
+                        old_room = entry.classroom.name if entry.classroom else 'None'
+                        entry.classroom = new_lab
+                        print(f"       ✅ Moved practical {entry.subject.code} from {old_room} to lab {new_lab.name}")
+
+        if violations_found == 0:
+            print("       ✅ All practical classes properly allocated to labs")
+
+        return entries
+
+    def _optimize_senior_batch_priority(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """Aggressively optimize room allocation to ensure senior batches get ALL labs."""
+        print("    🎓 Aggressively optimizing senior batch lab priority...")
+
+        # Use the room allocator's enforcement method
+        optimized_entries = self.room_allocator.enforce_senior_batch_lab_priority(entries)
+
+        # Ensure practical block consistency
+        optimized_entries = self.room_allocator.ensure_practical_block_consistency(optimized_entries)
+
+        # Validate the results
+        validation = self.room_allocator.validate_senior_batch_lab_allocation(optimized_entries)
+        compliance_rate = validation['compliance_rate']
+
+        print(f"       📊 Senior batch lab compliance: {compliance_rate:.1f}%")
+
+        if compliance_rate < 100:
+            print(f"       ⚠️  {len(validation['violations'])} senior batch classes still in regular rooms")
+            # Try additional aggressive moves
+            optimized_entries = self._force_senior_batch_lab_allocation(optimized_entries)
+        else:
+            print(f"       ✅ All senior batch classes successfully allocated to labs")
+
+        return optimized_entries
+
+    def _improve_senior_batch_allocation(self, batch_entries: List[TimetableEntry],
+                                       all_entries: List[TimetableEntry]) -> int:
+        """Improve room allocation for a specific senior batch."""
+        improvements = 0
+
+        for entry in batch_entries:
+            if not entry.classroom:
+                continue
+
+            # Check if senior batch could get a better room
+            current_room = entry.classroom
+
+            # For theory classes, prefer labs if available
+            if entry.subject and not entry.subject.is_practical and not current_room.is_lab:
+                better_room = self.room_allocator.allocate_room_for_theory(
+                    entry.day, entry.period, entry.class_group, entry.subject, all_entries
+                )
+
+                if better_room and better_room.is_lab and better_room != current_room:
+                    # Check if we can swap with a junior batch
+                    if self.room_allocator.intelligent_room_swap(all_entries, entry, 'lab'):
+                        improvements += 1
+
+        return improvements
+
+    def comprehensive_room_optimization(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """
+        Perform comprehensive room optimization using all available strategies.
+        This is the main integration point for room allocation optimization.
+        """
+        print("🏛️ COMPREHENSIVE ROOM OPTIMIZATION")
+        print("=" * 50)
+
+        current_entries = list(entries)
+
+        # Run all room optimization strategies
+        for strategy in self.room_optimization_strategies:
+            try:
+                current_entries = strategy(current_entries)
+            except Exception as e:
+                print(f"    ❌ Error in room optimization strategy {strategy.__name__}: {e}")
+
+        # Final validation
+        room_conflicts = self.room_allocator.find_room_conflicts(current_entries)
+        if room_conflicts:
+            print(f"    ⚠️  {len(room_conflicts)} room conflicts remain after optimization")
+            # Try one more round of conflict resolution
+            for conflict in room_conflicts:
+                self.room_allocator.resolve_room_conflict(conflict, current_entries)
+        else:
+            print("    ✅ No room conflicts detected after optimization")
+
+        print("🏛️ Room optimization complete")
+        return current_entries
+
+    def _force_senior_batch_lab_allocation(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """
+        Force all senior batch classes into labs by aggressively moving junior batches.
+        This ensures 100% compliance with senior batch lab priority.
+        """
+        print("    🚀 FORCE ALLOCATION: Moving ALL senior batches to labs")
+
+        current_entries = list(entries)
+        moves_made = 0
+
+        # Find ALL senior batch classes not in labs
+        senior_violations = [
+            entry for entry in current_entries
+            if (entry.classroom and not entry.classroom.is_lab and
+                self.room_allocator.is_senior_batch(entry.class_group))
+        ]
+
+        print(f"       📊 Found {len(senior_violations)} senior batch classes to move to labs")
+
+        # Find ALL junior batch classes in labs (theory only - practicals can stay)
+        junior_candidates = [
+            entry for entry in current_entries
+            if (entry.classroom and entry.classroom.is_lab and
+                not self.room_allocator.is_senior_batch(entry.class_group) and
+                entry.subject and not entry.subject.is_practical)
+        ]
+
+        print(f"       📊 Found {len(junior_candidates)} junior theory classes in labs to relocate")
+
+        # Force moves - prioritize by time slots to avoid conflicts
+        for senior_entry in senior_violations:
+            # Find any available lab by moving junior batches
+            lab_found = False
+
+            # Try to find a junior batch to displace
+            for junior_entry in junior_candidates[:]:
+                # Check if we can move the junior to the senior's current room
+                if self._can_force_room_swap(senior_entry, junior_entry, current_entries):
+                    # Perform the forced swap
+                    senior_old_room = senior_entry.classroom.name
+                    junior_old_room = junior_entry.classroom.name
+
+                    senior_entry.classroom, junior_entry.classroom = junior_entry.classroom, senior_entry.classroom
+
+                    print(f"       🔄 FORCED: Senior {senior_entry.class_group} → Lab {junior_old_room}")
+                    print(f"                 Junior {junior_entry.class_group} → Regular {senior_old_room}")
+
+                    junior_candidates.remove(junior_entry)
+                    moves_made += 1
+                    lab_found = True
+                    break
+
+            # If no swap possible, try to find any available lab
+            if not lab_found:
+                available_labs = self.room_allocator.get_available_labs_for_time(
+                    senior_entry.day, senior_entry.period, current_entries
+                )
+                if available_labs:
+                    old_room = senior_entry.classroom.name
+                    senior_entry.classroom = available_labs[0]
+                    print(f"       ✅ DIRECT: Senior {senior_entry.class_group} → Lab {available_labs[0].name}")
+                    moves_made += 1
+
+        print(f"       ✅ Completed {moves_made} forced moves for senior batch lab priority")
+
+        # Final validation
+        final_validation = self.room_allocator.validate_senior_batch_lab_allocation(current_entries)
+        print(f"       📈 Final compliance rate: {final_validation['compliance_rate']:.1f}%")
+
+        return current_entries
+
+    def _can_force_room_swap(self, senior_entry: TimetableEntry, junior_entry: TimetableEntry,
+                           entries: List[TimetableEntry]) -> bool:
+        """Check if we can force a room swap between senior and junior entries."""
+        # Different time slots - always safe to swap
+        if (senior_entry.day != junior_entry.day or
+            senior_entry.period != junior_entry.period):
+            return True
+
+        # Same time slot - check for conflicts
+        return self.room_allocator._can_swap_rooms(senior_entry, junior_entry, entries)

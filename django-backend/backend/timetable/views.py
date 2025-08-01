@@ -1060,8 +1060,9 @@ class ConstraintTestingView(APIView):
         # Friday-aware scheduling
         analysis['friday_aware_scheduling'] = self._analyze_friday_aware_scheduling(entries)
 
-        # Senior batch lab assignment
-        analysis['senior_batch_lab_assignment'] = self._analyze_senior_batch_lab_assignment(entries)
+        # ENHANCED: Room allocation constraints
+        analysis['room_double_booking'] = self._analyze_room_double_booking(entries)
+        analysis['practical_same_lab'] = self._analyze_practical_same_lab(entries)
 
         return analysis
 
@@ -1079,7 +1080,9 @@ class ConstraintTestingView(APIView):
             'minimum_daily_classes': self._analyze_minimum_daily_classes,
             'compact_scheduling': self._analyze_compact_scheduling,
             'friday_aware_scheduling': self._analyze_friday_aware_scheduling,
-            'senior_batch_lab_assignment': self._analyze_senior_batch_lab_assignment,
+            # ENHANCED: New working room allocation constraints
+            'room_double_booking': self._analyze_room_double_booking,
+            'practical_same_lab': self._analyze_practical_same_lab,
         }
 
         if constraint_type in analysis_methods:
@@ -1797,6 +1800,126 @@ class ConstraintTestingView(APIView):
             'status': 'PASS' if len(violations) == 0 else 'FAIL'
         }
 
+    def _analyze_room_double_booking(self, entries):
+        """
+        ENHANCED: Analyze room double-booking conflicts.
+        Detects when multiple classes are assigned to the same room at the same time.
+        """
+        try:
+            from collections import defaultdict
+
+            room_schedule = defaultdict(list)
+            conflicts = []
+
+            # Group entries by room, day, and period
+            for entry in entries:
+                if entry.classroom:
+                    key = (entry.classroom.id, entry.day, entry.period)
+                    room_schedule[key].append(entry)
+
+            # Find conflicts (more than one entry per time slot)
+            for (room_id, day, period), room_entries in room_schedule.items():
+                if len(room_entries) > 1:
+                    room_name = room_entries[0].classroom.name
+                    conflict_details = []
+
+                    for entry in room_entries:
+                        subject_code = entry.subject.code if entry.subject else 'Unknown'
+                        conflict_details.append({
+                            'class_group': entry.class_group,
+                            'subject': subject_code,
+                            'teacher': entry.teacher.name if entry.teacher else 'Unknown'
+                        })
+
+                    conflicts.append({
+                        'room_name': room_name,
+                        'day': day,
+                        'period': period,
+                        'conflict_count': len(room_entries),
+                        'conflicting_classes': conflict_details
+                    })
+
+            return {
+                'status': 'FAIL' if conflicts else 'PASS',
+                'total_conflicts': len(conflicts),
+                'conflicts': conflicts,
+                'message': f'Found {len(conflicts)} room double-booking conflicts' if conflicts else 'No room conflicts detected'
+            }
+
+        except Exception as e:
+            return {
+                'status': 'ERROR',
+                'error': f'Failed to analyze room conflicts: {str(e)}'
+            }
+
+    def _analyze_practical_same_lab(self, entries):
+        """
+        ENHANCED: Analyze practical same-lab rule compliance.
+        Ensures all 3 blocks of each practical subject use the same lab.
+        """
+        try:
+            from collections import defaultdict
+
+            practical_groups = defaultdict(list)
+            violations = []
+            compliant_practicals = []
+
+            # Group practical entries by class group and subject
+            for entry in entries:
+                if entry.subject and entry.subject.is_practical and entry.classroom:
+                    key = (entry.class_group, entry.subject.code)
+                    practical_groups[key].append(entry)
+
+            # Check each practical group for same-lab compliance
+            for (class_group, subject_code), group_entries in practical_groups.items():
+                if len(group_entries) >= 2:  # Need at least 2 entries to check consistency
+                    # Get all unique labs used by this practical
+                    labs_used = set(entry.classroom.id for entry in group_entries)
+
+                    if len(labs_used) > 1:
+                        # VIOLATION: Multiple labs used for same practical
+                        lab_details = []
+                        for entry in group_entries:
+                            lab_details.append({
+                                'day': entry.day,
+                                'period': entry.period,
+                                'lab_name': entry.classroom.name,
+                                'is_lab': entry.classroom.is_lab
+                            })
+
+                        violations.append({
+                            'class_group': class_group,
+                            'subject': subject_code,
+                            'labs_used': len(labs_used),
+                            'total_blocks': len(group_entries),
+                            'lab_details': lab_details
+                        })
+                    else:
+                        # COMPLIANT: All blocks in same lab
+                        lab_name = group_entries[0].classroom.name
+                        compliant_practicals.append({
+                            'class_group': class_group,
+                            'subject': subject_code,
+                            'lab_name': lab_name,
+                            'total_blocks': len(group_entries),
+                            'is_lab': group_entries[0].classroom.is_lab
+                        })
+
+            return {
+                'status': 'FAIL' if violations else 'PASS',
+                'total_violations': len(violations),
+                'violations': violations,
+                'compliant_practicals': compliant_practicals,
+                'total_practical_groups': len(practical_groups),
+                'message': f'Found {len(violations)} same-lab violations' if violations else 'All practicals follow same-lab rule'
+            }
+
+        except Exception as e:
+            return {
+                'status': 'ERROR',
+                'error': f'Failed to analyze practical same-lab rule: {str(e)}'
+            }
+
 
 class ConstraintResolverView(APIView):
     """
@@ -1999,8 +2122,10 @@ class ConstraintResolverView(APIView):
                 return self._resolve_compact_scheduling(entries)
             elif constraint_type == 'thesis_day_constraint':
                 return self._resolve_thesis_day_constraint(entries)
-            elif constraint_type == 'senior_batch_lab_assignment':
-                return self._resolve_senior_batch_lab_assignment(entries)
+            elif constraint_type == 'room_double_booking':
+                return self._resolve_room_double_booking(entries)
+            elif constraint_type == 'practical_same_lab':
+                return self._resolve_practical_same_lab(entries)
             else:
                 return None
 
@@ -2301,3 +2426,109 @@ class ConstraintResolverView(APIView):
             return True
 
         return False
+
+    def _resolve_room_double_booking(self, entries):
+        """
+        ENHANCED: Resolve room double-booking conflicts.
+        Moves conflicting classes to available rooms while maintaining constraints.
+        """
+        try:
+            from collections import defaultdict
+            from .room_allocator import RoomAllocator
+
+            room_allocator = RoomAllocator()
+            room_schedule = defaultdict(list)
+            conflicts_resolved = 0
+
+            # Group entries by room, day, and period to find conflicts
+            for entry in entries:
+                if entry.classroom:
+                    key = (entry.classroom.id, entry.day, entry.period)
+                    room_schedule[key].append(entry)
+
+            # Resolve conflicts
+            for (room_id, day, period), room_entries in room_schedule.items():
+                if len(room_entries) > 1:
+                    # Keep the first entry, move others
+                    entries_to_move = room_entries[1:]
+
+                    for entry in entries_to_move:
+                        # Find alternative room
+                        if entry.subject and entry.subject.is_practical:
+                            # Practical subjects need labs
+                            alternative_room = room_allocator.allocate_room_for_practical(
+                                day, period, entry.class_group, entry.subject, entries
+                            )
+                        else:
+                            # Theory subjects can use regular rooms or labs
+                            alternative_room = room_allocator.allocate_room_for_theory(
+                                day, period, entry.class_group, entry.subject, entries
+                            )
+
+                        if alternative_room:
+                            entry.classroom = alternative_room
+                            entry.save()
+                            conflicts_resolved += 1
+
+            return {
+                'action': f'Resolved {conflicts_resolved} room conflicts by moving classes to available rooms',
+                'success': conflicts_resolved > 0,
+                'changes_made': conflicts_resolved
+            }
+
+        except Exception as e:
+            return {
+                'action': f'Failed to resolve room conflicts: {str(e)}',
+                'success': False,
+                'changes_made': 0
+            }
+
+    def _resolve_practical_same_lab(self, entries):
+        """
+        ENHANCED: Resolve practical same-lab violations.
+        Ensures all blocks of each practical use the same lab.
+        """
+        try:
+            from collections import defaultdict
+            from .room_allocator import RoomAllocator
+
+            room_allocator = RoomAllocator()
+            practical_groups = defaultdict(list)
+            violations_resolved = 0
+
+            # Group practical entries by class group and subject
+            for entry in entries:
+                if entry.subject and entry.subject.is_practical and entry.classroom:
+                    key = (entry.class_group, entry.subject.code)
+                    practical_groups[key].append(entry)
+
+            # Fix violations using the enhanced consistency enforcement
+            fixed_entries = room_allocator.ensure_practical_block_consistency(entries)
+
+            # Count how many violations were fixed
+            for (class_group, subject_code), group_entries in practical_groups.items():
+                if len(group_entries) >= 2:
+                    labs_used_before = set(entry.classroom.id for entry in group_entries)
+                    if len(labs_used_before) > 1:
+                        # Check if it's fixed now
+                        current_entries = [e for e in fixed_entries
+                                         if e.class_group == class_group and
+                                         e.subject and e.subject.code == subject_code]
+                        labs_used_after = set(entry.classroom.id for entry in current_entries
+                                            if entry.classroom)
+                        if len(labs_used_after) == 1:
+                            violations_resolved += 1
+
+            return {
+                'action': f'Applied same-lab consistency enforcement, resolved {violations_resolved} violations',
+                'success': violations_resolved > 0,
+                'changes_made': violations_resolved
+            }
+
+        except Exception as e:
+            return {
+                'action': f'Failed to resolve same-lab violations: {str(e)}',
+                'success': False,
+                'changes_made': 0
+            }
+

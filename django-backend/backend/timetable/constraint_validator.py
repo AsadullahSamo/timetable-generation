@@ -226,32 +226,146 @@ class ConstraintValidator:
         return violations
     
     def _check_room_conflicts(self, entries: List[TimetableEntry]) -> List[Dict]:
-        """Check for classroom scheduling conflicts."""
+        """
+        Comprehensive room conflict detection including:
+        - Double-booking conflicts
+        - Room type mismatches (practicals not in labs)
+        - Capacity violations
+        - Seniority-based allocation violations
+        """
         violations = []
-        
-        # Group entries by day, period, and classroom
+
+        # Import room allocator for enhanced checking
+        from .room_allocator import RoomAllocator
+        room_allocator = RoomAllocator()
+
+        # 1. Check for double-booking conflicts
         schedule_slots = defaultdict(list)
-        
         for entry in entries:
             if entry.classroom:
                 schedule_slots[(entry.day, entry.period, entry.classroom.id)].append(entry)
-        
-        # Check for conflicts
+
         for (day, period, classroom_id), slot_entries in schedule_slots.items():
             if len(slot_entries) > 1:
                 classroom = Classroom.objects.get(id=classroom_id)
                 violations.append({
                     'type': 'Room Conflict',
+                    'subtype': 'double_booking',
                     'classroom': classroom.name,
                     'day': day,
                     'period': period,
                     'conflicts': len(slot_entries),
                     'severity': 'CRITICAL',
-                    'description': f"Classroom {classroom.name} double-booked at {day} P{period}",
-                    'entries': [f"{e.class_group}-{e.subject.code}" for e in slot_entries]
+                    'description': f"Classroom {classroom.name} double-booked at {day} P{period} ({len(slot_entries)} classes)",
+                    'entries': [f"{e.class_group}-{e.subject.code if e.subject else 'Unknown'}" for e in slot_entries]
                 })
-        
+
+        # 2. ENHANCED: Check for room type mismatches and same-lab violations
+        for entry in entries:
+            if entry.classroom and entry.subject:
+                # CRITICAL: Practical subjects MUST be in labs
+                if entry.subject.is_practical and not entry.classroom.is_lab:
+                    violations.append({
+                        'type': 'Room Conflict',
+                        'subtype': 'practical_not_in_lab',
+                        'classroom': entry.classroom.name,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'severity': 'CRITICAL',
+                        'description': f"VIOLATION: Practical subject {entry.subject.code} scheduled in non-lab room {entry.classroom.name}",
+                        'class_group': entry.class_group,
+                        'subject': entry.subject.code
+                    })
+
+        # 2b. ENHANCED: Check same-lab rule for practical subjects
+        self._check_practical_same_lab_violations(entries, violations)
+
+        # 3. Check for seniority-based allocation violations
+        for entry in entries:
+            if (entry.classroom and entry.classroom.is_lab and
+                entry.subject and not entry.subject.is_practical):
+                # Theory class in lab - check if junior batch
+                is_senior = room_allocator.is_senior_batch(entry.class_group)
+                if not is_senior:
+                    violations.append({
+                        'type': 'Room Conflict',
+                        'subtype': 'seniority_violation',
+                        'classroom': entry.classroom.name,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'severity': 'MEDIUM',
+                        'description': f"Junior batch {entry.class_group} assigned lab {entry.classroom.name} for theory class",
+                        'class_group': entry.class_group,
+                        'subject': entry.subject.code if entry.subject else 'Unknown'
+                    })
+
+        # 4. Check lab reservation violations (too many practicals, not enough labs for theory)
+        self._check_lab_reservation_violations(entries, violations, room_allocator)
+
+        # 5. Check room capacity violations
+        self._check_room_capacity_violations(entries, violations)
+
         return violations
+
+    def _check_lab_reservation_violations(self, entries: List[TimetableEntry],
+                                        violations: List[Dict], room_allocator):
+        """Check if lab reservation constraints are violated."""
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        total_labs = len(room_allocator.labs)
+        min_reserved_labs = min(4, max(3, total_labs - 2))
+
+        for day in days:
+            for period in range(1, 8):
+                # Count labs occupied by practicals at this time
+                practical_labs = set()
+                theory_in_labs = 0
+
+                for entry in entries:
+                    if (entry.day == day and entry.period == period and
+                        entry.classroom and entry.classroom.is_lab):
+                        if entry.subject and entry.subject.is_practical:
+                            practical_labs.add(entry.classroom.id)
+                        else:
+                            theory_in_labs += 1
+
+                occupied_labs = len(practical_labs) + theory_in_labs
+                available_labs = total_labs - occupied_labs
+
+                if available_labs < min_reserved_labs:
+                    violations.append({
+                        'type': 'Room Conflict',
+                        'subtype': 'lab_reservation_violation',
+                        'day': day,
+                        'period': period,
+                        'severity': 'HIGH',
+                        'description': f"Only {available_labs}/{min_reserved_labs} labs reserved for senior theory on {day} P{period}",
+                        'occupied_labs': occupied_labs,
+                        'total_labs': total_labs,
+                        'required_reserved': min_reserved_labs
+                    })
+
+    def _check_room_capacity_violations(self, entries: List[TimetableEntry], violations: List[Dict]):
+        """Check if room capacity can accommodate section sizes."""
+        # Assume 30 students per section as default (this could be made configurable)
+        default_section_size = 30
+
+        for entry in entries:
+            if entry.classroom:
+                # Check if room capacity is sufficient
+                if not entry.classroom.can_accommodate_section_size(default_section_size):
+                    violations.append({
+                        'type': 'Room Conflict',
+                        'subtype': 'capacity_violation',
+                        'classroom': entry.classroom.name,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'severity': 'HIGH',
+                        'description': f"Room {entry.classroom.name} (capacity {entry.classroom.capacity}) cannot accommodate section {entry.class_group} (estimated {default_section_size} students)",
+                        'class_group': entry.class_group,
+                        'subject': entry.subject.code if entry.subject else 'Unknown',
+                        'room_capacity': entry.classroom.capacity,
+                        'required_capacity': default_section_size
+                    })
     
     def _check_friday_time_limits(self, entries: List[TimetableEntry]) -> List[Dict]:
         """Check Friday time limit constraints."""
@@ -504,3 +618,42 @@ class ConstraintValidator:
                     report.append(f"   - ... and {len(constraint_result['details']) - 3} more")
 
         return report
+
+    def _check_practical_same_lab_violations(self, entries: List[TimetableEntry], violations: List[Dict]):
+        """
+        ENHANCED: Check that all 3 blocks of each practical subject use the same lab.
+        This enforces the universal same-lab rule for practical subjects.
+        """
+        from collections import defaultdict
+
+        # Group practical entries by class group and subject
+        practical_groups = defaultdict(list)
+
+        for entry in entries:
+            if (entry.subject and entry.subject.is_practical and
+                entry.classroom and entry.classroom.is_lab):
+                key = (entry.class_group, entry.subject.code)
+                practical_groups[key].append(entry)
+
+        # Check each practical group for same-lab compliance
+        for (class_group, subject_code), group_entries in practical_groups.items():
+            if len(group_entries) >= 2:  # Need at least 2 entries to check consistency
+                # Get all unique labs used by this practical
+                labs_used = set(entry.classroom.id for entry in group_entries)
+
+                if len(labs_used) > 1:
+                    # VIOLATION: Multiple labs used for same practical
+                    lab_details = []
+                    for entry in group_entries:
+                        lab_details.append(f"{entry.day} P{entry.period}: {entry.classroom.name}")
+
+                    violations.append({
+                        'type': 'Room Conflict',
+                        'subtype': 'practical_different_labs',
+                        'severity': 'CRITICAL',
+                        'description': f"VIOLATION: Practical {subject_code} uses {len(labs_used)} different labs - {', '.join(lab_details)}",
+                        'class_group': class_group,
+                        'subject': subject_code,
+                        'labs_used': len(labs_used),
+                        'details': lab_details
+                    })

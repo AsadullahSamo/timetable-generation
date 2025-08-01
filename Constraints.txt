@@ -14,5 +14,11 @@ Here are all the constraints currently implemented and working:
 ✅ Thesis Day Constraint - Wednesday is exclusively reserved for Thesis subjects for final year students
 
 
-2. Thesis Day: Should be determined by Subject "Thesis" and should be scheduled on Wednesday for all sections of that batch (having Thesis subject) and on that day "Wednesday" there must not be any other subjects
-3. There can't be more than one theory class (3 or 2) credit hours) on a given day (while also respecting "Subject Frequency" based on credit hours, for a week with exception of practical)
+
+
+✅ Enhanced Room & Lab Allocation - Practical subjects MUST be in labs with same-lab rule enforcement
+✅ Universal Lab Consistency - All 3 blocks of practical subjects use the same lab (strict enforcement)
+✅ Flexible Senior Batch Allocation - Senior batches prefer labs but can use regular rooms when needed for practicals
+
+To be implemented:
+1. There can't be more than one theory class (3 or 2) credit hours) on a given day (while also respecting "Subject Frequency" based on credit hours, for a week with exception of practical)

@@ -8,6 +8,46 @@ class Classroom(models.Model):
     capacity = models.PositiveIntegerField()
     building = models.CharField(max_length=50)
 
+    # Room classification properties
+    @property
+    def is_lab(self):
+        """Check if this classroom is a lab."""
+        return 'lab' in self.name.lower() or 'laboratory' in self.name.lower()
+
+    @property
+    def room_type(self):
+        """Get the room type for allocation purposes."""
+        if self.is_lab:
+            return 'lab'
+        return 'regular'
+
+    @property
+    def building_priority(self):
+        """Get building priority for allocation (lower = higher priority)."""
+        priority_map = {
+            'Lab Block': 1,      # Highest priority for labs
+            'Main Block': 2,     # Main building rooms
+            'Main Building': 2,  # Alternative main building name
+            'Academic Building': 3,  # Academic building rooms
+            'Admin Block': 4     # Lowest priority
+        }
+        return priority_map.get(self.building, 5)
+
+    def is_suitable_for_practical(self):
+        """Check if this room is suitable for practical classes."""
+        return self.is_lab
+
+    def is_suitable_for_theory(self):
+        """Check if this room is suitable for theory classes."""
+        return True  # All rooms can host theory classes
+
+    def can_accommodate_section_size(self, section_size):
+        """Check if room capacity can accommodate the section size."""
+        return self.capacity >= section_size
+
+    class Meta:
+        ordering = ['building', 'name']
+
 class ScheduleConfig(models.Model):
     name = models.CharField(max_length=255)
     days = models.JSONField(default=list)
