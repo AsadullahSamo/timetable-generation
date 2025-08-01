@@ -20,6 +20,8 @@ from .views import (
     OptimizationView,
     TimetableReportView,
     CrossSemesterConflictView,
+    ConstraintTestingView,
+    ConstraintResolverView,
 )
 
 # router = DefaultRouter()
@@ -64,6 +66,12 @@ urlpatterns = [
 
     # Cross-semester conflict detection
     path('cross-semester-conflicts/', CrossSemesterConflictView.as_view(), name='cross-semester-conflicts'),
+
+    # Constraint testing interface
+    path('constraint-testing/', ConstraintTestingView.as_view(), name='constraint-testing'),
+
+    # Constraint resolution
+    path('resolve-constraint/', ConstraintResolverView.as_view(), name='resolve-constraint'),
 
     # Task management
     path('task-status/<uuid:task_id>/', TaskStatusView.as_view(), name='task-status'),

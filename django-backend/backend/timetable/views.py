@@ -16,6 +16,7 @@ from django.core.paginator import Paginator
 from rest_framework import status
 from django.db import transaction
 from django.db.models import Q
+from django.db import models
 
 from .serializers import (
     SubjectSerializer,
@@ -38,6 +39,7 @@ from .tasks import (
 )
 
 from .services.cross_semester_conflict_detector import CrossSemesterConflictDetector
+from .constraint_validator import ConstraintValidator
 
 logger = logging.getLogger(__name__)
 
@@ -936,5 +938,1366 @@ class CrossSemesterConflictView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    
-    
+
+class ConstraintTestingView(APIView):
+    """
+    Comprehensive constraint testing interface for validating timetable constraints.
+    Provides detailed analysis for each constraint type.
+    """
+
+    def get(self, request):
+        """Get detailed constraint analysis for all constraints"""
+        try:
+            # Get all timetable entries
+            entries = TimetableEntry.objects.all()
+
+            if not entries.exists():
+                return Response({
+                    'success': False,
+                    'error': 'No timetable entries found. Please generate a timetable first.'
+                })
+
+            # Initialize constraint validator
+            validator = ConstraintValidator()
+
+            # Run comprehensive validation
+            validation_results = validator.validate_all_constraints(list(entries))
+
+            # Get detailed constraint analysis
+            constraint_analysis = self._get_detailed_constraint_analysis(entries)
+
+            return Response({
+                'success': True,
+                'validation_results': validation_results,
+                'constraint_analysis': constraint_analysis,
+                'total_entries': entries.count(),
+                'total_violations': validation_results['total_violations'],
+                'overall_compliance': validation_results['overall_compliance']
+            })
+
+        except Exception as e:
+            logger.error(f"Constraint testing failed: {str(e)}")
+            return Response(
+                {'error': f'Constraint testing failed: {str(e)}'},
+                status=500
+            )
+
+    def post(self, request):
+        """Get detailed analysis for a specific constraint type"""
+        try:
+            constraint_type = request.data.get('constraint_type')
+
+            if not constraint_type:
+                return Response(
+                    {'error': 'constraint_type is required'},
+                    status=400
+                )
+
+            # For cross-semester analysis, get ALL entries across all semesters
+            if constraint_type == 'cross_semester_conflicts':
+                entries = TimetableEntry.objects.all()  # All semesters
+            else:
+                # For other constraints, get current semester entries
+                entries = TimetableEntry.objects.all()
+
+            if not entries.exists():
+                return Response({
+                    'success': False,
+                    'error': 'No timetable entries found. Please generate a timetable first.'
+                })
+
+            # Get specific constraint analysis
+            analysis = self._get_specific_constraint_analysis(entries, constraint_type)
+
+            return Response({
+                'success': True,
+                'constraint_type': constraint_type,
+                'analysis': analysis,
+                'total_entries_analyzed': entries.count()
+            })
+
+        except Exception as e:
+            logger.error(f"Specific constraint testing failed: {str(e)}")
+            return Response(
+                {'error': f'Specific constraint testing failed: {str(e)}'},
+                status=500
+            )
+
+    def _get_detailed_constraint_analysis(self, entries):
+        """Get detailed analysis for all constraints"""
+        analysis = {}
+
+        # Cross-semester conflicts
+        analysis['cross_semester_conflicts'] = self._analyze_cross_semester_conflicts(entries)
+
+        # Subject frequency
+        analysis['subject_frequency'] = self._analyze_subject_frequency(entries)
+
+        # Teacher conflicts
+        analysis['teacher_conflicts'] = self._analyze_teacher_conflicts(entries)
+
+        # Room conflicts
+        analysis['room_conflicts'] = self._analyze_room_conflicts(entries)
+
+        # Practical blocks
+        analysis['practical_blocks'] = self._analyze_practical_blocks(entries)
+
+        # Friday time limits
+        analysis['friday_time_limits'] = self._analyze_friday_time_limits(entries)
+
+        # Thesis day constraint
+        analysis['thesis_day_constraint'] = self._analyze_thesis_day_constraint(entries)
+
+        # Teacher assignments
+        analysis['teacher_assignments'] = self._analyze_teacher_assignments(entries)
+
+        # Minimum daily classes
+        analysis['minimum_daily_classes'] = self._analyze_minimum_daily_classes(entries)
+
+        # Compact scheduling
+        analysis['compact_scheduling'] = self._analyze_compact_scheduling(entries)
+
+        # Friday-aware scheduling
+        analysis['friday_aware_scheduling'] = self._analyze_friday_aware_scheduling(entries)
+
+        # Senior batch lab assignment
+        analysis['senior_batch_lab_assignment'] = self._analyze_senior_batch_lab_assignment(entries)
+
+        return analysis
+
+    def _get_specific_constraint_analysis(self, entries, constraint_type):
+        """Get detailed analysis for a specific constraint"""
+        analysis_methods = {
+            'cross_semester_conflicts': self._analyze_cross_semester_conflicts,
+            'subject_frequency': self._analyze_subject_frequency,
+            'teacher_conflicts': self._analyze_teacher_conflicts,
+            'room_conflicts': self._analyze_room_conflicts,
+            'practical_blocks': self._analyze_practical_blocks,
+            'friday_time_limits': self._analyze_friday_time_limits,
+            'thesis_day_constraint': self._analyze_thesis_day_constraint,
+            'teacher_assignments': self._analyze_teacher_assignments,
+            'minimum_daily_classes': self._analyze_minimum_daily_classes,
+            'compact_scheduling': self._analyze_compact_scheduling,
+            'friday_aware_scheduling': self._analyze_friday_aware_scheduling,
+            'senior_batch_lab_assignment': self._analyze_senior_batch_lab_assignment,
+        }
+
+        if constraint_type in analysis_methods:
+            return analysis_methods[constraint_type](entries)
+        else:
+            return {'error': f'Unknown constraint type: {constraint_type}'}
+
+    def _analyze_cross_semester_conflicts(self, entries):
+        """Analyze cross-semester conflicts in detail with teacher-based grouping"""
+        try:
+            config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
+            if not config:
+                return {'error': 'No schedule configuration found'}
+
+            conflict_detector = CrossSemesterConflictDetector(config)
+            conflicts = []
+            teacher_schedules = {}
+
+            # Group all entries by teacher to get complete picture
+            for entry in entries:
+                if entry.teacher:
+                    teacher_name = entry.teacher.name
+                    if teacher_name not in teacher_schedules:
+                        teacher_schedules[teacher_name] = {
+                            'teacher_id': entry.teacher.id,
+                            'teacher_name': teacher_name,
+                            'subjects': set(),
+                            'sections': set(),
+                            'schedule': [],
+                            'rooms': set(),
+                            'semesters': set(),
+                            'conflicts': []
+                        }
+
+                    teacher_data = teacher_schedules[teacher_name]
+                    teacher_data['subjects'].add(entry.subject.name if entry.subject else 'N/A')
+                    teacher_data['sections'].add(entry.class_group)
+                    teacher_data['rooms'].add(entry.classroom.name if entry.classroom else 'N/A')
+                    teacher_data['semesters'].add(entry.semester)
+
+                    # Add schedule entry
+                    schedule_entry = {
+                        'day': entry.day,
+                        'period': entry.period,
+                        'time': f"{entry.start_time} - {entry.end_time}",
+                        'subject': entry.subject.name if entry.subject else 'N/A',
+                        'section': entry.class_group,
+                        'room': entry.classroom.name if entry.classroom else 'N/A',
+                        'semester': entry.semester,
+                        'academic_year': entry.academic_year
+                    }
+                    teacher_data['schedule'].append(schedule_entry)
+
+                    # Check for conflicts
+                    has_conflict, conflict_descriptions = conflict_detector.check_teacher_conflict(
+                        entry.teacher.id, entry.day, entry.period
+                    )
+
+                    if has_conflict:
+                        conflict_info = {
+                            'entry_id': entry.id,
+                            'teacher': teacher_name,
+                            'subject': entry.subject.name if entry.subject else 'N/A',
+                            'class_group': entry.class_group,
+                            'day': entry.day,
+                            'period': entry.period,
+                            'time': f"{entry.start_time} - {entry.end_time}",
+                            'room': entry.classroom.name if entry.classroom else 'N/A',
+                            'conflicts': conflict_descriptions
+                        }
+                        conflicts.append(conflict_info)
+                        teacher_data['conflicts'].append(conflict_info)
+
+            # Convert sets to lists for JSON serialization
+            for teacher_name, data in teacher_schedules.items():
+                data['subjects'] = list(data['subjects'])
+                data['sections'] = list(data['sections'])
+                data['rooms'] = list(data['rooms'])
+                data['semesters'] = list(data['semesters'])
+
+                # Sort schedule by day and period
+                day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+                data['schedule'].sort(key=lambda x: (day_order.index(x['day']) if x['day'] in day_order else 999, x['period']))
+
+            return {
+                'total_conflicts': len(conflicts),
+                'conflicts': conflicts,
+                'teacher_schedules': teacher_schedules,
+                'total_teachers': len(teacher_schedules),
+                'status': 'PASS' if len(conflicts) == 0 else 'FAIL'
+            }
+
+        except Exception as e:
+            return {'error': f'Cross-semester analysis failed: {str(e)}'}
+
+    def _analyze_subject_frequency(self, entries):
+        """Analyze subject frequency constraints"""
+        from collections import defaultdict
+
+        # Group by class_group and subject
+        class_subject_counts = defaultdict(lambda: defaultdict(int))
+        subject_details = defaultdict(list)
+
+        for entry in entries:
+            if entry.subject:
+                class_group = entry.class_group
+                subject_code = entry.subject.code
+                class_subject_counts[class_group][subject_code] += 1
+
+                subject_details[f"{class_group}-{subject_code}"].append({
+                    'day': entry.day,
+                    'period': entry.period,
+                    'time': f"{entry.start_time} - {entry.end_time}",
+                    'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                    'classroom': entry.classroom.name if entry.classroom else 'N/A'
+                })
+
+        violations = []
+        compliant_subjects = []
+
+        for class_group, subject_counts in class_subject_counts.items():
+            for subject_code, actual_count in subject_counts.items():
+                try:
+                    subject = Subject.objects.get(code=subject_code)
+                    expected_count = subject.credits
+
+                    subject_info = {
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'subject_name': subject.name,
+                        'expected_count': expected_count,
+                        'actual_count': actual_count,
+                        'is_practical': subject.is_practical,
+                        'schedule_details': subject_details[f"{class_group}-{subject_code}"]
+                    }
+
+                    if actual_count != expected_count:
+                        subject_info['violation_type'] = 'frequency_mismatch'
+                        violations.append(subject_info)
+                    else:
+                        compliant_subjects.append(subject_info)
+
+                except Subject.DoesNotExist:
+                    violations.append({
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'violation_type': 'subject_not_found',
+                        'schedule_details': subject_details[f"{class_group}-{subject_code}"]
+                    })
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_subjects': compliant_subjects,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_teacher_conflicts(self, entries):
+        """Analyze teacher conflicts (same teacher in multiple places at same time)"""
+        from collections import defaultdict
+
+        # Group by day and period
+        time_slot_teachers = defaultdict(list)
+
+        for entry in entries:
+            if entry.teacher:
+                key = f"{entry.day}-{entry.period}"
+                time_slot_teachers[key].append({
+                    'teacher_id': entry.teacher.id,
+                    'teacher_name': entry.teacher.name,
+                    'subject': entry.subject.name if entry.subject else 'N/A',
+                    'class_group': entry.class_group,
+                    'classroom': entry.classroom.name if entry.classroom else 'N/A',
+                    'time': f"{entry.start_time} - {entry.end_time}"
+                })
+
+        conflicts = []
+
+        for time_slot, teacher_entries in time_slot_teachers.items():
+            # Group by teacher
+            teacher_groups = defaultdict(list)
+            for entry in teacher_entries:
+                teacher_groups[entry['teacher_id']].append(entry)
+
+            # Check for conflicts (same teacher in multiple places)
+            for teacher_id, teacher_entries_list in teacher_groups.items():
+                if len(teacher_entries_list) > 1:
+                    day, period = time_slot.split('-')
+                    conflicts.append({
+                        'day': day,
+                        'period': int(period),
+                        'teacher_id': teacher_id,
+                        'teacher_name': teacher_entries_list[0]['teacher_name'],
+                        'conflicting_assignments': teacher_entries_list,
+                        'conflict_count': len(teacher_entries_list)
+                    })
+
+        return {
+            'total_conflicts': len(conflicts),
+            'conflicts': conflicts,
+            'status': 'PASS' if len(conflicts) == 0 else 'FAIL'
+        }
+
+    def _analyze_room_conflicts(self, entries):
+        """Analyze room conflicts (same room assigned to multiple classes at same time)"""
+        from collections import defaultdict
+
+        conflicts = []
+
+        # Group by day-period to find room conflicts
+        day_period_rooms = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            if entry.classroom:
+                day_period_key = f"{entry.day}-{entry.period}"
+                room_id = entry.classroom.id
+                day_period_rooms[day_period_key][room_id].append({
+                    'entry_id': entry.id,
+                    'classroom_name': entry.classroom.name,
+                    'subject': entry.subject.name if entry.subject else 'N/A',
+                    'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                    'class_group': entry.class_group,
+                    'time': f"{entry.start_time} - {entry.end_time}"
+                })
+
+        print(f"Analyzing room conflicts for {len(entries)} entries")
+
+        for day_period, rooms in day_period_rooms.items():
+            for room_id, room_entries in rooms.items():
+                if len(room_entries) > 1:
+                    day, period = day_period.split('-')
+                    conflict_info = {
+                        'day': day,
+                        'period': int(period),
+                        'classroom_id': room_id,
+                        'classroom_name': room_entries[0]['classroom_name'],
+                        'conflicting_assignments': room_entries,
+                        'conflict_count': len(room_entries)
+                    }
+                    conflicts.append(conflict_info)
+                    print(f"Found room conflict: {room_entries[0]['classroom_name']} on {day} P{period} - {len(room_entries)} assignments")
+
+        print(f"Total room conflicts found: {len(conflicts)}")
+
+        return {
+            'total_conflicts': len(conflicts),
+            'conflicts': conflicts,
+            'status': 'PASS' if len(conflicts) == 0 else 'FAIL'
+        }
+
+    def _analyze_practical_blocks(self, entries):
+        """Analyze practical block constraints (3-hour consecutive blocks)"""
+        from collections import defaultdict
+
+        # Group practical entries by class_group and subject
+        practical_groups = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            if entry.is_practical and entry.subject:
+                practical_groups[entry.class_group][entry.subject.code].append({
+                    'day': entry.day,
+                    'period': entry.period,
+                    'subject': entry.subject.name,
+                    'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                    'classroom': entry.classroom.name if entry.classroom else 'N/A',
+                    'time': f"{entry.start_time} - {entry.end_time}"
+                })
+
+        violations = []
+        compliant_blocks = []
+
+        for class_group, subjects in practical_groups.items():
+            for subject_code, practical_entries in subjects.items():
+                # Group by day to check for consecutive blocks
+                day_groups = defaultdict(list)
+                for entry in practical_entries:
+                    day_groups[entry['day']].append(entry)
+
+                for day, day_entries in day_groups.items():
+                    # Sort by period
+                    day_entries.sort(key=lambda x: x['period'])
+
+                    # Check if periods are consecutive and total 3 hours
+                    if len(day_entries) >= 3:
+                        periods = [entry['period'] for entry in day_entries]
+                        is_consecutive = all(periods[i] + 1 == periods[i + 1] for i in range(len(periods) - 1))
+
+                        block_info = {
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_name': day_entries[0]['subject'],
+                            'day': day,
+                            'periods': periods,
+                            'entries': day_entries,
+                            'is_consecutive': is_consecutive,
+                            'block_length': len(day_entries)
+                        }
+
+                        if is_consecutive and len(day_entries) == 3:
+                            compliant_blocks.append(block_info)
+                        else:
+                            block_info['violation_type'] = 'invalid_block_structure'
+                            violations.append(block_info)
+                    else:
+                        violations.append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_name': day_entries[0]['subject'],
+                            'day': day,
+                            'periods': [entry['period'] for entry in day_entries],
+                            'entries': day_entries,
+                            'violation_type': 'insufficient_block_length',
+                            'block_length': len(day_entries)
+                        })
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_blocks': compliant_blocks,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_friday_time_limits(self, entries):
+        """Analyze Friday time limit constraints"""
+        friday_entries = [entry for entry in entries if entry.day.upper() == 'FRIDAY']
+        violations = []
+        compliant_entries = []
+
+        for entry in friday_entries:
+            has_practical = any(e.is_practical for e in friday_entries if e.class_group == entry.class_group)
+
+            # Friday limits: 12:00/1:00 PM with practical, 11:00 AM without practical
+            if has_practical:
+                # Allow until period 4 (1:00 PM) if there are practicals
+                max_period = 4
+                limit_description = "1:00 PM (with practicals)"
+            else:
+                # Allow until period 3 (11:00 AM) if no practicals
+                max_period = 3
+                limit_description = "11:00 AM (no practicals)"
+
+            entry_info = {
+                'class_group': entry.class_group,
+                'subject': entry.subject.name if entry.subject else 'N/A',
+                'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                'period': entry.period,
+                'time': f"{entry.start_time} - {entry.end_time}",
+                'is_practical': entry.is_practical,
+                'has_practical_in_class': has_practical,
+                'limit_description': limit_description,
+                'max_allowed_period': max_period
+            }
+
+            if entry.period > max_period:
+                entry_info['violation_type'] = 'exceeds_friday_limit'
+                violations.append(entry_info)
+            else:
+                compliant_entries.append(entry_info)
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_entries': compliant_entries,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_thesis_day_constraint(self, entries):
+        """Analyze thesis day constraint (Wednesday exclusive for thesis)"""
+        wednesday_entries = [entry for entry in entries if entry.day.upper() == 'WEDNESDAY']
+        violations = []
+        compliant_entries = []
+
+        # Group by class_group
+        from collections import defaultdict
+        class_groups = defaultdict(list)
+
+        for entry in wednesday_entries:
+            class_groups[entry.class_group].append(entry)
+
+        for class_group, group_entries in class_groups.items():
+            has_thesis = any(
+                entry.subject and ('thesis' in entry.subject.name.lower() or 'thesis' in entry.subject.code.lower())
+                for entry in group_entries
+            )
+
+            if has_thesis:
+                # If class has thesis, Wednesday should be exclusive for thesis
+                for entry in group_entries:
+                    is_thesis_subject = (
+                        entry.subject and
+                        ('thesis' in entry.subject.name.lower() or 'thesis' in entry.subject.code.lower())
+                    )
+
+                    entry_info = {
+                        'class_group': class_group,
+                        'subject': entry.subject.name if entry.subject else 'N/A',
+                        'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                        'period': entry.period,
+                        'time': f"{entry.start_time} - {entry.end_time}",
+                        'is_thesis_subject': is_thesis_subject,
+                        'class_has_thesis': has_thesis
+                    }
+
+                    if not is_thesis_subject:
+                        entry_info['violation_type'] = 'non_thesis_on_thesis_day'
+                        violations.append(entry_info)
+                    else:
+                        compliant_entries.append(entry_info)
+            else:
+                # If no thesis, any subject is allowed on Wednesday
+                for entry in group_entries:
+                    compliant_entries.append({
+                        'class_group': class_group,
+                        'subject': entry.subject.name if entry.subject else 'N/A',
+                        'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                        'period': entry.period,
+                        'time': f"{entry.start_time} - {entry.end_time}",
+                        'is_thesis_subject': False,
+                        'class_has_thesis': False
+                    })
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_entries': compliant_entries,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_teacher_assignments(self, entries):
+        """Analyze teacher assignment constraints"""
+        violations = []
+        compliant_assignments = []
+
+        for entry in entries:
+            if entry.subject and entry.teacher:
+                # Check if teacher is assigned to teach this subject for this class group
+                try:
+                    assignment = TeacherSubjectAssignment.objects.get(
+                        teacher=entry.teacher,
+                        subject=entry.subject,
+                        sections__contains=[entry.class_group.split('-')[1]] if '-' in entry.class_group else []
+                    )
+
+                    compliant_assignments.append({
+                        'teacher': entry.teacher.name,
+                        'subject': entry.subject.name,
+                        'class_group': entry.class_group,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'time': f"{entry.start_time} - {entry.end_time}",
+                        'assignment_id': assignment.id
+                    })
+
+                except TeacherSubjectAssignment.DoesNotExist:
+                    violations.append({
+                        'teacher': entry.teacher.name,
+                        'subject': entry.subject.name,
+                        'class_group': entry.class_group,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'time': f"{entry.start_time} - {entry.end_time}",
+                        'violation_type': 'teacher_not_assigned_to_subject'
+                    })
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_assignments': compliant_assignments,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_minimum_daily_classes(self, entries):
+        """Analyze minimum daily classes constraint"""
+        from collections import defaultdict
+
+        # Group by class_group and day
+        daily_classes = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            daily_classes[entry.class_group][entry.day].append({
+                'subject': entry.subject.name if entry.subject else 'N/A',
+                'teacher': entry.teacher.name if entry.teacher else 'N/A',
+                'period': entry.period,
+                'time': f"{entry.start_time} - {entry.end_time}",
+                'is_practical': entry.is_practical
+            })
+
+        violations = []
+        compliant_days = []
+
+        for class_group, days in daily_classes.items():
+            for day, day_entries in days.items():
+                practical_count = sum(1 for entry in day_entries if entry['is_practical'])
+                theory_count = len(day_entries) - practical_count
+
+                day_info = {
+                    'class_group': class_group,
+                    'day': day,
+                    'total_classes': len(day_entries),
+                    'practical_count': practical_count,
+                    'theory_count': theory_count,
+                    'entries': day_entries
+                }
+
+                # Check violations: only practical or only one class
+                if len(day_entries) == 1 or (practical_count > 0 and theory_count == 0):
+                    if len(day_entries) == 1:
+                        day_info['violation_type'] = 'only_one_class'
+                    else:
+                        day_info['violation_type'] = 'only_practical_classes'
+                    violations.append(day_info)
+                else:
+                    compliant_days.append(day_info)
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_days': compliant_days,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_compact_scheduling(self, entries):
+        """Analyze compact scheduling constraint"""
+        from collections import defaultdict
+
+        # Group by class_group and day
+        daily_schedules = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            daily_schedules[entry.class_group][entry.day].append(entry.period)
+
+        violations = []
+        compliant_schedules = []
+
+        for class_group, days in daily_schedules.items():
+            for day, periods in days.items():
+                periods.sort()
+
+                # Check for gaps in schedule
+                gaps = []
+                if len(periods) > 1:
+                    for i in range(len(periods) - 1):
+                        gap_size = periods[i + 1] - periods[i] - 1
+                        if gap_size > 0:
+                            gaps.append({
+                                'start_period': periods[i],
+                                'end_period': periods[i + 1],
+                                'gap_size': gap_size
+                            })
+
+                schedule_info = {
+                    'class_group': class_group,
+                    'day': day,
+                    'periods': periods,
+                    'start_period': min(periods) if periods else None,
+                    'end_period': max(periods) if periods else None,
+                    'total_periods': len(periods),
+                    'gaps': gaps,
+                    'has_gaps': len(gaps) > 0
+                }
+
+                # Check if schedule is compact (no gaps and reasonable end time)
+                if len(gaps) > 0 or (periods and max(periods) > 5):
+                    if len(gaps) > 0:
+                        schedule_info['violation_type'] = 'schedule_gaps'
+                    else:
+                        schedule_info['violation_type'] = 'late_end_time'
+                    violations.append(schedule_info)
+                else:
+                    compliant_schedules.append(schedule_info)
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_schedules': compliant_schedules,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_friday_aware_scheduling(self, entries):
+        """Analyze Friday-aware scheduling constraint"""
+        from collections import defaultdict
+
+        # Group by class_group
+        class_schedules = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            class_schedules[entry.class_group][entry.day].append(entry.period)
+
+        violations = []
+        compliant_schedules = []
+
+        for class_group, days in class_schedules.items():
+            friday_periods = days.get('FRIDAY', [])
+            has_friday_practical = any(
+                entry.is_practical for entry in entries
+                if entry.class_group == class_group and entry.day.upper() == 'FRIDAY'
+            )
+
+            # Check Monday-Thursday scheduling considering Friday limits
+            for day in ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY']:
+                day_periods = days.get(day, [])
+
+                if day_periods:
+                    max_period = max(day_periods)
+
+                    # If Friday has constraints, Monday-Thursday should be more compact
+                    if friday_periods:
+                        friday_max = max(friday_periods)
+                        expected_friday_limit = 4 if has_friday_practical else 3
+
+                        schedule_info = {
+                            'class_group': class_group,
+                            'day': day,
+                            'periods': day_periods,
+                            'max_period': max_period,
+                            'friday_max_period': friday_max,
+                            'friday_limit': expected_friday_limit,
+                            'has_friday_practical': has_friday_practical
+                        }
+
+                        # Check if weekday scheduling is Friday-aware
+                        if max_period > 5:  # Too late on weekdays when Friday is constrained
+                            schedule_info['violation_type'] = 'not_friday_aware'
+                            violations.append(schedule_info)
+                        else:
+                            compliant_schedules.append(schedule_info)
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_schedules': compliant_schedules,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+    def _analyze_senior_batch_lab_assignment(self, entries):
+        """Analyze senior batch lab assignment constraint"""
+        from collections import defaultdict
+
+        violations = []
+        compliant_assignments = []
+
+        # Group entries by batch (extract batch from class_group)
+        batch_assignments = defaultdict(list)
+
+        for entry in entries:
+            if entry.classroom and entry.class_group:
+                # Extract batch from class_group (e.g., "21SW-A" -> "21SW")
+                batch_name = entry.class_group.split('-')[0] if '-' in entry.class_group else entry.class_group
+                batch_assignments[batch_name].append(entry)
+
+        # Determine seniority based on batch year (lower number = senior)
+        # e.g., 21SW is senior to 22SW, 23SW, 24SW
+        for batch_name, batch_entries in batch_assignments.items():
+            try:
+                # Extract year from batch name (e.g., "21SW" -> 21)
+                batch_year = int(batch_name[:2])
+
+                # Determine if this is a senior batch (lower year numbers are senior)
+                # 21SW, 22SW = Senior batches (ALL classes in labs)
+                # 23SW, 24SW = Junior batches (only practicals in labs)
+                is_senior_batch = batch_year <= 22
+
+                for entry in batch_entries:
+                    classroom_name = entry.classroom.name.lower()
+                    is_lab_room = 'lab' in classroom_name or 'laboratory' in classroom_name
+
+                    assignment_info = {
+                        'batch': batch_name,
+                        'class_group': entry.class_group,
+                        'subject': entry.subject.name if entry.subject else 'N/A',
+                        'classroom': entry.classroom.name,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'time': f"{entry.start_time} - {entry.end_time}",
+                        'is_senior_batch': is_senior_batch,
+                        'is_lab_room': is_lab_room,
+                        'is_practical': entry.is_practical
+                    }
+
+                    # Check constraint: Senior batches MUST be in labs (ALL classes)
+                    if is_senior_batch:
+                        if not is_lab_room:
+                            # VIOLATION: Senior batch not in lab
+                            assignment_info['violation_type'] = 'senior_batch_not_in_lab'
+                            assignment_info['expected'] = 'Lab room (senior batch privilege)'
+                            assignment_info['actual'] = f'Regular classroom ({entry.classroom.name})'
+                            violations.append(assignment_info)
+                        else:
+                            # COMPLIANT: Senior batch in lab
+                            compliant_assignments.append(assignment_info)
+                    else:
+                        # Junior batches: practicals in labs, theory in regular rooms
+                        if entry.is_practical:
+                            if is_lab_room:
+                                # COMPLIANT: Junior practical in lab
+                                compliant_assignments.append(assignment_info)
+                            else:
+                                # VIOLATION: Junior practical not in lab
+                                assignment_info['violation_type'] = 'junior_practical_not_in_lab'
+                                assignment_info['expected'] = 'Lab room for practical'
+                                assignment_info['actual'] = f'Regular classroom ({entry.classroom.name})'
+                                violations.append(assignment_info)
+                        else:
+                            # Junior theory can be in regular rooms (preferred) or labs if needed
+                            compliant_assignments.append(assignment_info)
+
+            except (ValueError, IndexError):
+                # Skip batches with invalid naming format
+                continue
+
+        return {
+            'total_violations': len(violations),
+            'violations': violations,
+            'compliant_assignments': compliant_assignments,
+            'status': 'PASS' if len(violations) == 0 else 'FAIL'
+        }
+
+
+class ConstraintResolverView(APIView):
+    """
+    Intelligent constraint resolution for specific constraint types.
+    Attempts to fix violations without creating new ones.
+    """
+
+    def post(self, request):
+        """Attempt to resolve a specific constraint type"""
+        try:
+            constraint_type = request.data.get('constraint_type')
+            max_attempts = request.data.get('max_attempts', 5)
+
+            if not constraint_type:
+                return Response(
+                    {'error': 'constraint_type is required'},
+                    status=400
+                )
+
+            # Get current timetable entries
+            entries = TimetableEntry.objects.all()
+
+            if not entries.exists():
+                return Response({
+                    'success': False,
+                    'error': 'No timetable entries found. Please generate a timetable first.'
+                })
+
+            # Initialize constraint validator
+            validator = ConstraintValidator()
+
+            # Get initial state
+            initial_results = validator.validate_all_constraints(list(entries))
+
+            # Map constraint types to validator constraint names
+            constraint_name_mapping = {
+                'subject_frequency': 'Subject Frequency',
+                'practical_blocks': 'Practical Blocks',
+                'teacher_conflicts': 'Teacher Conflicts',
+                'room_conflicts': 'Room Conflicts',
+                'friday_time_limits': 'Friday Time Limits',
+                'minimum_daily_classes': 'Minimum Daily Classes',
+                'thesis_day_constraint': 'Thesis Day Constraint',
+                'compact_scheduling': 'Compact Scheduling',
+                'cross_semester_conflicts': 'Cross Semester Conflicts',
+                'teacher_assignments': 'Teacher Assignments',
+                'friday_aware_scheduling': 'Friday Aware Scheduling',
+                'senior_batch_lab_assignment': 'Senior Batch Lab Assignment'
+            }
+
+            constraint_name = constraint_name_mapping.get(constraint_type, constraint_type.replace('_', ' ').title())
+            initial_violations = initial_results['constraint_results'].get(constraint_name, {}).get('violations', 0)
+
+            print(f"Constraint resolution for {constraint_type} ({constraint_name}): {initial_violations} initial violations")
+
+            if initial_violations == 0:
+                return Response({
+                    'success': True,
+                    'message': f'{constraint_type} constraint is already satisfied',
+                    'attempts_made': 0,
+                    'violations_before': 0,
+                    'violations_after': 0,
+                    'other_constraints_affected': 0
+                })
+
+            # Attempt to resolve the specific constraint
+            resolution_result = self._resolve_specific_constraint(
+                constraint_type, entries, validator, max_attempts
+            )
+
+            return Response({
+                'success': resolution_result['success'],
+                'message': resolution_result['message'],
+                'attempts_made': resolution_result['attempts_made'],
+                'violations_before': initial_violations,
+                'violations_after': resolution_result['violations_after'],
+                'other_constraints_affected': resolution_result['other_constraints_affected'],
+                'resolution_details': resolution_result['details']
+            })
+
+        except Exception as e:
+            logger.error(f"Constraint resolution failed: {str(e)}")
+            return Response(
+                {'error': f'Constraint resolution failed: {str(e)}'},
+                status=500
+            )
+
+    def _resolve_specific_constraint(self, constraint_type, entries, validator, max_attempts):
+        """Resolve a specific constraint type intelligently"""
+        attempts_made = 0
+        violations_after = 0
+        other_constraints_affected = 0
+        details = []
+
+        try:
+            # Get initial state of all constraints
+            initial_state = validator.validate_all_constraints(list(entries))
+
+            # Use the same constraint name mapping
+            constraint_name_mapping = {
+                'subject_frequency': 'Subject Frequency',
+                'practical_blocks': 'Practical Blocks',
+                'teacher_conflicts': 'Teacher Conflicts',
+                'room_conflicts': 'Room Conflicts',
+                'friday_time_limits': 'Friday Time Limits',
+                'minimum_daily_classes': 'Minimum Daily Classes',
+                'thesis_day_constraint': 'Thesis Day Constraint',
+                'compact_scheduling': 'Compact Scheduling',
+                'cross_semester_conflicts': 'Cross Semester Conflicts',
+                'teacher_assignments': 'Teacher Assignments',
+                'friday_aware_scheduling': 'Friday Aware Scheduling',
+                'senior_batch_lab_assignment': 'Senior Batch Lab Assignment'
+            }
+
+            constraint_name = constraint_name_mapping.get(constraint_type, constraint_type.replace('_', ' ').title())
+            initial_target_violations = initial_state['constraint_results'].get(constraint_name, {}).get('violations', 0)
+
+            initial_other_violations = sum(
+                result['violations'] for name, result in initial_state['constraint_results'].items()
+                if name != constraint_name
+            )
+
+            for attempt in range(max_attempts):
+                attempts_made += 1
+
+                # Apply constraint-specific resolution strategy
+                resolution_applied = self._apply_constraint_resolution(constraint_type, entries)
+
+                if not resolution_applied:
+                    details.append(f"Attempt {attempt + 1}: No resolution strategy available")
+                    break
+
+                # Validate after resolution attempt
+                current_state = validator.validate_all_constraints(list(entries))
+                current_violations = current_state['constraint_results'].get(constraint_name, {}).get('violations', 0)
+
+                current_other_violations = sum(
+                    result['violations'] for name, result in current_state['constraint_results'].items()
+                    if name != constraint_name
+                )
+
+                violations_after = current_violations
+                other_constraints_affected = current_other_violations - initial_other_violations
+
+                details.append(f"Attempt {attempt + 1}: {resolution_applied['action']} - "
+                             f"Violations: {current_violations}, Other affected: {other_constraints_affected}")
+
+                # Check if constraint is resolved without breaking others
+                if current_violations == 0:
+                    if other_constraints_affected <= 0:  # No new violations in other constraints
+                        return {
+                            'success': True,
+                            'message': f'{constraint_type} constraint resolved successfully',
+                            'attempts_made': attempts_made,
+                            'violations_after': violations_after,
+                            'other_constraints_affected': other_constraints_affected,
+                            'details': details
+                        }
+                    else:
+                        details.append(f"Constraint resolved but created {other_constraints_affected} new violations")
+
+                # If we created too many new violations, revert and try different approach
+                if other_constraints_affected > 2:
+                    details.append(f"Too many new violations created, trying different approach")
+                    continue
+
+            return {
+                'success': violations_after < initial_target_violations,
+                'message': f'Partial resolution achieved after {attempts_made} attempts',
+                'attempts_made': attempts_made,
+                'violations_after': violations_after,
+                'other_constraints_affected': other_constraints_affected,
+                'details': details
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Resolution failed: {str(e)}',
+                'attempts_made': attempts_made,
+                'violations_after': violations_after,
+                'other_constraints_affected': other_constraints_affected,
+                'details': details + [f"Error: {str(e)}"]
+            }
+
+    def _apply_constraint_resolution(self, constraint_type, entries):
+        """Apply specific resolution strategy based on constraint type"""
+        try:
+            if constraint_type == 'teacher_conflicts':
+                return self._resolve_teacher_conflicts(entries)
+            elif constraint_type == 'room_conflicts':
+                return self._resolve_room_conflicts(entries)
+            elif constraint_type == 'subject_frequency':
+                return self._resolve_subject_frequency(entries)
+            elif constraint_type == 'practical_blocks':
+                return self._resolve_practical_blocks(entries)
+            elif constraint_type == 'friday_time_limits':
+                return self._resolve_friday_time_limits(entries)
+            elif constraint_type == 'compact_scheduling':
+                return self._resolve_compact_scheduling(entries)
+            elif constraint_type == 'thesis_day_constraint':
+                return self._resolve_thesis_day_constraint(entries)
+            elif constraint_type == 'senior_batch_lab_assignment':
+                return self._resolve_senior_batch_lab_assignment(entries)
+            else:
+                return None
+
+        except Exception as e:
+            logger.error(f"Resolution strategy failed for {constraint_type}: {str(e)}")
+            return None
+
+    def _resolve_teacher_conflicts(self, entries):
+        """Resolve teacher conflicts by moving conflicting classes"""
+        from collections import defaultdict
+        import random
+
+        # Find teacher conflicts
+        time_slot_teachers = defaultdict(list)
+
+        for entry in entries:
+            if entry.teacher:
+                key = f"{entry.day}-{entry.period}"
+                time_slot_teachers[key].append(entry)
+
+        conflicts_resolved = 0
+
+        for time_slot, slot_entries in time_slot_teachers.items():
+            teacher_groups = defaultdict(list)
+            for entry in slot_entries:
+                teacher_groups[entry.teacher.id].append(entry)
+
+            # Find conflicts (same teacher, multiple classes)
+            for teacher_id, teacher_entries in teacher_groups.items():
+                if len(teacher_entries) > 1:
+                    # Try to move one of the conflicting entries
+                    entry_to_move = teacher_entries[1]  # Move the second entry
+
+                    # Find an available time slot for this entry
+                    moved = self._find_available_slot_and_move(entry_to_move, entries)
+                    if moved:
+                        conflicts_resolved += 1
+
+        if conflicts_resolved > 0:
+            return {'action': f'Moved {conflicts_resolved} conflicting teacher assignments'}
+        return None
+
+    def _resolve_room_conflicts(self, entries):
+        """Resolve room conflicts by reassigning rooms"""
+        from collections import defaultdict
+
+        conflicts_resolved = 0
+
+        # Group by day-period to find room conflicts
+        day_period_rooms = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            if entry.classroom:
+                day_period_key = f"{entry.day}-{entry.period}"
+                room_id = entry.classroom.id
+                day_period_rooms[day_period_key][room_id].append(entry)
+
+        # Find and resolve conflicts
+        for day_period, rooms in day_period_rooms.items():
+            for room_id, room_entries in rooms.items():
+                if len(room_entries) > 1:
+                    # Multiple entries in same room at same time - conflict!
+                    print(f"Found room conflict: {len(room_entries)} entries in room {room_entries[0].classroom.name} at {day_period}")
+
+                    # Try to reassign all but the first entry
+                    for i in range(1, len(room_entries)):
+                        entry_to_reassign = room_entries[i]
+                        day, period = day_period.split('-')
+
+                        # Find an available room for this time slot
+                        reassigned = self._find_available_room_and_reassign(entry_to_reassign, day, int(period))
+                        if reassigned:
+                            conflicts_resolved += 1
+                            print(f"Successfully reassigned {entry_to_reassign.subject} to new room")
+                        else:
+                            print(f"Failed to reassign {entry_to_reassign.subject} - no available rooms")
+
+        if conflicts_resolved > 0:
+            return {'action': f'Reassigned {conflicts_resolved} conflicting room assignments'}
+        return None
+
+    def _resolve_compact_scheduling(self, entries):
+        """Resolve compact scheduling by moving classes to reduce gaps"""
+        from collections import defaultdict
+
+        # Group by class_group and day
+        daily_schedules = defaultdict(lambda: defaultdict(list))
+
+        for entry in entries:
+            daily_schedules[entry.class_group][entry.day].append(entry)
+
+        gaps_resolved = 0
+
+        for class_group, days in daily_schedules.items():
+            for day, day_entries in days.items():
+                if len(day_entries) > 1:
+                    # Sort by period
+                    day_entries.sort(key=lambda x: x.period)
+
+                    # Find gaps
+                    for i in range(len(day_entries) - 1):
+                        gap_size = day_entries[i + 1].period - day_entries[i].period - 1
+                        if gap_size > 0:
+                            # Try to move the later entry to fill the gap
+                            moved = self._move_entry_to_fill_gap(day_entries[i + 1], day_entries[i].period + 1)
+                            if moved:
+                                gaps_resolved += 1
+
+        if gaps_resolved > 0:
+            return {'action': f'Filled {gaps_resolved} schedule gaps'}
+        return None
+
+    def _find_available_slot_and_move(self, entry, all_entries):
+        """Find an available time slot and move the entry"""
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        periods = range(1, 8)  # Assuming 7 periods max
+
+        # Get occupied slots for this teacher
+        teacher_slots = set()
+        for e in all_entries:
+            if e.teacher and e.teacher.id == entry.teacher.id and e.id != entry.id:
+                teacher_slots.add(f"{e.day}-{e.period}")
+
+        # Find available slot
+        for day in days:
+            for period in periods:
+                slot_key = f"{day}-{period}"
+                if slot_key not in teacher_slots:
+                    # Check if room is available too
+                    room_available = not any(
+                        e.classroom and e.classroom.id == entry.classroom.id and
+                        e.day == day and e.period == period and e.id != entry.id
+                        for e in all_entries
+                    )
+
+                    if room_available:
+                        # Move the entry
+                        entry.day = day
+                        entry.period = period
+                        entry.save()
+                        return True
+
+        return False
+
+    def _find_available_room_and_reassign(self, entry, day, period):
+        """Find an available room and reassign the entry"""
+        from .models import Classroom
+
+        # Get all available classrooms
+        all_rooms = Classroom.objects.all()
+
+        print(f"Looking for available room for {entry.subject} on {day} period {period}")
+        print(f"Current room: {entry.classroom.name if entry.classroom else 'None'}")
+
+        # Find rooms not occupied at this time
+        for room in all_rooms:
+            room_occupied = TimetableEntry.objects.filter(
+                classroom=room,
+                day=day,
+                period=period
+            ).exclude(id=entry.id).exists()
+
+            print(f"Checking room {room.name}: {'occupied' if room_occupied else 'available'}")
+
+            if not room_occupied:
+                old_room = entry.classroom.name if entry.classroom else 'None'
+                entry.classroom = room
+                entry.save()
+                print(f"Successfully moved {entry.subject} from {old_room} to {room.name}")
+                return True
+
+        print(f"No available rooms found for {entry.subject}")
+        return False
+
+    def _resolve_senior_batch_lab_assignment(self, entries):
+        """Resolve senior batch lab assignment by moving senior batches to labs"""
+        from .models import Classroom
+
+        violations_resolved = 0
+
+        # Get all lab rooms
+        lab_rooms = Classroom.objects.filter(
+            models.Q(name__icontains='lab') | models.Q(name__icontains='laboratory')
+        )
+
+        if not lab_rooms.exists():
+            print("No lab rooms found in the system")
+            return None
+
+        print(f"Found {lab_rooms.count()} lab rooms: {[lab.name for lab in lab_rooms]}")
+
+        # Find senior batch entries not in labs
+        senior_violations = []
+
+        for entry in entries:
+            if entry.classroom and entry.class_group:
+                # Extract batch from class_group
+                batch_name = entry.class_group.split('-')[0] if '-' in entry.class_group else entry.class_group
+
+                try:
+                    batch_year = int(batch_name[:2])
+                    is_senior_batch = batch_year <= 22  # 21SW, 22SW are senior
+
+                    if is_senior_batch:
+                        classroom_name = entry.classroom.name.lower()
+                        is_lab_room = 'lab' in classroom_name or 'laboratory' in classroom_name
+
+                        if not is_lab_room:
+                            senior_violations.append(entry)
+                            print(f"Found senior violation: {batch_name} {entry.subject} in {entry.classroom.name} on {entry.day} P{entry.period}")
+
+                except (ValueError, IndexError):
+                    continue
+
+        print(f"Found {len(senior_violations)} senior batch violations to resolve")
+
+        # Try to resolve violations by moving to labs
+        for entry in senior_violations:
+            moved_to_lab = self._move_to_available_lab(entry, lab_rooms)
+            if moved_to_lab:
+                violations_resolved += 1
+                batch_name = entry.class_group.split('-')[0]
+                print(f"Successfully moved {batch_name} ({entry.subject}) to lab room")
+            else:
+                print(f"Failed to move {entry.class_group} ({entry.subject}) - no available labs")
+
+        if violations_resolved > 0:
+            return {'action': f'Moved {violations_resolved} senior batch classes to lab rooms'}
+        else:
+            return {'action': f'Attempted to resolve {len(senior_violations)} violations but no labs were available'}
+
+    def _move_to_available_lab(self, entry, lab_rooms):
+        """Move an entry to an available lab room, with smart swapping if needed"""
+
+        # First, try to find a completely free lab
+        for lab_room in lab_rooms:
+            lab_occupied = TimetableEntry.objects.filter(
+                classroom=lab_room,
+                day=entry.day,
+                period=entry.period
+            ).exclude(id=entry.id).exists()
+
+            if not lab_occupied:
+                old_room = entry.classroom.name if entry.classroom else 'None'
+                entry.classroom = lab_room
+                entry.save()
+                print(f"Moved {entry.class_group} from {old_room} to {lab_room.name} (free lab)")
+                return True
+
+        # If no free labs, try to swap with junior batches in labs
+        for lab_room in lab_rooms:
+            lab_occupant = TimetableEntry.objects.filter(
+                classroom=lab_room,
+                day=entry.day,
+                period=entry.period
+            ).exclude(id=entry.id).first()
+
+            if lab_occupant and lab_occupant.class_group:
+                # Check if occupant is a junior batch
+                occupant_batch = lab_occupant.class_group.split('-')[0]
+                try:
+                    occupant_year = int(occupant_batch[:2])
+                    is_occupant_junior = occupant_year > 22  # 23SW, 24SW are junior
+
+                    # Only swap if occupant is junior and their subject is theory (not practical)
+                    if is_occupant_junior and not lab_occupant.is_practical:
+                        # Swap rooms: senior gets lab, junior gets regular room
+                        old_senior_room = entry.classroom
+                        old_junior_room = lab_occupant.classroom
+
+                        entry.classroom = old_junior_room  # Senior gets lab
+                        lab_occupant.classroom = old_senior_room  # Junior gets regular room
+
+                        entry.save()
+                        lab_occupant.save()
+
+                        print(f"Swapped rooms: {entry.class_group} (senior) gets {old_junior_room.name}, {lab_occupant.class_group} (junior) gets {old_senior_room.name}")
+                        return True
+
+                except (ValueError, IndexError):
+                    continue
+
+        return False
+
+    def _move_entry_to_fill_gap(self, entry, target_period):
+        """Move an entry to a specific period to fill a gap"""
+        # Check if target period is available for this teacher and room
+        conflicts = TimetableEntry.objects.filter(
+            day=entry.day,
+            period=target_period
+        ).filter(
+            models.Q(teacher=entry.teacher) | models.Q(classroom=entry.classroom)
+        ).exclude(id=entry.id)
+
+        if not conflicts.exists():
+            entry.period = target_period
+            entry.save()
+            return True
+
+        return False

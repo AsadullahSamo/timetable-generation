@@ -11,6 +11,7 @@ Here are all the constraints currently implemented and working:
 ✅ Minimum Daily Classes - No day has only practical or only one class
 ✅ Compact Scheduling - Classes wrap up quickly while respecting Friday constraints
 ✅ Friday-Aware Scheduling - Monday-Thursday scheduling considers Friday limits proactively
+✅ Thesis Day Constraint - Wednesday is exclusively reserved for Thesis subjects for final year students
 
 
 2. Thesis Day: Should be determined by Subject "Thesis" and should be scheduled on Wednesday for all sections of that batch (having Thesis subject) and on that day "Wednesday" there must not be any other subjects
