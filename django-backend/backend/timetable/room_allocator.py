@@ -332,6 +332,107 @@ class RoomAllocator:
             print(f"    💥 CRITICAL: Universal practical allocation failed - system design issue")
             return self._create_virtual_room_if_needed(class_group, subject)
 
+    def _find_existing_lab_for_practical(self, class_group: str, subject: Subject,
+                                        entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """
+        SAME-LAB CONSTRAINT: Find if this practical already has a lab assigned.
+        This ensures all 3 blocks of a practical use the SAME lab.
+        """
+        all_entries = self._get_all_relevant_entries(entries)
+
+        # Look for existing entries for this class_group and subject
+        for entry in all_entries:
+            if (entry.class_group == class_group and
+                entry.subject and entry.subject.code == subject.code and
+                entry.classroom and entry.classroom.name.startswith('Lab')):
+                print(f"    🔍 SAME-LAB: Found existing lab {entry.classroom.name} for {class_group} {subject.code}")
+                return entry.classroom
+
+        return None
+
+    def _force_lab_availability(self, lab: Classroom, day: str, start_period: int,
+                               duration: int, entries: List[TimetableEntry]) -> bool:
+        """
+        SAME-LAB CONSTRAINT: Force a lab to be available by moving conflicting classes.
+        This is critical for maintaining the same-lab rule for practicals.
+        """
+        print(f"    🔧 SAME-LAB FORCE: Ensuring {lab.name} is available for {duration} periods")
+        all_entries = self._get_all_relevant_entries(entries)
+
+        # Find all conflicts across the duration
+        conflicts_to_move = []
+        for period_offset in range(duration):
+            check_period = start_period + period_offset
+
+            period_conflicts = [
+                entry for entry in all_entries
+                if (entry.classroom and entry.classroom.id == lab.id and
+                    entry.day == day and entry.period == check_period)
+            ]
+            conflicts_to_move.extend(period_conflicts)
+
+        if not conflicts_to_move:
+            print(f"    ✅ SAME-LAB: {lab.name} is already available")
+            return True
+
+        print(f"    🔧 SAME-LAB: Moving {len(conflicts_to_move)} conflicting classes from {lab.name}")
+
+        # Try to move all conflicts
+        for conflict_entry in conflicts_to_move:
+            if not self._move_conflicting_class_for_same_lab_rule(conflict_entry, all_entries):
+                print(f"    ❌ SAME-LAB: Failed to move {conflict_entry.class_group} {conflict_entry.subject.code if conflict_entry.subject else 'Unknown'}")
+                return False
+
+        print(f"    ✅ SAME-LAB: Successfully cleared {lab.name}")
+        return True
+
+    def _move_conflicting_class_for_same_lab_rule(self, entry: TimetableEntry,
+                                                 all_entries: List[TimetableEntry]) -> bool:
+        """
+        SAME-LAB CONSTRAINT: Move a conflicting class to preserve same-lab rule.
+        Practical subjects have absolute priority for lab usage.
+        """
+        if not entry.subject:
+            return True
+
+        print(f"    🔄 SAME-LAB: Moving {entry.class_group} {entry.subject.code} from {entry.classroom.name if entry.classroom else 'Unknown'}")
+
+        # If it's a practical subject, try to move to another lab
+        if entry.subject.is_practical:
+            # Find alternative labs
+            for alt_lab in self.labs:
+                if alt_lab.id != entry.classroom.id:
+                    # Check if alternative lab is free
+                    conflicts = [
+                        e for e in all_entries
+                        if (e.classroom and e.classroom.id == alt_lab.id and
+                            e.day == entry.day and e.period == entry.period)
+                    ]
+
+                    if not conflicts:
+                        old_lab = entry.classroom.name if entry.classroom else "Unknown"
+                        entry.classroom = alt_lab
+                        print(f"    ✅ SAME-LAB: Moved practical {entry.class_group} {entry.subject.code} from {old_lab} to {alt_lab.name}")
+                        return True
+        else:
+            # Theory subject - move to regular room
+            for room in self.regular_rooms:
+                # Check if regular room is free
+                conflicts = [
+                    e for e in all_entries
+                    if (e.classroom and e.classroom.id == room.id and
+                        e.day == entry.day and e.period == entry.period)
+                ]
+
+                if not conflicts:
+                    old_room = entry.classroom.name if entry.classroom else "Unknown"
+                    entry.classroom = room
+                    print(f"    ✅ SAME-LAB: Moved theory {entry.class_group} {entry.subject.code} from {old_room} to {room.name}")
+                    return True
+
+        print(f"    ❌ SAME-LAB: Could not find alternative for {entry.class_group} {entry.subject.code}")
+        return False
+
     def _select_best_lab_for_practical(self, available_labs: List[Classroom], class_group: str) -> Optional[Classroom]:
         """Select the best lab for practical allocation based on priority rules."""
         if not available_labs:
@@ -403,9 +504,21 @@ class RoomAllocator:
                                        subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
         UNIVERSAL: Guaranteed practical allocation through intelligent conflict resolution.
+        ENHANCED: Respects same-lab constraint for practical subjects.
         This method ensures that practical subjects ALWAYS get allocated, regardless of conflicts.
         """
         print(f"    🧪 UNIVERSAL PRACTICAL: Guaranteeing allocation for {subject.code} ({class_group})")
+
+        # Phase 0: SAME-LAB CONSTRAINT - Check if this practical already has a lab assigned
+        existing_lab = self._find_existing_lab_for_practical(class_group, subject, entries)
+        if existing_lab:
+            print(f"    🔄 SAME-LAB UNIVERSAL: Must use existing lab {existing_lab.name}")
+            if self._force_lab_availability(existing_lab, day, start_period, 3, entries):
+                print(f"    ✅ SAME-LAB UNIVERSAL: Successfully maintained same-lab constraint")
+                return existing_lab
+            else:
+                print(f"    ❌ SAME-LAB UNIVERSAL: Failed to maintain same-lab constraint")
+                return None
 
         # Phase 1: Force availability by moving theory classes (enhanced version)
         forced_lab = self._force_lab_availability_intelligently(day, start_period, 3, entries, class_group)
@@ -485,8 +598,11 @@ class RoomAllocator:
 
     def _redistribute_practicals_across_labs(self, day: str, start_period: int, duration: int,
                                             entries: List[TimetableEntry], class_group: str) -> Optional[Classroom]:
-        """UNIVERSAL: Redistribute existing practicals to create space."""
-        print(f"    🔄 REDISTRIBUTION: Analyzing practical redistribution opportunities")
+        """
+        UNIVERSAL: Redistribute existing practicals to create space.
+        ENHANCED: Maintains same-lab constraint by moving ALL blocks of a practical together.
+        """
+        print(f"    🔄 REDISTRIBUTION: Analyzing practical redistribution with same-lab constraint")
 
         # Find labs with existing practicals that could be moved to other labs
         all_entries = self._get_all_relevant_entries(entries)
@@ -499,19 +615,95 @@ class RoomAllocator:
                     entry.day == day and entry.subject and entry.subject.is_practical)
             ]
 
-            for practical_entry in existing_practicals:
-                # Try to move this practical to another lab
-                alternative_labs = [l for l in self.labs if l.id != lab.id]
-                for alt_lab in alternative_labs:
-                    if self._is_lab_available_for_duration(alt_lab, practical_entry.day, practical_entry.period, 3, all_entries):
-                        # Move the practical to the alternative lab
-                        old_lab_name = practical_entry.classroom.name
-                        practical_entry.classroom = alt_lab
-                        print(f"    🔄 REDISTRIBUTED: {practical_entry.class_group} {practical_entry.subject.code} from {old_lab_name} to {alt_lab.name}")
+            # Group practicals by class_group and subject to maintain same-lab constraint
+            practical_groups = {}
+            for entry in existing_practicals:
+                key = (entry.class_group, entry.subject.code)
+                if key not in practical_groups:
+                    practical_groups[key] = []
+                practical_groups[key].append(entry)
+
+            # Try to move entire practical groups (all blocks together)
+            for (group_class, subject_code), group_entries in practical_groups.items():
+                if self._can_move_entire_practical_group(group_entries, all_entries):
+                    moved_lab = self._move_entire_practical_group(group_entries, all_entries)
+                    if moved_lab:
+                        print(f"    🔄 SAME-LAB REDISTRIBUTION: Moved entire {group_class} {subject_code} to {moved_lab.name}")
 
                         # Check if the original lab is now available
                         if self._is_lab_available_for_duration(lab, day, start_period, duration, all_entries):
                             return lab
+
+        return None
+
+    def _can_move_entire_practical_group(self, group_entries: List[TimetableEntry],
+                                        all_entries: List[TimetableEntry]) -> bool:
+        """SAME-LAB: Check if an entire practical group can be moved while maintaining same-lab constraint."""
+        if not group_entries:
+            return False
+
+        # Find a lab that can accommodate ALL blocks of this practical
+        current_lab_id = group_entries[0].classroom.id if group_entries[0].classroom else None
+
+        for lab in self.labs:
+            if lab.id == current_lab_id:
+                continue  # Skip current lab
+
+            # Check if this lab can accommodate all blocks
+            can_accommodate_all = True
+            for entry in group_entries:
+                # Check if this lab is free at this time
+                conflicts = [
+                    e for e in all_entries
+                    if (e.classroom and e.classroom.id == lab.id and
+                        e.day == entry.day and e.period == entry.period and
+                        e != entry)  # Don't count the entry itself
+                ]
+
+                if conflicts:
+                    can_accommodate_all = False
+                    break
+
+            if can_accommodate_all:
+                return True
+
+        return False
+
+    def _move_entire_practical_group(self, group_entries: List[TimetableEntry],
+                                    all_entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """SAME-LAB: Move an entire practical group to a new lab while maintaining same-lab constraint."""
+        if not group_entries:
+            return None
+
+        current_lab_id = group_entries[0].classroom.id if group_entries[0].classroom else None
+
+        # Find a lab that can accommodate ALL blocks
+        for lab in self.labs:
+            if lab.id == current_lab_id:
+                continue  # Skip current lab
+
+            # Check if this lab can accommodate all blocks
+            can_accommodate_all = True
+            for entry in group_entries:
+                conflicts = [
+                    e for e in all_entries
+                    if (e.classroom and e.classroom.id == lab.id and
+                        e.day == entry.day and e.period == entry.period and
+                        e != entry)
+                ]
+
+                if conflicts:
+                    can_accommodate_all = False
+                    break
+
+            if can_accommodate_all:
+                # Move ALL blocks to this lab
+                old_lab_name = group_entries[0].classroom.name if group_entries[0].classroom else "Unknown"
+                for entry in group_entries:
+                    entry.classroom = lab
+
+                print(f"    ✅ SAME-LAB: Moved all {len(group_entries)} blocks from {old_lab_name} to {lab.name}")
+                return lab
 
         return None
 
