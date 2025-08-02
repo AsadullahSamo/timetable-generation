@@ -1343,6 +1343,160 @@ class ConstraintTestingView(APIView):
             'status': 'PASS' if len(conflicts) == 0 else 'FAIL'
         }
 
+    def _analyze_practical_in_labs_only(self, entries):
+        """Analyze if practical subjects are only in labs"""
+        violations = []
+
+        for entry in entries:
+            if (entry.subject and entry.subject.is_practical and
+                entry.classroom and not entry.classroom.is_lab):
+                violations.append({
+                    'class_group': entry.class_group,
+                    'subject': entry.subject.code,
+                    'classroom': entry.classroom.name,
+                    'day': entry.day,
+                    'period': entry.period,
+                    'description': f'Practical {entry.subject.code} in non-lab room {entry.classroom.name}'
+                })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} practical subjects not in labs'
+        }
+
+    def _analyze_theory_room_consistency(self, entries):
+        """Analyze theory room consistency violations"""
+        from collections import defaultdict
+
+        violations = []
+        section_daily_rooms = defaultdict(lambda: defaultdict(set))
+
+        # Track rooms used by each section on each day for theory classes
+        for entry in entries:
+            if entry.subject and not entry.subject.is_practical and entry.classroom:
+                section_daily_rooms[entry.class_group][entry.day].add(entry.classroom.name)
+
+        # Check for inconsistencies
+        for class_group, daily_rooms in section_daily_rooms.items():
+            for day, rooms in daily_rooms.items():
+                if len(rooms) > 1:
+                    violations.append({
+                        'class_group': class_group,
+                        'day': day,
+                        'rooms_used': list(rooms),
+                        'description': f'{class_group} uses multiple rooms on {day}: {", ".join(rooms)}'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} room consistency violations'
+        }
+
+    def _analyze_section_simultaneous_classes(self, entries):
+        """Analyze sections with simultaneous classes"""
+        from collections import defaultdict
+
+        violations = []
+        time_slot_sections = defaultdict(list)
+
+        # Group entries by time slot
+        for entry in entries:
+            key = (entry.day, entry.period)
+            time_slot_sections[key].append(entry)
+
+        # Check for sections with multiple classes at same time
+        for (day, period), slot_entries in time_slot_sections.items():
+            section_counts = defaultdict(int)
+            for entry in slot_entries:
+                section_counts[entry.class_group] += 1
+
+            for class_group, count in section_counts.items():
+                if count > 1:
+                    violations.append({
+                        'class_group': class_group,
+                        'day': day,
+                        'period': period,
+                        'simultaneous_classes': count,
+                        'description': f'{class_group} has {count} simultaneous classes on {day} P{period}'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} simultaneous class violations'
+        }
+
+    def _analyze_working_hours_compliance(self, entries):
+        """Analyze working hours compliance (8AM-3PM)"""
+        violations = []
+
+        for entry in entries:
+            if entry.start_time and entry.end_time:
+                # Handle both string and time object formats
+                if isinstance(entry.start_time, str):
+                    start_hour = int(entry.start_time.split(':')[0])
+                else:
+                    start_hour = entry.start_time.hour
+
+                if isinstance(entry.end_time, str):
+                    end_hour = int(entry.end_time.split(':')[0])
+                else:
+                    end_hour = entry.end_time.hour
+
+                if start_hour < 8 or end_hour > 15:
+                    violations.append({
+                        'class_group': entry.class_group,
+                        'subject': entry.subject.code if entry.subject else 'Unknown',
+                        'day': entry.day,
+                        'period': entry.period,
+                        'start_time': str(entry.start_time),
+                        'end_time': str(entry.end_time),
+                        'description': f'Class {entry.start_time}-{entry.end_time} outside 8AM-3PM'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} working hours violations'
+        }
+
+    def _analyze_max_theory_per_day(self, entries):
+        """Analyze maximum one theory class per day constraint"""
+        from collections import defaultdict
+
+        violations = []
+        section_daily_theory = defaultdict(lambda: defaultdict(list))
+
+        # Count theory classes per section per day
+        for entry in entries:
+            if entry.subject and not entry.subject.is_practical:
+                section_daily_theory[entry.class_group][entry.day].append(entry)
+
+        # Check for violations (more than 1 theory class per day)
+        for class_group, daily_classes in section_daily_theory.items():
+            for day, theory_classes in daily_classes.items():
+                if len(theory_classes) > 1:
+                    violations.append({
+                        'class_group': class_group,
+                        'day': day,
+                        'theory_count': len(theory_classes),
+                        'subjects': [e.subject.code for e in theory_classes],
+                        'description': f'{class_group} has {len(theory_classes)} theory classes on {day}'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} multiple theory per day violations'
+        }
+
     def _analyze_practical_blocks(self, entries):
         """Analyze practical block constraints (3-hour consecutive blocks)"""
         from collections import defaultdict
@@ -1530,11 +1684,22 @@ class ConstraintTestingView(APIView):
             if entry.subject and entry.teacher:
                 # Check if teacher is assigned to teach this subject for this class group
                 try:
-                    assignment = TeacherSubjectAssignment.objects.get(
+                    # Check if teacher is assigned to this subject for this section
+                    section = entry.class_group.split('-')[1] if '-' in entry.class_group else entry.class_group
+                    assignments = TeacherSubjectAssignment.objects.filter(
                         teacher=entry.teacher,
-                        subject=entry.subject,
-                        sections__contains=[entry.class_group.split('-')[1]] if '-' in entry.class_group else []
+                        subject=entry.subject
                     )
+
+                    # Check if any assignment includes this section
+                    assignment = None
+                    for assign in assignments:
+                        if section in assign.sections:
+                            assignment = assign
+                            break
+
+                    if not assignment:
+                        raise TeacherSubjectAssignment.DoesNotExist()
 
                     compliant_assignments.append({
                         'teacher': entry.teacher.name,
@@ -2339,10 +2504,8 @@ class ConstraintResolverView(APIView):
 
         violations_resolved = 0
 
-        # Get all lab rooms
-        lab_rooms = Classroom.objects.filter(
-            models.Q(name__icontains='lab') | models.Q(name__icontains='laboratory')
-        )
+        # Get all lab rooms (using is_lab field instead of name matching)
+        lab_rooms = Classroom.objects.filter(is_lab=True)
 
         if not lab_rooms.exists():
             print("No lab rooms found in the system")
@@ -2565,29 +2728,7 @@ class ConstraintResolverView(APIView):
                 'changes_made': 0
             }
 
-    # Additional constraint analysis methods for new constraint buttons
-    def _analyze_practical_in_labs_only(self, entries):
-        """Analyze if practical subjects are only in labs"""
-        violations = []
 
-        for entry in entries:
-            if (entry.subject and entry.subject.is_practical and
-                entry.classroom and not entry.classroom.is_lab):
-                violations.append({
-                    'class_group': entry.class_group,
-                    'subject': entry.subject.code,
-                    'classroom': entry.classroom.name,
-                    'day': entry.day,
-                    'period': entry.period,
-                    'description': f'Practical {entry.subject.code} in non-lab room {entry.classroom.name}'
-                })
-
-        return {
-            'status': 'PASS' if len(violations) == 0 else 'FAIL',
-            'total_violations': len(violations),
-            'violations': violations,
-            'message': f'Found {len(violations)} practical subjects not in labs'
-        }
 
 
 

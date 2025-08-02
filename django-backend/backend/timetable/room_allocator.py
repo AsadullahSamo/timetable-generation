@@ -633,7 +633,7 @@ class RoomAllocator:
                                              entries: List[TimetableEntry], requesting_class: str) -> Optional[Classroom]:
         """UNIVERSAL: Intelligently force lab availability by moving lower priority classes."""
         all_entries = self._get_all_relevant_entries(entries)
-        requesting_is_senior = self.is_senior_batch(requesting_class)
+        # Simplified: No seniority-based priority
 
         for lab in self.labs:
             can_force = True
@@ -1512,10 +1512,7 @@ class RoomAllocator:
         if entry.subject.is_practical:
             return False
 
-        # Senior batches requesting can move junior batch classes
-        entry_is_senior = self.is_senior_batch(entry.class_group)
-        if requesting_is_senior and not entry_is_senior:
-            return True
+        # Simplified: All theory classes can be moved if alternative rooms exist
 
         # Same priority level - check if alternative rooms exist
         return self._has_alternative_rooms_available(entry, all_entries)
@@ -1936,24 +1933,8 @@ class RoomAllocator:
         current_entries = list(entries)
         moves_made = 0
 
-        # Step 1: Find senior batches in regular rooms (violations)
-        senior_violations = []
-        for entry in current_entries:
-            if (entry.classroom and not entry.classroom.is_lab and
-                self.is_senior_batch(entry.class_group)):
-                senior_violations.append(entry)
-
-        print(f"📊 Found {len(senior_violations)} senior batch classes in regular rooms")
-
-        # Step 2: Find junior batches in labs (candidates for swapping)
-        junior_in_labs = []
-        for entry in current_entries:
-            if (entry.classroom and entry.classroom.is_lab and
-                not self.is_senior_batch(entry.class_group) and
-                entry.subject and not entry.subject.is_practical):  # Only theory classes can be moved
-                junior_in_labs.append(entry)
-
-        print(f"📊 Found {len(junior_in_labs)} junior batch theory classes in labs")
+        # Simplified: No seniority-based room swapping needed
+        print(f"📊 Simplified room allocation - no seniority-based swapping")
 
         # Step 3: Perform swaps (more aggressive approach)
         for senior_entry in senior_violations:
@@ -2029,8 +2010,7 @@ class RoomAllocator:
             if (entry.day == day and entry.period == period and
                 entry.classroom and entry != senior_entry):
 
-                # Check if this is a junior batch in a preferred room
-                is_junior = not self.is_senior_batch(entry.class_group)
+                # Simplified: No seniority-based checks
                 room_matches_target = (
                     (target_room_type == 'lab' and entry.classroom.is_lab) or
                     (target_room_type == 'regular' and not entry.classroom.is_lab)
@@ -2182,9 +2162,7 @@ class RoomAllocator:
         """Optimize room allocation for a specific time slot."""
         optimization = {'swaps': 0, 'improvements': []}
 
-        # Separate senior and junior entries
-        senior_entries = [e for e in slot_entries if self.is_senior_batch(e.class_group)]
-        junior_entries = [e for e in slot_entries if not self.is_senior_batch(e.class_group)]
+        # Simplified: No seniority-based separation needed
 
         # Find junior batches in labs that could be moved
         junior_in_labs = [
@@ -2365,7 +2343,7 @@ class RoomAllocator:
         if not available_labs:
             return None
 
-        is_senior = self.is_senior_batch(class_group)
+        # Simplified: No seniority-based lab selection
 
         # Get current lab usage from real-time tracking
         lab_usage = self._get_current_lab_usage()
@@ -2630,12 +2608,8 @@ class RoomAllocator:
         ]
 
         if available_labs:
-            # Apply seniority-based selection
-            is_senior = self.is_senior_batch(entry.class_group)
-            if is_senior:
-                return self._select_best_lab(available_labs)
-            else:
-                return self._select_best_lab_for_practical(available_labs, entry.class_group)
+            # Simplified: Use best available lab
+            return self._select_best_lab(available_labs)
 
         return None
 
@@ -2648,13 +2622,7 @@ class RoomAllocator:
         if entry.subject and entry.subject.is_practical:
             return None  # Practical subjects must use labs
 
-        is_senior = self.is_senior_batch(entry.class_group)
-
-        if is_senior:
-            # Senior batches prefer labs for all classes
-            available_labs = self.get_available_labs_for_time(day, period, entries, duration=1)
-            if available_labs:
-                return self._select_best_lab(available_labs)
+        # Simplified: Theory classes use regular rooms, labs as fallback
 
         # Use regular rooms for theory classes
         available_rooms = self.get_available_regular_rooms_for_time(day, period, entries, duration=1)
@@ -2663,11 +2631,10 @@ class RoomAllocator:
             sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, -room.capacity, room.name))
             return sorted_rooms[0]
 
-        # If no regular rooms, senior batches can use labs
-        if is_senior:
-            available_labs = self.get_available_labs_for_time(day, period, entries, duration=1)
-            if available_labs:
-                return self._select_best_lab(available_labs)
+        # If no regular rooms, use labs as fallback
+        available_labs = self.get_available_labs_for_time(day, period, entries, duration=1)
+        if available_labs:
+            return self._select_best_lab(available_labs)
 
         return None
 

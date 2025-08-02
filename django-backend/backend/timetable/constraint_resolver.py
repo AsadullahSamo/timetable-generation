@@ -1944,14 +1944,15 @@ class IntelligentConstraintResolver:
         if not classroom.can_accommodate_section_size(section_size):
             return False
 
-        is_senior = self.room_allocator.is_senior_batch(entry.class_group)
+        # Simplified: No seniority-based room allocation
 
-        # SENIOR BATCHES: Must get labs for ALL classes (theory and practical)
-        if is_senior:
-            if not classroom.is_lab:
-                print(f"    🚫 Senior batch {entry.class_group} cannot use regular room {classroom.name}")
-                return False
-            return True
+        # Simplified: Check basic suitability without seniority rules
+        # Practical subjects need labs
+        if entry.subject and entry.subject.is_practical:
+            return classroom.is_lab
+
+        # Theory subjects can use any room
+        return True
 
         # JUNIOR BATCHES: Should use regular rooms, labs only for practicals
         else:
@@ -3640,7 +3641,7 @@ class IntelligentConstraintResolver:
         senior_violations = [
             entry for entry in current_entries
             if (entry.classroom and not entry.classroom.is_lab and
-                self.room_allocator.is_senior_batch(entry.class_group))
+                False)  # Simplified: No seniority-based checks
         ]
 
         print(f"       📊 Found {len(senior_violations)} senior batch classes to move to labs")

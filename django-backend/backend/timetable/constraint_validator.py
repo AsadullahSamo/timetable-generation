@@ -280,24 +280,7 @@ class ConstraintValidator:
         # 2b. ENHANCED: Check same-lab rule for practical subjects
         self._check_practical_same_lab_violations(entries, violations)
 
-        # 3. Check for seniority-based allocation violations
-        for entry in entries:
-            if (entry.classroom and entry.classroom.is_lab and
-                entry.subject and not entry.subject.is_practical):
-                # Theory class in lab - check if junior batch
-                is_senior = room_allocator.is_senior_batch(entry.class_group)
-                if not is_senior:
-                    violations.append({
-                        'type': 'Room Conflict',
-                        'subtype': 'seniority_violation',
-                        'classroom': entry.classroom.name,
-                        'day': entry.day,
-                        'period': entry.period,
-                        'severity': 'MEDIUM',
-                        'description': f"Junior batch {entry.class_group} assigned lab {entry.classroom.name} for theory class",
-                        'class_group': entry.class_group,
-                        'subject': entry.subject.code if entry.subject else 'Unknown'
-                    })
+        # 3. Simplified: No seniority-based allocation checks needed
 
         # 4. Check lab reservation violations (too many practicals, not enough labs for theory)
         self._check_lab_reservation_violations(entries, violations, room_allocator)
@@ -460,7 +443,13 @@ class ConstraintValidator:
         violations = []
 
         # Find Thesis entries
-        thesis_entries = [e for e in entries if 'thesis' in e.subject.code.lower() or 'thesis' in e.subject.name.lower()]
+        thesis_entries = []
+        for e in entries:
+            if e.subject:
+                subject_code = e.subject.code.lower() if e.subject.code else ''
+                subject_name = e.subject.name.lower() if e.subject.name else ''
+                if 'thesis' in subject_code or 'thesis' in subject_name:
+                    thesis_entries.append(e)
 
         # Check Thesis entries
         for entry in thesis_entries:
@@ -493,11 +482,23 @@ class ConstraintValidator:
 
         for class_group in final_year_batches:
             wednesday_entries = [e for e in entries if e.class_group == class_group and e.day.lower().startswith('wed')]
-            thesis_count = len([e for e in wednesday_entries if 'thesis' in e.subject.code.lower() or 'thesis' in e.subject.name.lower()])
-            non_thesis_count = len(wednesday_entries) - thesis_count
+
+            # Count thesis and non-thesis entries
+            thesis_count = 0
+            non_thesis_subjects = []
+
+            for e in wednesday_entries:
+                if e.subject:
+                    subject_code = e.subject.code.lower() if e.subject.code else ''
+                    subject_name = e.subject.name.lower() if e.subject.name else ''
+                    if 'thesis' in subject_code or 'thesis' in subject_name:
+                        thesis_count += 1
+                    else:
+                        non_thesis_subjects.append(e.subject.code)
+
+            non_thesis_count = len(non_thesis_subjects)
 
             if thesis_count > 0 and non_thesis_count > 0:
-                non_thesis_subjects = [e.subject.code for e in wednesday_entries if not ('thesis' in e.subject.code.lower() or 'thesis' in e.subject.name.lower())]
                 violations.append({
                     'type': 'Thesis Day Violation',
                     'class_group': class_group,
