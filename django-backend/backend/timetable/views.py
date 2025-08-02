@@ -1060,9 +1060,14 @@ class ConstraintTestingView(APIView):
         # Friday-aware scheduling
         analysis['friday_aware_scheduling'] = self._analyze_friday_aware_scheduling(entries)
 
-        # ENHANCED: Room allocation constraints
+        # Room allocation constraints
         analysis['room_double_booking'] = self._analyze_room_double_booking(entries)
         analysis['practical_same_lab'] = self._analyze_practical_same_lab(entries)
+        analysis['practical_in_labs_only'] = self._analyze_practical_in_labs_only(entries)
+        analysis['theory_room_consistency'] = self._analyze_theory_room_consistency(entries)
+        analysis['section_simultaneous_classes'] = self._analyze_section_simultaneous_classes(entries)
+        analysis['working_hours_compliance'] = self._analyze_working_hours_compliance(entries)
+        analysis['max_theory_per_day'] = self._analyze_max_theory_per_day(entries)
 
         return analysis
 
@@ -1080,9 +1085,14 @@ class ConstraintTestingView(APIView):
             'minimum_daily_classes': self._analyze_minimum_daily_classes,
             'compact_scheduling': self._analyze_compact_scheduling,
             'friday_aware_scheduling': self._analyze_friday_aware_scheduling,
-            # ENHANCED: New working room allocation constraints
+            # Room allocation constraints
             'room_double_booking': self._analyze_room_double_booking,
             'practical_same_lab': self._analyze_practical_same_lab,
+            'practical_in_labs_only': self._analyze_practical_in_labs_only,
+            'theory_room_consistency': self._analyze_theory_room_consistency,
+            'section_simultaneous_classes': self._analyze_section_simultaneous_classes,
+            'working_hours_compliance': self._analyze_working_hours_compliance,
+            'max_theory_per_day': self._analyze_max_theory_per_day,
         }
 
         if constraint_type in analysis_methods:
@@ -1967,7 +1977,14 @@ class ConstraintResolverView(APIView):
                 'cross_semester_conflicts': 'Cross Semester Conflicts',
                 'teacher_assignments': 'Teacher Assignments',
                 'friday_aware_scheduling': 'Friday Aware Scheduling',
-                'senior_batch_lab_assignment': 'Senior Batch Lab Assignment'
+                # Room allocation constraints
+                'room_double_booking': 'Room Conflicts',
+                'practical_same_lab': 'Room Conflicts',
+                'practical_in_labs_only': 'Room Conflicts',
+                'theory_room_consistency': 'Room Conflicts',
+                'section_simultaneous_classes': 'Teacher Conflicts',
+                'working_hours_compliance': 'Compact Scheduling',
+                'max_theory_per_day': 'Subject Frequency'
             }
 
             constraint_name = constraint_name_mapping.get(constraint_type, constraint_type.replace('_', ' ').title())
@@ -2126,6 +2143,22 @@ class ConstraintResolverView(APIView):
                 return self._resolve_room_double_booking(entries)
             elif constraint_type == 'practical_same_lab':
                 return self._resolve_practical_same_lab(entries)
+            elif constraint_type == 'practical_in_labs_only':
+                return self._resolve_practical_in_labs_only(entries)
+            elif constraint_type == 'theory_room_consistency':
+                return self._resolve_theory_room_consistency(entries)
+            elif constraint_type == 'section_simultaneous_classes':
+                return self._resolve_section_simultaneous_classes(entries)
+            elif constraint_type == 'working_hours_compliance':
+                return self._resolve_working_hours_compliance(entries)
+            elif constraint_type == 'max_theory_per_day':
+                return self._resolve_max_theory_per_day(entries)
+            elif constraint_type == 'minimum_daily_classes':
+                return self._resolve_minimum_daily_classes(entries)
+            elif constraint_type == 'teacher_assignments':
+                return self._resolve_teacher_assignments(entries)
+            elif constraint_type == 'friday_aware_scheduling':
+                return self._resolve_friday_aware_scheduling(entries)
             else:
                 return None
 
@@ -2531,4 +2564,396 @@ class ConstraintResolverView(APIView):
                 'success': False,
                 'changes_made': 0
             }
+
+    # Additional constraint analysis methods for new constraint buttons
+    def _analyze_practical_in_labs_only(self, entries):
+        """Analyze if practical subjects are only in labs"""
+        violations = []
+
+        for entry in entries:
+            if (entry.subject and entry.subject.is_practical and
+                entry.classroom and not entry.classroom.is_lab):
+                violations.append({
+                    'class_group': entry.class_group,
+                    'subject': entry.subject.code,
+                    'classroom': entry.classroom.name,
+                    'day': entry.day,
+                    'period': entry.period,
+                    'description': f'Practical {entry.subject.code} in non-lab room {entry.classroom.name}'
+                })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} practical subjects not in labs'
+        }
+
+
+
+    def _analyze_theory_room_consistency(self, entries):
+        """Analyze theory room consistency violations"""
+        from collections import defaultdict
+
+        violations = []
+        section_daily_rooms = defaultdict(lambda: defaultdict(set))
+
+        # Track rooms used by each section on each day for theory classes
+        for entry in entries:
+            if entry.subject and not entry.subject.is_practical and entry.classroom:
+                section_daily_rooms[entry.class_group][entry.day].add(entry.classroom.name)
+
+        # Check for inconsistencies
+        for class_group, daily_rooms in section_daily_rooms.items():
+            for day, rooms in daily_rooms.items():
+                if len(rooms) > 1:
+                    violations.append({
+                        'class_group': class_group,
+                        'day': day,
+                        'rooms_used': list(rooms),
+                        'description': f'{class_group} uses multiple rooms on {day}: {", ".join(rooms)}'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} room consistency violations'
+        }
+
+    def _analyze_section_simultaneous_classes(self, entries):
+        """Analyze sections with simultaneous classes"""
+        from collections import defaultdict
+
+        violations = []
+        time_slot_sections = defaultdict(list)
+
+        # Group entries by time slot
+        for entry in entries:
+            key = (entry.day, entry.period)
+            time_slot_sections[key].append(entry)
+
+        # Check for sections with multiple classes at same time
+        for (day, period), slot_entries in time_slot_sections.items():
+            section_counts = defaultdict(int)
+            for entry in slot_entries:
+                section_counts[entry.class_group] += 1
+
+            for class_group, count in section_counts.items():
+                if count > 1:
+                    violations.append({
+                        'class_group': class_group,
+                        'day': day,
+                        'period': period,
+                        'simultaneous_classes': count,
+                        'description': f'{class_group} has {count} simultaneous classes on {day} P{period}'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} simultaneous class violations'
+        }
+
+    def _analyze_working_hours_compliance(self, entries):
+        """Analyze working hours compliance (8AM-3PM)"""
+        violations = []
+
+        for entry in entries:
+            if entry.start_time and entry.end_time:
+                start_hour = int(entry.start_time.split(':')[0])
+                end_hour = int(entry.end_time.split(':')[0])
+
+                if start_hour < 8 or end_hour > 15:
+                    violations.append({
+                        'class_group': entry.class_group,
+                        'subject': entry.subject.code if entry.subject else 'Unknown',
+                        'day': entry.day,
+                        'period': entry.period,
+                        'start_time': entry.start_time,
+                        'end_time': entry.end_time,
+                        'description': f'Class {entry.start_time}-{entry.end_time} outside 8AM-3PM'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} working hours violations'
+        }
+
+    def _analyze_max_theory_per_day(self, entries):
+        """Analyze maximum one theory class per day constraint"""
+        from collections import defaultdict
+
+        violations = []
+        section_daily_theory = defaultdict(lambda: defaultdict(list))
+
+        # Count theory classes per section per day
+        for entry in entries:
+            if entry.subject and not entry.subject.is_practical:
+                section_daily_theory[entry.class_group][entry.day].append(entry)
+
+        # Check for violations (more than 1 theory class per day)
+        for class_group, daily_classes in section_daily_theory.items():
+            for day, theory_classes in daily_classes.items():
+                if len(theory_classes) > 1:
+                    violations.append({
+                        'class_group': class_group,
+                        'day': day,
+                        'theory_count': len(theory_classes),
+                        'subjects': [e.subject.code for e in theory_classes],
+                        'description': f'{class_group} has {len(theory_classes)} theory classes on {day}'
+                    })
+
+        return {
+            'status': 'PASS' if len(violations) == 0 else 'FAIL',
+            'total_violations': len(violations),
+            'violations': violations,
+            'message': f'Found {len(violations)} multiple theory per day violations'
+        }
+
+    # Additional constraint resolution methods for new constraint types
+    def _resolve_practical_in_labs_only(self, entries):
+        """Resolve practical subjects not in labs by moving them to available labs"""
+        from .room_allocator import RoomAllocator
+
+        room_allocator = RoomAllocator()
+        resolved_count = 0
+
+        for entry in entries:
+            if (entry.subject and entry.subject.is_practical and
+                entry.classroom and not entry.classroom.is_lab):
+
+                # Find an available lab for this practical
+                available_lab = room_allocator.allocate_room_for_practical(
+                    entry.day, entry.period, entry.class_group, entry.subject, entries
+                )
+
+                if available_lab:
+                    entry.classroom = available_lab
+                    entry.save()
+                    resolved_count += 1
+
+        return {
+            'action': f'Moved {resolved_count} practical subjects to labs',
+            'success': resolved_count > 0,
+            'changes_made': resolved_count
+        } if resolved_count > 0 else None
+
+
+
+    def _resolve_theory_room_consistency(self, entries):
+        """Resolve theory room consistency by assigning consistent rooms per section per day"""
+        from collections import defaultdict
+
+        resolved_count = 0
+        section_daily_rooms = defaultdict(lambda: defaultdict(list))
+
+        # Group theory entries by section and day
+        for entry in entries:
+            if entry.subject and not entry.subject.is_practical:
+                section_daily_rooms[entry.class_group][entry.day].append(entry)
+
+        # Fix inconsistencies
+        for class_group, daily_entries in section_daily_rooms.items():
+            for day, day_entries in daily_entries.items():
+                if len(day_entries) > 1:
+                    # Use the first entry's room as the standard
+                    standard_room = day_entries[0].classroom
+
+                    for entry in day_entries[1:]:
+                        if entry.classroom != standard_room:
+                            # Check if standard room is available for this period
+                            conflicts = TimetableEntry.objects.filter(
+                                day=entry.day,
+                                period=entry.period,
+                                classroom=standard_room
+                            ).exclude(id=entry.id)
+
+                            if not conflicts.exists():
+                                entry.classroom = standard_room
+                                entry.save()
+                                resolved_count += 1
+
+        return {
+            'action': f'Standardized {resolved_count} room assignments for consistency',
+            'success': resolved_count > 0,
+            'changes_made': resolved_count
+        } if resolved_count > 0 else None
+
+    def _resolve_section_simultaneous_classes(self, entries):
+        """Resolve sections with simultaneous classes by moving one of the conflicting classes"""
+        from collections import defaultdict
+
+        resolved_count = 0
+        time_slot_sections = defaultdict(list)
+
+        # Group entries by time slot
+        for entry in entries:
+            key = (entry.day, entry.period)
+            time_slot_sections[key].append(entry)
+
+        # Find and resolve conflicts
+        for (day, period), slot_entries in time_slot_sections.items():
+            section_entries = defaultdict(list)
+            for entry in slot_entries:
+                section_entries[entry.class_group].append(entry)
+
+            for class_group, group_entries in section_entries.items():
+                if len(group_entries) > 1:
+                    # Move all but the first entry
+                    for entry in group_entries[1:]:
+                        moved = self._find_available_slot_and_move(entry, entries)
+                        if moved:
+                            resolved_count += 1
+
+        return {
+            'action': f'Moved {resolved_count} simultaneous classes to different time slots',
+            'success': resolved_count > 0,
+            'changes_made': resolved_count
+        } if resolved_count > 0 else None
+
+    def _resolve_working_hours_compliance(self, entries):
+        """Resolve working hours violations by moving classes to valid time slots"""
+        resolved_count = 0
+
+        for entry in entries:
+            if entry.start_time and entry.end_time:
+                start_hour = int(entry.start_time.split(':')[0])
+                end_hour = int(entry.end_time.split(':')[0])
+
+                if start_hour < 8 or end_hour > 15:
+                    # Try to move to a valid time slot (periods 1-7, 8AM-3PM)
+                    for period in range(1, 8):
+                        # Check if this period is within working hours
+                        if 8 <= (7 + period) <= 15:  # Assuming period 1 starts at 8AM
+                            # Check if slot is available
+                            conflicts = TimetableEntry.objects.filter(
+                                day=entry.day,
+                                period=period,
+                                teacher=entry.teacher,
+                                classroom=entry.classroom
+                            ).exclude(id=entry.id)
+
+                            if not conflicts.exists():
+                                entry.period = period
+                                entry.save()
+                                resolved_count += 1
+                                break
+
+        return {
+            'action': f'Moved {resolved_count} classes to valid working hours',
+            'success': resolved_count > 0,
+            'changes_made': resolved_count
+        } if resolved_count > 0 else None
+
+    def _resolve_max_theory_per_day(self, entries):
+        """Resolve multiple theory classes per day by moving excess classes to other days"""
+        from collections import defaultdict
+
+        resolved_count = 0
+        section_daily_theory = defaultdict(lambda: defaultdict(list))
+
+        # Group theory classes by section and day
+        for entry in entries:
+            if entry.subject and not entry.subject.is_practical:
+                section_daily_theory[entry.class_group][entry.day].append(entry)
+
+        # Resolve violations
+        for class_group, daily_classes in section_daily_theory.items():
+            for day, theory_classes in daily_classes.items():
+                if len(theory_classes) > 1:
+                    # Keep the first class, move others to different days
+                    for entry in theory_classes[1:]:
+                        moved = self._move_to_different_day(entry, entries)
+                        if moved:
+                            resolved_count += 1
+
+        return {
+            'action': f'Moved {resolved_count} excess theory classes to different days',
+            'success': resolved_count > 0,
+            'changes_made': resolved_count
+        } if resolved_count > 0 else None
+
+    def _resolve_minimum_daily_classes(self, entries):
+        """Resolve minimum daily classes violations by redistributing classes"""
+        # This is complex and may require adding classes, which is beyond simple resolution
+        return {
+            'action': 'Minimum daily classes constraint requires schedule regeneration',
+            'success': False,
+            'changes_made': 0
+        }
+
+    def _resolve_teacher_assignments(self, entries):
+        """Resolve teacher assignment violations by reassigning teachers"""
+        from timetable.models import TeacherSubjectAssignment
+
+        resolved_count = 0
+
+        for entry in entries:
+            if entry.teacher and entry.subject:
+                # Check if teacher is assigned to this subject
+                assignments = TeacherSubjectAssignment.objects.filter(
+                    teacher=entry.teacher,
+                    subject=entry.subject
+                )
+
+                if not assignments.exists():
+                    # Find a teacher who is assigned to this subject
+                    valid_assignments = TeacherSubjectAssignment.objects.filter(
+                        subject=entry.subject
+                    )
+
+                    for assignment in valid_assignments:
+                        # Check if this teacher is available at this time
+                        conflicts = TimetableEntry.objects.filter(
+                            day=entry.day,
+                            period=entry.period,
+                            teacher=assignment.teacher
+                        ).exclude(id=entry.id)
+
+                        if not conflicts.exists():
+                            entry.teacher = assignment.teacher
+                            entry.save()
+                            resolved_count += 1
+                            break
+
+        return {
+            'action': f'Reassigned {resolved_count} teachers to their designated subjects',
+            'success': resolved_count > 0,
+            'changes_made': resolved_count
+        } if resolved_count > 0 else None
+
+    def _resolve_friday_aware_scheduling(self, entries):
+        """Resolve Friday-aware scheduling violations"""
+        # This is a quality constraint that's hard to resolve automatically
+        return {
+            'action': 'Friday-aware scheduling requires comprehensive schedule review',
+            'success': False,
+            'changes_made': 0
+        }
+
+    def _move_to_different_day(self, entry, entries):
+        """Move an entry to a different day"""
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        current_day = entry.day
+
+        for day in days:
+            if day != current_day:
+                # Check if teacher and room are available on this day at same period
+                conflicts = TimetableEntry.objects.filter(
+                    day=day,
+                    period=entry.period
+                ).filter(
+                    models.Q(teacher=entry.teacher) | models.Q(classroom=entry.classroom)
+                ).exclude(id=entry.id)
+
+                if not conflicts.exists():
+                    entry.day = day
+                    entry.save()
+                    return True
+
+        return False
 

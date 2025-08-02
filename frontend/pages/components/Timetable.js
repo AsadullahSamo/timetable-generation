@@ -47,63 +47,134 @@ const Timetable = () => {
     fetchTimetable();
   }, [selectedClassGroup]);
 
-  // Constraint filter definitions
+  // Comprehensive Constraint filter definitions - All constraints from Constraints.txt and Room Allocation.txt
   const constraintFilters = [
+    // Core Scheduling Constraints
     {
       id: 'subject_frequency',
-      name: 'Credit Hours',
-      description: 'Show subjects with their credit hours, assigned teachers, sections, and timings',
+      name: 'Subject Frequency',
+      description: 'Validate correct number of classes per week based on credit hours',
       icon: '📊',
       color: 'bg-blue-500'
     },
     {
-      id: 'cross_semester_conflicts',
-      name: 'Cross-Semester',
-      description: 'Show teachers and their assignments across different semesters',
-      icon: '🔄',
-      color: 'bg-red-500'
-    },
-    {
       id: 'practical_blocks',
       name: 'Practical Blocks',
-      description: 'Show 3-hour practical blocks with consecutive timings',
+      description: 'Ensure 3-hour consecutive blocks for practical subjects',
       icon: '🔬',
       color: 'bg-purple-500'
     },
     {
       id: 'teacher_conflicts',
       name: 'Teacher Conflicts',
-      description: 'Show teachers and their time slot assignments',
+      description: 'Prevent teachers from being in multiple places at once',
       icon: '👨‍🏫',
       color: 'bg-yellow-500'
     },
     {
-      id: 'room_double_booking',
+      id: 'room_conflicts',
       name: 'Room Conflicts',
-      description: 'Detect and fix room double-booking conflicts where multiple classes are assigned to the same room at the same time',
-      icon: '🚫',
+      description: 'Prevent room double-booking and ensure proper room allocation',
+      icon: '🏫',
       color: 'bg-red-500'
     },
     {
+      id: 'cross_semester_conflicts',
+      name: 'Cross-Semester',
+      description: 'Detect scheduling conflicts across different batches/semesters',
+      icon: '🔄',
+      color: 'bg-orange-500'
+    },
+    {
+      id: 'teacher_assignments',
+      name: 'Teacher Assignments',
+      description: 'Validate teachers are assigned to their designated subjects',
+      icon: '👩‍🏫',
+      color: 'bg-green-500'
+    },
+
+    // Time-based Constraints
+    {
       id: 'friday_time_limits',
       name: 'Friday Limits',
-      description: 'Show Friday classes and time restrictions',
+      description: 'Enforce Friday time restrictions (12PM with practical, 11AM without)',
       icon: '📅',
       color: 'bg-indigo-500'
     },
     {
+      id: 'minimum_daily_classes',
+      name: 'Daily Minimum',
+      description: 'Ensure no day has only practical or only one class',
+      icon: '📋',
+      color: 'bg-teal-500'
+    },
+    {
+      id: 'compact_scheduling',
+      name: 'Compact Schedule',
+      description: 'Ensure classes wrap up quickly with minimal gaps',
+      icon: '⏰',
+      color: 'bg-cyan-500'
+    },
+    {
+      id: 'friday_aware_scheduling',
+      name: 'Friday-Aware',
+      description: 'Monday-Thursday scheduling considers Friday limits proactively',
+      icon: '🗓️',
+      color: 'bg-slate-500'
+    },
+    {
+      id: 'working_hours_compliance',
+      name: 'Working Hours',
+      description: 'Ensure all classes are within 8:00 AM to 3:00 PM',
+      icon: '🕐',
+      color: 'bg-amber-500'
+    },
+
+    // Special Constraints
+    {
       id: 'thesis_day_constraint',
       name: 'Thesis Day',
-      description: 'Show Wednesday thesis assignments for final year students',
+      description: 'Wednesday exclusively reserved for Thesis subjects (final year)',
       icon: '📝',
       color: 'bg-pink-500'
     },
     {
+      id: 'max_theory_per_day',
+      name: 'Theory Limit',
+      description: 'Maximum one theory class per day per section',
+      icon: '📚',
+      color: 'bg-violet-500'
+    },
+
+    // Room & Lab Allocation Constraints
+    {
       id: 'practical_same_lab',
       name: 'Same Lab Rule',
-      description: 'Ensure all 3 blocks of each practical subject use the same lab (universal rule enforcement)',
+      description: 'All 3 blocks of practical subjects must use the same lab',
+      icon: '🧪',
+      color: 'bg-purple-600'
+    },
+    {
+      id: 'practical_in_labs_only',
+      name: 'Practicals in Labs',
+      description: 'Practical subjects must be scheduled only in laboratory rooms',
       icon: '🔬',
-      color: 'bg-purple-500'
+      color: 'bg-emerald-500'
+    },
+
+    {
+      id: 'theory_room_consistency',
+      name: 'Room Consistency',
+      description: 'Consistent room assignment for theory classes per section',
+      icon: '🏠',
+      color: 'bg-sky-500'
+    },
+    {
+      id: 'section_simultaneous_classes',
+      name: 'Section Conflicts',
+      description: 'Prevent multiple simultaneous classes for same section',
+      icon: '⚡',
+      color: 'bg-red-600'
     }
   ];
 
@@ -155,16 +226,13 @@ const Timetable = () => {
         const subjectFrequencyData = analysisData?.violations || [];
 
         if (subjectFrequencyData.length === 0) {
-          // No violations, show empty array
           filtered = [];
         } else {
-          // Get subjects and class groups that have violations
           const violatedSubjectGroups = subjectFrequencyData.map(item => ({
             subject_code: item.subject_code,
             class_group: item.class_group
           }));
 
-          // Filter entries to show only those with violations
           filtered = timetableData.entries.filter(entry => {
             return violatedSubjectGroups.some(violation =>
               violation.subject_code === entry.subject &&
@@ -178,7 +246,7 @@ const Timetable = () => {
             return {
               ...entry,
               constraintInfo: {
-                type: 'Credit Hours Violation',
+                type: 'Subject Frequency Violation',
                 details: violationData ?
                   `Expected: ${violationData.expected_count}, Actual: ${violationData.actual_count} classes/week` :
                   `Frequency violation`,
@@ -283,6 +351,130 @@ const Timetable = () => {
             }
           };
         });
+        break;
+
+      case 'teacher_assignments':
+        // Show entries with teacher assignment violations
+        const teacherAssignmentViolations = analysisData?.violations || [];
+
+        if (teacherAssignmentViolations.length === 0) {
+          filtered = [];
+        } else {
+          filtered = timetableData.entries.filter(entry => {
+            return teacherAssignmentViolations.some(violation =>
+              violation.teacher === entry.teacher &&
+              violation.subject === entry.subject &&
+              violation.class_group === entry.class_group
+            );
+          }).map(entry => ({
+            ...entry,
+            constraintInfo: {
+              type: 'Teacher Assignment Violation',
+              details: `${entry.teacher} not assigned to ${entry.subject}`,
+              status: 'error'
+            }
+          }));
+        }
+        break;
+
+      case 'minimum_daily_classes':
+        // Show days with minimum daily class violations
+        const dailyViolations = analysisData?.violations || [];
+
+        if (dailyViolations.length === 0) {
+          filtered = [];
+        } else {
+          const violatedDays = dailyViolations.map(v => ({ class_group: v.class_group, day: v.day }));
+
+          filtered = timetableData.entries.filter(entry => {
+            return violatedDays.some(violation =>
+              violation.class_group === entry.class_group && violation.day === entry.day
+            );
+          }).map(entry => {
+            const violationData = dailyViolations.find(v =>
+              v.class_group === entry.class_group && v.day === entry.day
+            );
+
+            return {
+              ...entry,
+              constraintInfo: {
+                type: 'Daily Minimum Violation',
+                details: violationData ? violationData.issue : 'Minimum daily classes violation',
+                status: 'warning'
+              }
+            };
+          });
+        }
+        break;
+
+      case 'compact_scheduling':
+        // Show entries with compact scheduling violations
+        const compactViolations = analysisData?.violations || [];
+
+        if (compactViolations.length === 0) {
+          filtered = [];
+        } else {
+          const violatedSchedules = compactViolations.map(v => ({ class_group: v.class_group, day: v.day }));
+
+          filtered = timetableData.entries.filter(entry => {
+            return violatedSchedules.some(violation =>
+              violation.class_group === entry.class_group && violation.day === entry.day
+            );
+          }).map(entry => {
+            const violationData = compactViolations.find(v =>
+              v.class_group === entry.class_group && v.day === entry.day
+            );
+
+            return {
+              ...entry,
+              constraintInfo: {
+                type: 'Compact Scheduling Violation',
+                details: violationData ? violationData.issue : 'Schedule not compact',
+                status: 'warning'
+              }
+            };
+          });
+        }
+        break;
+
+      case 'working_hours_compliance':
+        // Show entries outside working hours (8AM-3PM)
+        filtered = timetableData.entries.filter(entry => {
+          const startHour = parseInt(entry.start_time?.split(':')[0] || '8');
+          const endHour = parseInt(entry.end_time?.split(':')[0] || '15');
+          return startHour < 8 || endHour > 15;
+        }).map(entry => ({
+          ...entry,
+          constraintInfo: {
+            type: 'Working Hours Violation',
+            details: `Class at ${entry.start_time}-${entry.end_time} outside 8AM-3PM`,
+            status: 'error'
+          }
+        }));
+        break;
+
+      case 'max_theory_per_day':
+        // Show days with multiple theory classes for same section
+        const theoryViolations = analysisData?.violations || [];
+
+        if (theoryViolations.length === 0) {
+          filtered = [];
+        } else {
+          const violatedTheoryDays = theoryViolations.map(v => ({ class_group: v.class_group, day: v.day }));
+
+          filtered = timetableData.entries.filter(entry => {
+            return !entry.is_practical && violatedTheoryDays.some(violation =>
+              violation.class_group === entry.class_group && violation.day === entry.day
+            );
+          }).map(entry => ({
+            ...entry,
+            constraintInfo: {
+              type: 'Multiple Theory Classes',
+              details: `Multiple theory classes on ${entry.day}`,
+              status: 'warning'
+            }
+          }));
+        }
         break;
 
       case 'friday_time_limits':
@@ -475,6 +667,102 @@ const Timetable = () => {
         }
         break;
       }
+
+      case 'practical_in_labs_only':
+        // Show practical subjects not in labs
+        const practicalLabViolations = analysisData?.violations || [];
+
+        if (practicalLabViolations.length === 0) {
+          filtered = [];
+        } else {
+          filtered = timetableData.entries.filter(entry => {
+            return entry.is_practical && practicalLabViolations.some(violation =>
+              violation.class_group === entry.class_group &&
+              violation.subject === entry.subject &&
+              violation.classroom === entry.classroom
+            );
+          }).map(entry => ({
+            ...entry,
+            constraintInfo: {
+              type: 'Practical Not In Lab',
+              details: `Practical ${entry.subject} in non-lab room ${entry.classroom}`,
+              status: 'error'
+            }
+          }));
+        }
+        break;
+
+
+
+      case 'theory_room_consistency':
+        // Show theory room consistency violations
+        const consistencyViolations = analysisData?.violations || [];
+
+        if (consistencyViolations.length === 0) {
+          filtered = [];
+        } else {
+          filtered = timetableData.entries.filter(entry => {
+            return !entry.is_practical && consistencyViolations.some(violation =>
+              violation.class_group === entry.class_group &&
+              violation.day === entry.day
+            );
+          }).map(entry => ({
+            ...entry,
+            constraintInfo: {
+              type: 'Room Consistency Violation',
+              details: `Inconsistent room assignment for theory classes`,
+              status: 'warning'
+            }
+          }));
+        }
+        break;
+
+      case 'section_simultaneous_classes':
+        // Show sections with simultaneous classes
+        const simultaneousViolations = analysisData?.violations || [];
+
+        if (simultaneousViolations.length === 0) {
+          filtered = [];
+        } else {
+          filtered = timetableData.entries.filter(entry => {
+            return simultaneousViolations.some(violation =>
+              violation.class_group === entry.class_group &&
+              violation.day === entry.day &&
+              violation.period === entry.period
+            );
+          }).map(entry => ({
+            ...entry,
+            constraintInfo: {
+              type: 'Simultaneous Classes',
+              details: `Multiple classes for ${entry.class_group} at same time`,
+              status: 'error'
+            }
+          }));
+        }
+        break;
+
+      case 'friday_aware_scheduling':
+        // Show Friday-aware scheduling issues
+        const fridayAwareViolations = analysisData?.violations || [];
+
+        if (fridayAwareViolations.length === 0) {
+          filtered = [];
+        } else {
+          filtered = timetableData.entries.filter(entry => {
+            return fridayAwareViolations.some(violation =>
+              violation.class_group === entry.class_group &&
+              violation.day === entry.day
+            );
+          }).map(entry => ({
+            ...entry,
+            constraintInfo: {
+              type: 'Friday-Aware Violation',
+              details: 'Monday-Thursday scheduling not considering Friday limits',
+              status: 'warning'
+            }
+          }));
+        }
+        break;
 
       default:
         filtered = timetableData.entries;
@@ -830,30 +1118,126 @@ const Timetable = () => {
                 )}
               </div>
 
-              {/* Resolution Result */}
+              {/* Enhanced Resolution Result Display */}
               {resolutionResult && (
-                <div className={`mt-3 p-3 rounded-lg border ${
+                <div className={`mt-3 p-4 rounded-lg border ${
                   resolutionResult.success
-                    ? 'bg-green-900/20 border-green-700 text-green-300'
-                    : 'bg-red-900/20 border-red-700 text-red-300'
+                    ? 'bg-green-900/20 border-green-700'
+                    : 'bg-red-900/20 border-red-700'
                 }`}>
-                  <div className="font-medium mb-2">
-                    {resolutionResult.success ? '✅ Resolution Result' : '❌ Resolution Failed'}
+                  <div className="flex justify-between items-start mb-3">
+                    <div className={`font-medium text-lg ${
+                      resolutionResult.success ? 'text-green-300' : 'text-red-300'
+                    }`}>
+                      {resolutionResult.success ? '✅ Resolution Successful' : '❌ Resolution Failed'}
+                    </div>
+                    <button
+                      onClick={() => setResolutionResult(null)}
+                      className="text-gray-400 hover:text-gray-200 transition-colors"
+                      title="Close resolution result"
+                    >
+                      ✕
+                    </button>
                   </div>
-                  <div className="text-sm">
-                    <div>{resolutionResult.message}</div>
+
+                  <div className={`text-sm ${resolutionResult.success ? 'text-green-200' : 'text-red-200'}`}>
+                    <div className="mb-3 font-medium">{resolutionResult.message}</div>
+
+                    {/* Resolution Statistics */}
                     {resolutionResult.attempts_made && (
-                      <div className="mt-1">
-                        Attempts: {resolutionResult.attempts_made} |
-                        Violations Before: {resolutionResult.violations_before} → After: {resolutionResult.violations_after}
-                        {resolutionResult.other_constraints_affected !== undefined && (
-                          <span> | Other Constraints Affected: {resolutionResult.other_constraints_affected}</span>
-                        )}
+                      <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
+                        <h5 className="font-medium mb-2 text-gray-100">Resolution Statistics</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-blue-400">{resolutionResult.attempts_made}</div>
+                            <div className="text-gray-400">Attempts</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-red-400">{resolutionResult.violations_before || 0}</div>
+                            <div className="text-gray-400">Before</div>
+                          </div>
+                          <div className="text-center">
+                            <div className={`text-lg font-bold ${
+                              (resolutionResult.violations_after || 0) === 0 ? 'text-green-400' : 'text-yellow-400'
+                            }`}>
+                              {resolutionResult.violations_after || 0}
+                            </div>
+                            <div className="text-gray-400">After</div>
+                          </div>
+                          <div className="text-center">
+                            <div className={`text-lg font-bold ${
+                              (resolutionResult.other_constraints_affected || 0) === 0 ? 'text-green-400' : 'text-orange-400'
+                            }`}>
+                              {resolutionResult.other_constraints_affected || 0}
+                            </div>
+                            <div className="text-gray-400">Side Effects</div>
+                          </div>
+                        </div>
                       </div>
                     )}
+
+                    {/* Resolution Details */}
+                    {resolutionResult.resolution_details && resolutionResult.resolution_details.length > 0 && (
+                      <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
+                        <h5 className="font-medium mb-2 text-gray-100">Resolution Steps</h5>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {resolutionResult.resolution_details.map((detail, index) => (
+                            <div key={index} className="text-xs text-gray-300 flex items-start gap-2">
+                              <span className="text-blue-400 font-mono">#{index + 1}</span>
+                              <span>{detail}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Success Indicators */}
                     {resolutionResult.violations_after === 0 && (
-                      <div className="mt-2 text-green-400 text-xs">
-                        ✅ Data is being refreshed to reflect the changes...
+                      <div className="bg-green-900/30 rounded-lg p-3 mb-3">
+                        <div className="flex items-center gap-2 text-green-300">
+                          <span className="text-lg">🎉</span>
+                          <span className="font-medium">Perfect Resolution!</span>
+                        </div>
+                        <div className="text-xs text-green-400 mt-1">
+                          All violations have been resolved with no side effects on other constraints.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Partial Success */}
+                    {resolutionResult.success && resolutionResult.violations_after > 0 && (
+                      <div className="bg-yellow-900/30 rounded-lg p-3 mb-3">
+                        <div className="flex items-center gap-2 text-yellow-300">
+                          <span className="text-lg">⚠️</span>
+                          <span className="font-medium">Partial Resolution</span>
+                        </div>
+                        <div className="text-xs text-yellow-400 mt-1">
+                          Some violations remain. You may need to run the resolution again or check for conflicting constraints.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Side Effects Warning */}
+                    {resolutionResult.other_constraints_affected > 0 && (
+                      <div className="bg-orange-900/30 rounded-lg p-3 mb-3">
+                        <div className="flex items-center gap-2 text-orange-300">
+                          <span className="text-lg">⚡</span>
+                          <span className="font-medium">Side Effects Detected</span>
+                        </div>
+                        <div className="text-xs text-orange-400 mt-1">
+                          Resolving this constraint affected {resolutionResult.other_constraints_affected} other constraint(s).
+                          Consider checking other constraints for new violations.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Data Refresh Indicator */}
+                    {resolutionResult.violations_after === 0 && (
+                      <div className="text-center">
+                        <div className="inline-flex items-center gap-2 text-green-400 text-xs">
+                          <i className="fas fa-sync-alt fa-spin"></i>
+                          <span>Timetable data updated successfully</span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -862,6 +1246,36 @@ const Timetable = () => {
             </div>
           )}
         </div>
+
+        {/* Comprehensive Constraint Status Summary */}
+        {!constraintFilter && timetableData && (
+          <div className="mb-6 bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <h3 className="text-lg font-semibold text-gray-100 mb-4">Constraint Status Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {constraintFilters.map((filter) => (
+                <div
+                  key={filter.id}
+                  className="p-3 rounded-lg border border-gray-600 bg-gray-700 hover:bg-gray-600 transition-colors cursor-pointer"
+                  onClick={() => fetchConstraintData(filter.id)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{filter.icon}</span>
+                      <span className="font-medium text-gray-100 text-sm">{filter.name}</span>
+                    </div>
+                    <div className="w-3 h-3 rounded-full bg-gray-500" title="Click to check status"></div>
+                  </div>
+                  <div className="text-xs text-gray-400 line-clamp-2">
+                    {filter.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 text-sm text-gray-400 text-center">
+              Click on any constraint to check its status and view detailed violations
+            </div>
+          </div>
+        )}
 
         {/* Section Filter */}
         {timetableData.pagination && (
@@ -1050,12 +1464,20 @@ const Timetable = () => {
           </div>
         )}
 
-        {/* Constraint Details Panel */}
+        {/* Comprehensive Constraint Status Display */}
         {constraintFilter && constraintData && (
           <div className="mt-8 bg-gray-800 rounded-lg border border-gray-700 p-6">
-            <h3 className="text-xl font-semibold text-gray-100 mb-4">
-              {constraintFilters.find(f => f.id === constraintFilter)?.name} - Analysis Summary
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-100">
+                {constraintFilters.find(f => f.id === constraintFilter)?.name} - Detailed Analysis
+              </h3>
+              <button
+                onClick={() => setConstraintData(null)}
+                className="px-3 py-1 text-sm bg-gray-600 text-gray-300 rounded hover:bg-gray-500 transition-colors"
+              >
+                Close Analysis
+              </button>
+            </div>
 
             {constraintFilter === 'cross_semester_conflicts' ? (
               // Special summary for cross-semester conflicts
