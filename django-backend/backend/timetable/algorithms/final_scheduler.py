@@ -919,35 +919,19 @@ class FinalUniversalScheduler:
             # Fallback to basic allocation if missing information
             return self._find_basic_available_classroom(day, start_period, duration)
 
-        # BULLETPROOF: Get ALL entries (both in-memory and database) for accurate conflict detection
+        # SIMPLIFIED: Get ALL entries (both in-memory and database) for accurate conflict detection
         current_entries = self._get_all_current_entries()
 
-        is_senior = self.room_allocator.is_senior_batch(class_group)
-
-        # SENIOR BATCHES: Get labs for ALL classes (theory and practical)
-        if is_senior:
-            if subject.is_practical and duration == 3:
-                # Senior practical: 3-block lab allocation
-                return self.room_allocator.allocate_room_for_practical(
-                    day, start_period, class_group, subject, current_entries
-                )
-            else:
-                # Senior theory: single period lab allocation
-                return self.room_allocator.allocate_room_for_theory(
-                    day, start_period, class_group, subject, current_entries
-                )
-
-        # JUNIOR BATCHES: Labs only for practicals, regular rooms for theory
+        # SIMPLIFIED ALLOCATION: Use building-based allocation for all batches
+        if subject.is_practical and duration == 3:
+            # Practical: 3-block lab allocation (same for all batches)
+            return self.room_allocator.allocate_room_for_practical(
+                day, start_period, class_group, subject, current_entries
+            )
         else:
-            if subject.is_practical and duration == 3:
-                # Junior practical: 3-block lab allocation (if available after senior reservation)
-                return self.room_allocator.allocate_room_for_practical(
-                    day, start_period, class_group, subject, current_entries
-                )
-            else:
-                # Junior theory: regular rooms only
-                return self.room_allocator.allocate_room_for_theory(
-                    day, start_period, class_group, subject, current_entries
+            # Theory: building-based allocation (2nd year -> Academic, others -> Main)
+            return self.room_allocator.allocate_room_for_theory(
+                day, start_period, class_group, subject, current_entries
                 )
 
     def _find_basic_available_classroom(self, day: str, start_period: int, duration: int) -> Optional[Classroom]:

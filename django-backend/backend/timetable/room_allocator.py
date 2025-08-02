@@ -1,7 +1,7 @@
 """
-COMPREHENSIVE ROOM ALLOCATION SYSTEM
-===================================
-Implements intelligent room allocation with seniority-based priority,
+SIMPLIFIED ROOM ALLOCATION SYSTEM
+=================================
+Implements intelligent room allocation with building-based assignment,
 practical class lab allocation, and zero-conflict room assignment.
 """
 
@@ -13,24 +13,24 @@ from .models import Classroom, TimetableEntry, Batch, Subject
 
 class RoomAllocator:
     """
-    Comprehensive room allocation system with seniority-based priority
+    Simplified room allocation system with building-based assignment
     and intelligent conflict resolution.
     """
-    
+
     def __init__(self):
         self.labs = None
         self.regular_rooms = None
-        self.batch_seniority = None
+        self.academic_building_rooms = None
+        self.main_building_rooms = None
 
-        # ENHANCED: Real-time lab usage tracking during scheduling
+        # Real-time lab usage tracking during scheduling
         self.current_lab_usage = {}  # {lab_id: usage_count}
         self.practical_lab_assignments = {}  # {(class_group, subject_code): lab_id} for same-lab rule
 
         self._initialize_room_data()
-        self._initialize_batch_seniority()
     
     def _initialize_room_data(self):
-        """Initialize room classification data."""
+        """Initialize room classification data by building and type."""
         all_rooms = list(Classroom.objects.all())
         # Sort by building priority (property) and name
         all_rooms.sort(key=lambda room: (room.building_priority, room.name))
@@ -38,40 +38,31 @@ class RoomAllocator:
         self.labs = [room for room in all_rooms if room.is_lab]
         self.regular_rooms = [room for room in all_rooms if not room.is_lab]
 
-        print(f"🏫 Room Allocator Initialized:")
+        # Categorize regular rooms by building for simplified allocation
+        self.academic_building_rooms = [room for room in self.regular_rooms if 'Academic' in room.building]
+        self.main_building_rooms = [room for room in self.regular_rooms if 'Main' in room.building or 'Academic' not in room.building]
+
+        print(f"🏫 Simplified Room Allocator Initialized:")
         print(f"   📍 Labs: {len(self.labs)} ({[lab.name for lab in self.labs]})")
-        print(f"   📍 Regular Rooms: {len(self.regular_rooms)} ({[room.name for room in self.regular_rooms]})")
+        print(f"   📍 Academic Building Rooms: {len(self.academic_building_rooms)} ({[room.name for room in self.academic_building_rooms]})")
+        print(f"   📍 Main Building Rooms: {len(self.main_building_rooms)} ({[room.name for room in self.main_building_rooms]})")
+        print(f"   📍 Total Regular Rooms: {len(self.regular_rooms)}")
     
-    def _initialize_batch_seniority(self):
-        """Initialize dynamic batch seniority based on current year and semester numbers."""
-        from datetime import datetime
-        from .models import Batch
-
-        current_year = datetime.now().year
-
-        # Get all batches and determine seniority dynamically
-        self.batch_seniority = {}
-
+    def get_year_from_class_group(self, class_group: str) -> int:
+        """Extract year from class group (e.g., '21SW' -> 2021, '22CS' -> 2022)."""
         try:
-            batches = Batch.objects.all()
-            if batches.exists():
-                # Sort batches by semester number (higher = more senior)
-                sorted_batches = sorted(batches, key=lambda b: b.semester_number, reverse=True)
-
-                for i, batch in enumerate(sorted_batches):
-                    self.batch_seniority[batch.name] = i + 1
-
-                print(f"📊 Dynamic batch seniority initialized:")
-                for batch_name, priority in self.batch_seniority.items():
-                    print(f"   {batch_name}: Priority {priority} ({'Senior' if priority == 1 else 'Junior'})")
-            else:
-                # Fallback: determine from class group patterns if no Batch model data
-                print("⚠️  No Batch model data found, using dynamic year-based detection")
-                self.batch_seniority = {}  # Will be populated dynamically
-
-        except Exception as e:
-            print(f"⚠️  Error initializing batch seniority: {e}")
-            self.batch_seniority = {}  # Will be populated dynamically
+            # Extract first two digits and convert to full year
+            year_digits = ''.join(filter(str.isdigit, class_group))[:2]
+            if year_digits:
+                year = int(year_digits)
+                # Convert 2-digit year to 4-digit (assuming 20xx)
+                if year < 50:  # Assume years 00-49 are 20xx
+                    return 2000 + year
+                else:  # Years 50-99 are 19xx (though unlikely for current data)
+                    return 1900 + year
+        except:
+            pass
+        return 2021  # Default fallback year
     
     def get_batch_from_class_group(self, class_group: str) -> str:
         """Extract batch name from class group dynamically (e.g., '21SW-I' -> '21SW')."""
@@ -92,54 +83,15 @@ class RoomAllocator:
         # Fallback: take first 4 characters if available
         return class_group[:4] if len(class_group) >= 4 else class_group
     
-    def get_batch_priority(self, class_group: str) -> int:
-        """Get batch priority dynamically (lower = higher priority)."""
-        batch = self.get_batch_from_class_group(class_group)
+    def is_second_year(self, class_group: str) -> bool:
+        """Check if class group belongs to 2nd year (for academic building allocation)."""
+        year = self.get_year_from_class_group(class_group)
+        from datetime import datetime
+        current_year = datetime.now().year
 
-        # If we have batch seniority data, use it
-        if batch in self.batch_seniority:
-            return self.batch_seniority[batch]
-
-        # Dynamic fallback: determine priority from year in batch name
-        try:
-            # Extract year from batch name (e.g., '21SW' -> 21, '24CS' -> 24)
-            import re
-            year_match = re.match(r'^(\d{2})', batch)
-            if year_match:
-                year = int(year_match.group(1))
-                from datetime import datetime
-                current_year_short = datetime.now().year % 100
-
-                # Calculate priority based on graduation year
-                # Lower year number = higher seniority (older batches are more senior)
-                # For current year 2025 (25): 21->1, 22->2, 23->3, 24->4, 25->5, etc.
-                if year <= current_year_short:
-                    # Past/current batches: lower year = higher seniority
-                    priority = current_year_short - year + 1
-                else:
-                    # Future batches: higher year = lower seniority
-                    priority = year - current_year_short + 4  # Start from priority 5+ for future
-
-                # Ensure minimum priority of 1
-                priority = max(1, priority)
-
-                # Cache this for future use
-                self.batch_seniority[batch] = priority
-                return priority
-        except:
-            pass
-
-        return 999  # Unknown batches get lowest priority
-    
-    def is_senior_batch(self, class_group: str) -> bool:
-        """
-        Check if class group belongs to the most senior batch dynamically.
-        The most senior batch is the one with the highest semester number or lowest priority.
-        """
-        batch_priority = self.get_batch_priority(class_group)
-
-        # Senior batch has priority 1 (highest seniority)
-        return batch_priority == 1
+        # 2nd year students are those who started 2 years ago
+        # For 2025: 2nd year = 23XX batches (started in 2023)
+        return year == (current_year - 2)
     
     def get_available_labs_for_time(self, day: str, period: int,
                                    entries: List[TimetableEntry],
@@ -293,44 +245,74 @@ class RoomAllocator:
                                   class_group: str, subject: Subject,
                                   entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
-        SIMPLIFIED & ROBUST: Allocate lab for practical class with absolute priority.
+        SIMPLIFIED: Allocate lab for practical class following core constraints.
 
-        ABSOLUTE RULES:
-        1. Practical subjects MUST be in labs (no exceptions)
+        CORE RULES:
+        1. Practical subjects MUST be in labs only
         2. All 3 blocks of a practical MUST use the same lab
-        3. If needed, move senior theory classes to regular rooms to free labs
+        3. No lab conflicts (3 consecutive periods must be free)
+        4. 7 practical sessions across 5 weekdays
         """
         if not subject.is_practical:
             return None
 
-        print(f"    🧪 ABSOLUTE PRIORITY: Allocating lab for practical {subject.code} ({class_group})")
+        print(f"    🧪 SIMPLIFIED: Allocating lab for practical {subject.code} ({class_group})")
 
-        # STEP 1: Check if this practical already has a lab assigned (same-lab rule)
+        # STEP 1: Check same-lab constraint - if this practical already has a lab assigned
         existing_lab = self._find_existing_lab_for_practical(class_group, subject, entries)
         if existing_lab:
-            # MUST continue in the same lab - resolve conflicts if needed
+            print(f"    🔄 SAME LAB: Must use existing lab {existing_lab.name}")
             if self._is_lab_available_for_duration(existing_lab, day, start_period, 3, entries):
-                print(f"    🔄 SAME LAB: Continuing {subject.code} in existing lab {existing_lab.name}")
+                print(f"    ✅ SAME LAB: Available - using {existing_lab.name}")
                 return existing_lab
             else:
-                print(f"    🔧 CONFLICT: Resolving conflicts for existing lab {existing_lab.name}")
+                print(f"    🔧 SAME LAB: Conflicts found - resolving for {existing_lab.name}")
                 if self._force_lab_availability(existing_lab, day, start_period, 3, entries):
-                    print(f"    ✅ RESOLVED: Using existing lab {existing_lab.name}")
+                    print(f"    ✅ SAME LAB: Conflicts resolved - using {existing_lab.name}")
                     return existing_lab
                 else:
-                    print(f"    ❌ CRITICAL: Cannot maintain same-lab rule for {subject.code}")
+                    print(f"    ❌ SAME LAB: Cannot resolve conflicts for {existing_lab.name}")
                     return None
 
-        # STEP 2: UNIVERSAL practical allocation (PRIMARY method for conflict-free scheduling)
-        print(f"    🌍 UNIVERSAL: Using universal practical allocation for guaranteed conflict-free scheduling")
-        universal_lab = self._universal_practical_allocation(day, start_period, class_group, subject, entries)
+        # STEP 2: Find any available lab for 3 consecutive periods
+        print(f"    🔍 NEW LAB: Finding available lab for 3 consecutive periods")
+        available_lab = self._find_available_lab_for_duration(day, start_period, 3, entries)
+        if available_lab:
+            print(f"    ✅ NEW LAB: Found available lab {available_lab.name}")
+            return available_lab
 
-        if universal_lab:
-            print(f"    🎯 UNIVERSAL: Successfully allocated lab {universal_lab.name}")
-            return universal_lab
-        else:
-            print(f"    💥 CRITICAL: Universal practical allocation failed - system design issue")
-            return self._create_virtual_room_if_needed(class_group, subject)
+        # STEP 3: Force lab availability by resolving conflicts
+        print(f"    🚨 FORCE: All labs occupied - resolving conflicts")
+        forced_lab = self._force_any_lab_availability(day, start_period, 3, entries)
+        if forced_lab:
+            print(f"    ✅ FORCE: Freed up lab {forced_lab.name}")
+            return forced_lab
+
+        print(f"    ❌ CRITICAL: No lab could be allocated for practical {subject.code}")
+        return None
+
+    def _find_available_lab_for_duration(self, day: str, start_period: int, duration: int,
+                                        entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Find any lab available for the specified duration."""
+        all_entries = self._get_all_relevant_entries(entries)
+
+        for lab in self.labs:
+            if self._is_lab_available_for_duration(lab, day, start_period, duration, entries):
+                return lab
+
+        return None
+
+    def _force_any_lab_availability(self, day: str, start_period: int, duration: int,
+                                   entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Force any lab to be available by moving conflicting entries."""
+        all_entries = self._get_all_relevant_entries(entries)
+
+        # Try each lab and see if we can resolve conflicts
+        for lab in self.labs:
+            if self._force_lab_availability(lab, day, start_period, duration, entries):
+                return lab
+
+        return None
 
     def _find_existing_lab_for_practical(self, class_group: str, subject: Subject,
                                         entries: List[TimetableEntry]) -> Optional[Classroom]:
@@ -449,56 +431,162 @@ class RoomAllocator:
         # Fallback to any available lab
         return sorted_labs[0]
 
-    def _select_best_lab_for_senior(self, available_labs: List[Classroom], class_group: str) -> Optional[Classroom]:
-        """Select the best lab for senior batch allocation with highest priority."""
+    def _select_best_lab(self, available_labs: List[Classroom]) -> Optional[Classroom]:
+        """Select the best available lab based on building priority."""
         if not available_labs:
             return None
 
-        # Sort labs by building priority (Lab Block first, then Main Block, etc.)
+        # Sort labs by building priority and name for consistent selection
         sorted_labs = sorted(available_labs, key=lambda lab: (lab.building_priority, lab.name))
-
-        # Senior batches get the highest priority labs
         return sorted_labs[0]
     
     def allocate_room_for_theory(self, day: str, period: int,
                                class_group: str, subject: Subject,
                                entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
-        UNIVERSAL & CONFLICT-FREE: Allocate room for theory class with guaranteed success.
+        SIMPLIFIED: Allocate room for theory class based on building assignment rules.
 
-        ENHANCED UNIVERSAL FEATURES:
-        1. Intelligent conflict resolution with room swapping
-        2. Dynamic fallback strategies for any dataset size
-        3. Universal compatibility with any room configuration
-        4. Guaranteed allocation through smart redistribution
-        5. Works with any future data without modification
+        Rules:
+        - 2nd year → Academic building rooms
+        - 1st, 3rd, 4th year → Main building rooms
+        - If no rooms available, use labs as fallback
+        - Ensure no conflicts
         """
         if subject.is_practical:
             return None  # Practical allocation handled separately
 
-        print(f"    📚 UNIVERSAL: Allocating room for theory {subject.code} ({class_group})")
-        is_senior = self.is_senior_batch(class_group)
+        print(f"    📚 SIMPLIFIED: Allocating room for theory {subject.code} ({class_group})")
 
-        # PHASE 1: Standard allocation (preferred approach)
-        allocated_room = self._try_standard_theory_allocation(day, period, class_group, subject, entries, is_senior)
+        # Determine building preference based on year
+        is_second_year = self.is_second_year(class_group)
+
+        # PHASE 1: Try preferred building rooms
+        if is_second_year:
+            print(f"    🏫 2nd year batch - trying Academic building rooms")
+            allocated_room = self._try_building_rooms(self.academic_building_rooms, day, period, entries)
+            if allocated_room:
+                print(f"    ✅ Allocated Academic building room: {allocated_room.name}")
+                return allocated_room
+        else:
+            print(f"    🏫 Non-2nd year batch - trying Main building rooms")
+            allocated_room = self._try_building_rooms(self.main_building_rooms, day, period, entries)
+            if allocated_room:
+                print(f"    ✅ Allocated Main building room: {allocated_room.name}")
+                return allocated_room
+
+        # PHASE 2: Try other building rooms if preferred not available
+        if is_second_year:
+            print(f"    🔄 Academic building full - trying Main building rooms")
+            allocated_room = self._try_building_rooms(self.main_building_rooms, day, period, entries)
+            if allocated_room:
+                print(f"    ✅ Allocated Main building room: {allocated_room.name}")
+                return allocated_room
+        else:
+            print(f"    🔄 Main building full - trying Academic building rooms")
+            allocated_room = self._try_building_rooms(self.academic_building_rooms, day, period, entries)
+            if allocated_room:
+                print(f"    ✅ Allocated Academic building room: {allocated_room.name}")
+                return allocated_room
+
+        # PHASE 3: Fallback to labs if all regular rooms are occupied
+        print(f"    🧪 All regular rooms occupied - trying labs as fallback")
+        allocated_room = self._try_building_rooms(self.labs, day, period, entries)
         if allocated_room:
+            print(f"    ✅ Allocated lab as fallback: {allocated_room.name}")
             return allocated_room
 
-        # PHASE 2: Intelligent conflict resolution (when standard fails)
-        print(f"    🔧 UNIVERSAL: Standard allocation failed, initiating intelligent conflict resolution")
-        resolved_room = self._resolve_theory_conflicts_intelligently(day, period, class_group, subject, entries, is_senior)
-        if resolved_room:
-            return resolved_room
+        # PHASE 4: Force allocation by resolving conflicts
+        print(f"    🚨 All rooms occupied - resolving conflicts")
+        return self._force_room_allocation(day, period, class_group, subject, entries)
 
-        # PHASE 3: Emergency universal allocation (guaranteed success)
-        print(f"    🚨 UNIVERSAL: Emergency allocation mode for guaranteed success")
-        emergency_room = self._emergency_universal_allocation(day, period, class_group, subject, entries, is_senior)
-        if emergency_room:
-            return emergency_room
+    def _try_building_rooms(self, rooms: List[Classroom], day: str, period: int,
+                           entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Try to allocate from a specific set of rooms (building-specific)."""
+        all_entries = self._get_all_relevant_entries(entries)
 
-        # PHASE 4: This should NEVER happen in a universal system
-        print(f"    💥 CRITICAL: Universal allocation failed - this indicates a system design issue")
-        return self._create_virtual_room_if_needed(class_group, subject)
+        for room in rooms:
+            # Check if room is available at this time
+            conflicts = [
+                entry for entry in all_entries
+                if (entry.classroom and entry.classroom.id == room.id and
+                    entry.day == day and entry.period == period)
+            ]
+
+            if not conflicts:
+                return room
+
+        return None
+
+    def _force_room_allocation(self, day: str, period: int, class_group: str,
+                              subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Force room allocation by resolving conflicts intelligently."""
+        all_entries = self._get_all_relevant_entries(entries)
+
+        # Try to find a room with the least conflicts
+        room_conflicts = {}
+        all_rooms = self.regular_rooms + self.labs
+
+        for room in all_rooms:
+            conflicts = [
+                entry for entry in all_entries
+                if (entry.classroom and entry.classroom.id == room.id and
+                    entry.day == day and entry.period == period)
+            ]
+            room_conflicts[room] = conflicts
+
+        # Sort by number of conflicts (prefer rooms with fewer conflicts)
+        sorted_rooms = sorted(room_conflicts.items(), key=lambda x: len(x[1]))
+
+        for room, conflicts in sorted_rooms:
+            if len(conflicts) == 0:
+                return room
+            elif len(conflicts) == 1:
+                # Try to move the conflicting entry to another room
+                conflicting_entry = conflicts[0]
+                if self._try_move_entry_to_different_room(conflicting_entry, all_entries):
+                    print(f"    🔄 Moved conflicting entry to free up {room.name}")
+                    return room
+
+        # If all else fails, use the first available room
+        if all_rooms:
+            print(f"    ⚠️ Using first available room as last resort")
+            return all_rooms[0]
+
+        return None
+
+    def _try_move_entry_to_different_room(self, entry: TimetableEntry,
+                                         all_entries: List[TimetableEntry]) -> bool:
+        """Try to move an entry to a different room to resolve conflicts."""
+        if not entry.classroom:
+            return False
+
+        # Find alternative rooms
+        alternative_rooms = []
+        if entry.subject and entry.subject.is_practical:
+            alternative_rooms = self.labs
+        else:
+            alternative_rooms = self.regular_rooms
+
+        for room in alternative_rooms:
+            if room.id == entry.classroom.id:
+                continue  # Skip the current room
+
+            # Check if this room is available
+            conflicts = [
+                e for e in all_entries
+                if (e.classroom and e.classroom.id == room.id and
+                    e.day == entry.day and e.period == entry.period and
+                    e.id != entry.id)
+            ]
+
+            if not conflicts:
+                # Move the entry to this room
+                old_room = entry.classroom.name
+                entry.classroom = room
+                print(f"    🔄 Moved {entry.class_group} from {old_room} to {room.name}")
+                return True
+
+        return False
 
     def _universal_practical_allocation(self, day: str, start_period: int, class_group: str,
                                        subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
@@ -778,7 +866,7 @@ class RoomAllocator:
             # Senior batches: Try labs first, then regular rooms
             available_labs = self.get_available_labs_for_time(day, period, entries)
             if available_labs:
-                best_lab = self._select_best_lab_for_senior(available_labs, class_group)
+                best_lab = self._select_best_lab(available_labs)
                 print(f"    🎓 Senior batch {class_group} allocated lab {best_lab.name} for theory class")
                 return best_lab
 
@@ -950,7 +1038,7 @@ class RoomAllocator:
 
             if available_rooms:
                 # Found available room at this period
-                best_room = self._select_best_room_for_class(available_rooms, class_group, subject, is_senior)
+                best_room = self._select_best_room_for_class(available_rooms, class_group, subject)
                 if try_period != period:
                     print(f"    ⏰ MULTI-PERIOD: Moved to period {try_period} for better room availability")
                     # Update the entry's period (this would need scheduler coordination)
@@ -999,25 +1087,35 @@ class RoomAllocator:
         return None
 
     def _select_best_room_for_class(self, available_rooms: List[Classroom], class_group: str,
-                                   subject: Subject, is_senior: bool) -> Classroom:
-        """PERFECT: Select the best room based on class requirements."""
+                                   subject: Subject) -> Classroom:
+        """SIMPLIFIED: Select the best room based on class requirements."""
         if not available_rooms:
             return None
 
-        # Prioritize based on class type and seniority
+        # Practical subjects must use labs
         if subject and subject.is_practical:
-            # Practical subjects prefer labs
-            labs = [room for room in available_rooms if room.name.startswith('Lab')]
+            labs = [room for room in available_rooms if room.is_lab]
             if labs:
                 return labs[0]
 
-        if is_senior:
-            # Senior batches prefer labs
-            labs = [room for room in available_rooms if room.name.startswith('Lab')]
-            if labs:
-                return labs[0]
+        # Theory subjects prefer regular rooms, but can use labs if needed
+        regular_rooms = [room for room in available_rooms if not room.is_lab]
+        if regular_rooms:
+            # For theory, prefer building-based allocation
+            is_second_year = self.is_second_year(class_group)
+            if is_second_year:
+                academic_rooms = [room for room in regular_rooms if 'Academic' in room.building]
+                if academic_rooms:
+                    return academic_rooms[0]
+            else:
+                main_rooms = [room for room in regular_rooms if 'Main' in room.building or 'Academic' not in room.building]
+                if main_rooms:
+                    return main_rooms[0]
 
-        # Default to first available room
+            # Fallback to any regular room
+            return regular_rooms[0]
+
+        # Fallback to any available room (including labs)
         return available_rooms[0]
 
     def _force_clear_room_completely(self, room: Classroom, day: str, period: int,
@@ -1041,46 +1139,32 @@ class RoomAllocator:
         return True
 
     def _emergency_universal_allocation(self, day: str, period: int, class_group: str,
-                                      subject: Subject, entries: List[TimetableEntry],
-                                      is_senior: bool) -> Optional[Classroom]:
+                                      subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
-        PERFECT UNIVERSAL: 100% guaranteed allocation through exhaustive strategies.
-        This method NEVER fails and ensures ZERO conflicts through any means necessary.
+        SIMPLIFIED EMERGENCY: Simple but effective emergency allocation.
         """
-        print(f"    🚨 PERFECT EMERGENCY: 100% guaranteed allocation for {class_group} {subject.code}")
+        print(f"    🚨 EMERGENCY: Simple emergency allocation for {class_group} {subject.code}")
 
-        # Emergency Strategy 1: BULLETPROOF conflict-free allocation
-        bulletproof_room = self._bulletproof_conflict_free_allocation(day, period, class_group, subject, entries, is_senior)
-        if bulletproof_room:
-            print(f"    🛡️ BULLETPROOF: Conflict-free allocation found {bulletproof_room.name}")
-            return bulletproof_room
+        # Strategy 1: Find any truly free room
+        all_entries = self._get_all_relevant_entries(entries)
+        truly_free_rooms = self._find_truly_free_rooms(day, period, all_entries)
+        if truly_free_rooms:
+            best_room = self._select_best_room_for_class(truly_free_rooms, class_group, subject)
+            print(f"    ✅ EMERGENCY: Found free room {best_room.name}")
+            return best_room
 
-        # Emergency Strategy 2: Exhaustive cascade clearing
-        exhaustive_room = self._exhaustive_cascade_clearing(day, period, entries)
-        if exhaustive_room:
-            print(f"    💪 PERFECT: Exhaustive cascade cleared {exhaustive_room.name}")
-            return exhaustive_room
+        # Strategy 2: Force clear any room by moving conflicts
+        all_rooms = self.regular_rooms + self.labs
+        for room in all_rooms:
+            if self._force_clear_room_completely(room, day, period, all_entries):
+                print(f"    🔧 EMERGENCY: Cleared room {room.name}")
+                return room
 
-        # Emergency Strategy 3: Multi-dimensional optimization
-        optimized_room = self._multi_dimensional_optimization(day, period, class_group, subject, entries, is_senior)
-        if optimized_room:
-            print(f"    🎯 PERFECT: Multi-dimensional optimization found {optimized_room.name}")
-            return optimized_room
+        # Strategy 3: Use first available room as absolute fallback
+        if all_rooms:
+            print(f"    ⚠️ EMERGENCY: Using fallback room {all_rooms[0].name}")
+            return all_rooms[0]
 
-        # Emergency Strategy 4: Quantum room allocation (use any space creatively)
-        quantum_room = self._quantum_room_allocation(day, period, class_group, subject, entries, is_senior)
-        if quantum_room:
-            print(f"    ⚛️ PERFECT: Quantum allocation found {quantum_room.name}")
-            return quantum_room
-
-        # Emergency Strategy 5: Absolute fallback (this should NEVER be reached)
-        absolute_room = self._absolute_fallback_allocation(class_group, subject)
-        if absolute_room:
-            print(f"    🆘 PERFECT: Absolute fallback used {absolute_room.name}")
-            return absolute_room
-
-        # This line should NEVER be reached in a perfect system
-        print(f"    💥 CRITICAL ERROR: Perfect system failed - this indicates a fundamental design flaw")
         return None
 
     def _bulletproof_conflict_free_allocation(self, day: str, period: int, class_group: str,
@@ -1096,7 +1180,7 @@ class RoomAllocator:
         # Phase 1: Find truly free rooms (no conflicts whatsoever)
         truly_free_rooms = self._find_truly_free_rooms(day, period, all_entries)
         if truly_free_rooms:
-            best_room = self._select_best_room_for_class(truly_free_rooms, class_group, subject, is_senior)
+            best_room = self._select_best_room_for_class(truly_free_rooms, class_group, subject)
             print(f"    🛡️ BULLETPROOF: Found truly free room {best_room.name}")
             return best_room
 
@@ -2549,7 +2633,7 @@ class RoomAllocator:
             # Apply seniority-based selection
             is_senior = self.is_senior_batch(entry.class_group)
             if is_senior:
-                return self._select_best_lab_for_senior(available_labs, entry.class_group)
+                return self._select_best_lab(available_labs)
             else:
                 return self._select_best_lab_for_practical(available_labs, entry.class_group)
 
@@ -2570,7 +2654,7 @@ class RoomAllocator:
             # Senior batches prefer labs for all classes
             available_labs = self.get_available_labs_for_time(day, period, entries, duration=1)
             if available_labs:
-                return self._select_best_lab_for_senior(available_labs, entry.class_group)
+                return self._select_best_lab(available_labs)
 
         # Use regular rooms for theory classes
         available_rooms = self.get_available_regular_rooms_for_time(day, period, entries, duration=1)
@@ -2583,7 +2667,7 @@ class RoomAllocator:
         if is_senior:
             available_labs = self.get_available_labs_for_time(day, period, entries, duration=1)
             if available_labs:
-                return self._select_best_lab_for_senior(available_labs, entry.class_group)
+                return self._select_best_lab(available_labs)
 
         return None
 
