@@ -92,7 +92,20 @@ class RoomAllocator:
         # 2nd year students are those who started 2 years ago
         # For 2025: 2nd year = 23XX batches (started in 2023)
         return year == (current_year - 2)
-    
+
+    def _is_senior_batch(self, class_group: str) -> bool:
+        """Check if class group belongs to a senior batch (for lab allocation priority)."""
+        try:
+            # Extract batch year from class group (e.g., "21SW-III" -> 21)
+            batch_name = class_group.split('-')[0] if '-' in class_group else class_group
+            batch_year = int(batch_name[:2])
+
+            # Senior batches: 21SW, 22SW (lower year numbers are senior)
+            return batch_year <= 22
+        except (ValueError, IndexError):
+            # If we can't parse the year, assume not senior
+            return False
+
     def get_available_labs_for_time(self, day: str, period: int,
                                    entries: List[TimetableEntry],
                                    duration: int = 1) -> List[Classroom]:
@@ -2343,7 +2356,8 @@ class RoomAllocator:
         if not available_labs:
             return None
 
-        # Simplified: No seniority-based lab selection
+        # Calculate seniority based on class group
+        is_senior = self._is_senior_batch(class_group)
 
         # Get current lab usage from real-time tracking
         lab_usage = self._get_current_lab_usage()

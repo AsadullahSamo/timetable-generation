@@ -1189,13 +1189,17 @@ class ConstraintTestingView(APIView):
             return {'error': f'Cross-semester analysis failed: {str(e)}'}
 
     def _analyze_subject_frequency(self, entries):
-        """Analyze subject frequency constraints"""
+        """Analyze subject frequency constraints - checks entire timetable data"""
         from collections import defaultdict
+        from timetable.models import TeacherSubjectAssignment
 
         # Group by class_group and subject
         class_subject_counts = defaultdict(lambda: defaultdict(int))
         class_practical_sessions = defaultdict(lambda: defaultdict(int))
         subject_details = defaultdict(list)
+
+        # Get all class groups from entries
+        all_class_groups = set(entry.class_group for entry in entries)
 
         for entry in entries:
             if entry.subject:
@@ -1218,75 +1222,125 @@ class ConstraintTestingView(APIView):
                     'classroom': entry.classroom.name if entry.classroom else 'N/A'
                 })
 
+        # Get all subjects that should be scheduled for each class group
+        expected_subjects = defaultdict(set)
+        for assignment in TeacherSubjectAssignment.objects.all():
+            for section in assignment.sections:
+                for class_group in all_class_groups:
+                    if section in class_group:
+                        expected_subjects[class_group].add(assignment.subject.code)
+
         violations = []
         compliant_subjects = []
 
-        # Check theory subjects
-        for class_group, subject_counts in class_subject_counts.items():
-            for subject_code, actual_count in subject_counts.items():
+        # Check all expected subjects for each class group
+        for class_group in all_class_groups:
+            # Check theory subjects that are scheduled
+            if class_group in class_subject_counts:
+                for subject_code, actual_count in class_subject_counts[class_group].items():
+                    try:
+                        subject = Subject.objects.get(code=subject_code)
+                        expected_count = subject.credits
+
+                        subject_info = {
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_name': subject.name,
+                            'expected_count': expected_count,
+                            'actual_count': actual_count,
+                            'is_practical': subject.is_practical,
+                            'schedule_details': subject_details[f"{class_group}-{subject_code}"]
+                        }
+
+                        if actual_count != expected_count:
+                            subject_info['violation_type'] = 'frequency_mismatch'
+                            violations.append(subject_info)
+                        else:
+                            compliant_subjects.append(subject_info)
+
+                    except Subject.DoesNotExist:
+                        violations.append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'violation_type': 'subject_not_found',
+                            'schedule_details': subject_details[f"{class_group}-{subject_code}"]
+                        })
+
+            # Check for missing theory subjects
+            for subject_code in expected_subjects[class_group]:
                 try:
                     subject = Subject.objects.get(code=subject_code)
-                    expected_count = subject.credits
-
-                    subject_info = {
-                        'class_group': class_group,
-                        'subject_code': subject_code,
-                        'subject_name': subject.name,
-                        'expected_count': expected_count,
-                        'actual_count': actual_count,
-                        'is_practical': subject.is_practical,
-                        'schedule_details': subject_details[f"{class_group}-{subject_code}"]
-                    }
-
-                    if actual_count != expected_count:
-                        subject_info['violation_type'] = 'frequency_mismatch'
-                        violations.append(subject_info)
-                    else:
-                        compliant_subjects.append(subject_info)
-
+                    if not subject.is_practical:  # Only check theory subjects here
+                        if subject_code not in class_subject_counts[class_group]:
+                            violations.append({
+                                'class_group': class_group,
+                                'subject_code': subject_code,
+                                'subject_name': subject.name,
+                                'expected_count': subject.credits,
+                                'actual_count': 0,
+                                'is_practical': subject.is_practical,
+                                'violation_type': 'missing_subject',
+                                'schedule_details': []
+                            })
                 except Subject.DoesNotExist:
-                    violations.append({
-                        'class_group': class_group,
-                        'subject_code': subject_code,
-                        'violation_type': 'subject_not_found',
-                        'schedule_details': subject_details[f"{class_group}-{subject_code}"]
-                    })
+                    pass
 
         # Check practical subjects (count sessions, not blocks)
-        for class_group, session_counts in class_practical_sessions.items():
-            for subject_code, actual_sessions in session_counts.items():
+        for class_group in all_class_groups:
+            # Check practical subjects that are scheduled
+            if class_group in class_practical_sessions:
+                for subject_code, actual_sessions in class_practical_sessions[class_group].items():
+                    try:
+                        subject = Subject.objects.get(code=subject_code)
+                        expected_sessions = 1  # Practical subjects: 1 session per week (3 consecutive blocks)
+
+                        # Count actual sessions by grouping blocks by day
+                        practical_details = subject_details[f"{class_group}-{subject_code}"]
+                        days_with_practical = set(detail['day'] for detail in practical_details)
+                        actual_sessions = len(days_with_practical)
+
+                        subject_info = {
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_name': subject.name,
+                            'expected_count': expected_sessions,
+                            'actual_count': actual_sessions,
+                            'is_practical': subject.is_practical,
+                            'schedule_details': practical_details
+                        }
+
+                        if actual_sessions != expected_sessions:
+                            subject_info['violation_type'] = 'practical_session_mismatch'
+                            violations.append(subject_info)
+                        else:
+                            compliant_subjects.append(subject_info)
+
+                    except Subject.DoesNotExist:
+                        violations.append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'violation_type': 'subject_not_found',
+                            'schedule_details': subject_details[f"{class_group}-{subject_code}"]
+                        })
+
+            # Check for missing practical subjects
+            for subject_code in expected_subjects[class_group]:
                 try:
                     subject = Subject.objects.get(code=subject_code)
-                    expected_sessions = 1  # Practical subjects: 1 session per week (3 consecutive blocks)
-
-                    # Count actual sessions by grouping blocks by day
-                    practical_details = subject_details[f"{class_group}-{subject_code}"]
-                    days_with_practical = set(detail['day'] for detail in practical_details)
-                    actual_sessions = len(days_with_practical)
-
-                    subject_info = {
-                        'class_group': class_group,
-                        'subject_code': subject_code,
-                        'subject_name': subject.name,
-                        'expected_count': expected_sessions,
-                        'actual_count': actual_sessions,
-                        'is_practical': subject.is_practical,
-                        'schedule_details': practical_details
-                    }
-
-                    if actual_sessions != expected_sessions:
-                        subject_info['violation_type'] = 'practical_session_mismatch'
-                        violations.append(subject_info)
-                    else:
-                        compliant_subjects.append(subject_info)
-
+                    if subject.is_practical:  # Only check practical subjects here
+                        if subject_code not in class_practical_sessions[class_group]:
+                            violations.append({
+                                'class_group': class_group,
+                                'subject_code': subject_code,
+                                'subject_name': subject.name,
+                                'expected_count': 1,
+                                'actual_count': 0,
+                                'is_practical': subject.is_practical,
+                                'violation_type': 'missing_practical_subject',
+                                'schedule_details': []
+                            })
                 except Subject.DoesNotExist:
-                    violations.append({
-                        'class_group': class_group,
-                        'subject_code': subject_code,
-                        'violation_type': 'subject_not_found',
-                        'schedule_details': subject_details[f"{class_group}-{subject_code}"]
-                    })
+                    pass
 
         return {
             'total_violations': len(violations),
@@ -2168,39 +2222,14 @@ class ConstraintResolverView(APIView):
                     'error': 'No timetable entries found. Please generate a timetable first.'
                 })
 
-            # Initialize constraint validator
+            # Initialize constraint validator for side effect tracking
             validator = ConstraintValidator()
 
-            # Get initial state
-            initial_results = validator.validate_all_constraints(list(entries))
+            # Get initial state using the same analysis methods as constraint testing
+            initial_analysis = self._get_specific_constraint_analysis(entries, constraint_type)
+            initial_violations = initial_analysis.get('total_violations', 0)
 
-            # Map constraint types to validator constraint names
-            constraint_name_mapping = {
-                'subject_frequency': 'Subject Frequency',
-                'practical_blocks': 'Practical Blocks',
-                'teacher_conflicts': 'Teacher Conflicts',
-                'room_conflicts': 'Room Conflicts',
-                'friday_time_limits': 'Friday Time Limits',
-                'minimum_daily_classes': 'Minimum Daily Classes',
-                'thesis_day_constraint': 'Thesis Day Constraint',
-                'compact_scheduling': 'Compact Scheduling',
-                'cross_semester_conflicts': 'Cross Semester Conflicts',
-                'teacher_assignments': 'Teacher Assignments',
-                'friday_aware_scheduling': 'Friday Aware Scheduling',
-                # Room allocation constraints
-                'room_double_booking': 'Room Conflicts',
-                'practical_same_lab': 'Room Conflicts',
-                'practical_in_labs_only': 'Room Conflicts',
-                'theory_room_consistency': 'Room Conflicts',
-                'section_simultaneous_classes': 'Teacher Conflicts',
-                'working_hours_compliance': 'Compact Scheduling',
-                'max_theory_per_day': 'Subject Frequency'
-            }
-
-            constraint_name = constraint_name_mapping.get(constraint_type, constraint_type.replace('_', ' ').title())
-            initial_violations = initial_results['constraint_results'].get(constraint_name, {}).get('violations', 0)
-
-            print(f"Constraint resolution for {constraint_type} ({constraint_name}): {initial_violations} initial violations")
+            print(f"Constraint resolution for {constraint_type}: {initial_violations} initial violations")
 
             if initial_violations == 0:
                 return Response({
@@ -2234,6 +2263,12 @@ class ConstraintResolverView(APIView):
                 status=500
             )
 
+    def _get_specific_constraint_analysis(self, entries, constraint_type):
+        """Get detailed analysis for a specific constraint - delegates to ConstraintTestingView"""
+        # Create an instance of ConstraintTestingView to use its analysis methods
+        testing_view = ConstraintTestingView()
+        return testing_view._get_specific_constraint_analysis(entries, constraint_type)
+
     def _resolve_specific_constraint(self, constraint_type, entries, validator, max_attempts):
         """Resolve a specific constraint type intelligently"""
         attempts_made = 0
@@ -2242,32 +2277,13 @@ class ConstraintResolverView(APIView):
         details = []
 
         try:
-            # Get initial state of all constraints
+            # Get initial state using the same analysis methods as constraint testing
+            initial_analysis = self._get_specific_constraint_analysis(entries, constraint_type)
+            initial_target_violations = initial_analysis.get('total_violations', 0)
+
+            # Get initial state of all other constraints for side effect tracking
             initial_state = validator.validate_all_constraints(list(entries))
-
-            # Use the same constraint name mapping
-            constraint_name_mapping = {
-                'subject_frequency': 'Subject Frequency',
-                'practical_blocks': 'Practical Blocks',
-                'teacher_conflicts': 'Teacher Conflicts',
-                'room_conflicts': 'Room Conflicts',
-                'friday_time_limits': 'Friday Time Limits',
-                'minimum_daily_classes': 'Minimum Daily Classes',
-                'thesis_day_constraint': 'Thesis Day Constraint',
-                'compact_scheduling': 'Compact Scheduling',
-                'cross_semester_conflicts': 'Cross Semester Conflicts',
-                'teacher_assignments': 'Teacher Assignments',
-                'friday_aware_scheduling': 'Friday Aware Scheduling',
-                'senior_batch_lab_assignment': 'Senior Batch Lab Assignment'
-            }
-
-            constraint_name = constraint_name_mapping.get(constraint_type, constraint_type.replace('_', ' ').title())
-            initial_target_violations = initial_state['constraint_results'].get(constraint_name, {}).get('violations', 0)
-
-            initial_other_violations = sum(
-                result['violations'] for name, result in initial_state['constraint_results'].items()
-                if name != constraint_name
-            )
+            initial_other_violations = initial_state['total_violations'] - initial_target_violations
 
             for attempt in range(max_attempts):
                 attempts_made += 1
@@ -2279,14 +2295,13 @@ class ConstraintResolverView(APIView):
                     details.append(f"Attempt {attempt + 1}: No resolution strategy available")
                     break
 
-                # Validate after resolution attempt
-                current_state = validator.validate_all_constraints(list(entries))
-                current_violations = current_state['constraint_results'].get(constraint_name, {}).get('violations', 0)
+                # Validate after resolution attempt using the same analysis methods
+                current_analysis = self._get_specific_constraint_analysis(entries, constraint_type)
+                current_violations = current_analysis.get('total_violations', 0)
 
-                current_other_violations = sum(
-                    result['violations'] for name, result in current_state['constraint_results'].items()
-                    if name != constraint_name
-                )
+                # Check other constraints for side effects
+                current_state = validator.validate_all_constraints(list(entries))
+                current_other_violations = current_state['total_violations'] - current_violations
 
                 violations_after = current_violations
                 other_constraints_affected = current_other_violations - initial_other_violations
@@ -2301,6 +2316,7 @@ class ConstraintResolverView(APIView):
                             'success': True,
                             'message': f'{constraint_type} constraint resolved successfully',
                             'attempts_made': attempts_made,
+                            'violations_before': initial_target_violations,
                             'violations_after': violations_after,
                             'other_constraints_affected': other_constraints_affected,
                             'details': details
@@ -2317,6 +2333,7 @@ class ConstraintResolverView(APIView):
                 'success': violations_after < initial_target_violations,
                 'message': f'Partial resolution achieved after {attempts_made} attempts',
                 'attempts_made': attempts_made,
+                'violations_before': initial_target_violations,
                 'violations_after': violations_after,
                 'other_constraints_affected': other_constraints_affected,
                 'details': details
@@ -2327,6 +2344,7 @@ class ConstraintResolverView(APIView):
                 'success': False,
                 'message': f'Resolution failed: {str(e)}',
                 'attempts_made': attempts_made,
+                'violations_before': initial_target_violations,
                 'violations_after': violations_after,
                 'other_constraints_affected': other_constraints_affected,
                 'details': details + [f"Error: {str(e)}"]
@@ -2340,7 +2358,7 @@ class ConstraintResolverView(APIView):
             elif constraint_type == 'room_conflicts':
                 return self._resolve_room_conflicts(entries)
             elif constraint_type == 'subject_frequency':
-                return self._resolve_subject_frequency(entries)
+                return {'action': 'Subject frequency constraint resolution disabled', 'success': False, 'message': 'Constraint resolution has been removed'}
             elif constraint_type == 'practical_blocks':
                 return self._resolve_practical_blocks(entries)
             elif constraint_type == 'friday_time_limits':
@@ -2377,77 +2395,1182 @@ class ConstraintResolverView(APIView):
             return None
 
     def _resolve_teacher_conflicts(self, entries):
-        """Resolve teacher conflicts by moving conflicting classes"""
+        """Universal teacher conflict resolution - works with any timetable structure"""
         from collections import defaultdict
-        import random
 
-        # Find teacher conflicts
-        time_slot_teachers = defaultdict(list)
+        changes_made = 0
+        resolution_details = []
+
+        try:
+            # STEP 1: Analyze teacher conflicts universally
+            conflicts = self._analyze_universal_teacher_conflicts(entries)
+
+            # STEP 2: Resolve conflicts by intelligent rescheduling
+            for conflict in conflicts:
+                resolution = self._resolve_single_teacher_conflict(conflict, entries)
+                if resolution['success']:
+                    changes_made += resolution['changes']
+                    resolution_details.extend(resolution['details'])
+
+            return {
+                'action': f'Universal teacher conflict resolution: {changes_made} conflicts resolved',
+                'success': changes_made > 0,
+                'changes_made': changes_made,
+                'details': resolution_details
+            } if changes_made > 0 else None
+
+        except Exception as e:
+            return {
+                'action': f'Teacher conflict resolution failed: {str(e)}',
+                'success': False,
+                'changes_made': 0,
+                'error': str(e)
+            }
+
+    def _analyze_universal_teacher_conflicts(self, entries):
+        """Universal analysis of teacher conflicts - works with any data structure"""
+        from collections import defaultdict
+
+        conflicts = []
+        time_slot_teachers = defaultdict(lambda: defaultdict(list))
+
+        # Group entries by time slot and teacher
+        for entry in entries:
+            if entry.teacher and entry.day and entry.period:
+                time_key = (entry.day, entry.period)
+                time_slot_teachers[time_key][entry.teacher.id].append(entry)
+
+        # Identify conflicts (same teacher, multiple classes at same time)
+        for time_slot, teachers in time_slot_teachers.items():
+            for teacher_id, teacher_entries in teachers.items():
+                if len(teacher_entries) > 1:
+                    conflicts.append({
+                        'time_slot': time_slot,
+                        'teacher_id': teacher_id,
+                        'teacher': teacher_entries[0].teacher,
+                        'conflicting_entries': teacher_entries,
+                        'conflict_count': len(teacher_entries)
+                    })
+
+        return conflicts
+
+    def _resolve_single_teacher_conflict(self, conflict, entries):
+        """Resolve a single teacher conflict by intelligent rescheduling"""
+        changes_made = 0
+        details = []
+
+        conflicting_entries = conflict['conflicting_entries']
+        teacher = conflict['teacher']
+
+        # Strategy: Keep the first entry, move others
+        entries_to_move = conflicting_entries[1:]
+
+        for entry_to_move in entries_to_move:
+            # Find alternative time slots for this entry
+            alternative_slots = self._find_alternative_slots_for_entry(entry_to_move, entries)
+
+            for day, period in alternative_slots:
+                # Check if teacher is available at this time
+                if self._is_teacher_available(teacher, day, period, entries):
+                    # Check if classroom is available
+                    if self._is_classroom_available(entry_to_move.classroom, day, period, entries):
+                        # Check if class group is available
+                        if self._is_class_group_available(entry_to_move.class_group, day, period, entries):
+                            try:
+                                # Move the entry
+                                old_day, old_period = entry_to_move.day, entry_to_move.period
+                                entry_to_move.day = day
+                                entry_to_move.period = period
+                                entry_to_move.start_time = self._get_period_start_time(period)
+                                entry_to_move.end_time = self._get_period_end_time(period)
+                                entry_to_move.save()
+
+                                changes_made += 1
+                                details.append(f"Moved {entry_to_move.subject.code} for {entry_to_move.class_group} from {old_day} P{old_period} to {day} P{period}")
+                                break
+
+                            except Exception as e:
+                                continue
+
+                if changes_made > 0:
+                    break
+
+        return {
+            'success': changes_made > 0,
+            'changes': changes_made,
+            'details': details
+        }
+
+    def _find_alternative_slots_for_entry(self, entry, entries):
+        """Find alternative time slots for a specific entry"""
+        # Get all possible time slots
+        all_slots = []
+        for day in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']:
+            for period in range(1, 9):
+                all_slots.append((day, period))
+
+        # Filter out current slot
+        current_slot = (entry.day, entry.period)
+        alternative_slots = [slot for slot in all_slots if slot != current_slot]
+
+        return alternative_slots
+
+    def _is_teacher_available(self, teacher, day, period, entries):
+        """Check if teacher is available at specific time"""
+        for entry in entries:
+            if (entry.teacher and entry.teacher.id == teacher.id and
+                entry.day == day and entry.period == period):
+                return False
+        return True
+
+    def _is_classroom_available(self, classroom, day, period, entries):
+        """Check if classroom is available at specific time"""
+        if not classroom:
+            return True
 
         for entry in entries:
-            if entry.teacher:
-                key = f"{entry.day}-{entry.period}"
-                time_slot_teachers[key].append(entry)
+            if (entry.classroom and entry.classroom.id == classroom.id and
+                entry.day == day and entry.period == period):
+                return False
+        return True
 
-        conflicts_resolved = 0
-
-        for time_slot, slot_entries in time_slot_teachers.items():
-            teacher_groups = defaultdict(list)
-            for entry in slot_entries:
-                teacher_groups[entry.teacher.id].append(entry)
-
-            # Find conflicts (same teacher, multiple classes)
-            for teacher_id, teacher_entries in teacher_groups.items():
-                if len(teacher_entries) > 1:
-                    # Try to move one of the conflicting entries
-                    entry_to_move = teacher_entries[1]  # Move the second entry
-
-                    # Find an available time slot for this entry
-                    moved = self._find_available_slot_and_move(entry_to_move, entries)
-                    if moved:
-                        conflicts_resolved += 1
-
-        if conflicts_resolved > 0:
-            return {'action': f'Moved {conflicts_resolved} conflicting teacher assignments'}
-        return None
+    def _is_class_group_available(self, class_group, day, period, entries):
+        """Check if class group is available at specific time"""
+        for entry in entries:
+            if (entry.class_group == class_group and
+                entry.day == day and entry.period == period):
+                return False
+        return True
 
     def _resolve_room_conflicts(self, entries):
-        """Resolve room conflicts by reassigning rooms"""
+        """Universal room conflict resolution - works with any timetable structure"""
         from collections import defaultdict
 
-        conflicts_resolved = 0
+        changes_made = 0
+        resolution_details = []
 
-        # Group by day-period to find room conflicts
-        day_period_rooms = defaultdict(lambda: defaultdict(list))
+        try:
+            # STEP 1: Analyze room conflicts universally
+            conflicts = self._analyze_universal_room_conflicts(entries)
 
+            # STEP 2: Resolve conflicts by intelligent room reassignment
+            for conflict in conflicts:
+                resolution = self._resolve_single_room_conflict(conflict, entries)
+                if resolution['success']:
+                    changes_made += resolution['changes']
+                    resolution_details.extend(resolution['details'])
+
+            return {
+                'action': f'Universal room conflict resolution: {changes_made} conflicts resolved',
+                'success': changes_made > 0,
+                'changes_made': changes_made,
+                'details': resolution_details
+            } if changes_made > 0 else None
+
+        except Exception as e:
+            return {
+                'action': f'Room conflict resolution failed: {str(e)}',
+                'success': False,
+                'changes_made': 0,
+                'error': str(e)
+            }
+
+    def _analyze_universal_room_conflicts(self, entries):
+        """Universal analysis of room conflicts - works with any data structure"""
+        from collections import defaultdict
+
+        conflicts = []
+        time_slot_rooms = defaultdict(lambda: defaultdict(list))
+
+        # Group entries by time slot and room
         for entry in entries:
-            if entry.classroom:
-                day_period_key = f"{entry.day}-{entry.period}"
-                room_id = entry.classroom.id
-                day_period_rooms[day_period_key][room_id].append(entry)
+            if entry.classroom and entry.day and entry.period:
+                time_key = (entry.day, entry.period)
+                time_slot_rooms[time_key][entry.classroom.id].append(entry)
 
-        # Find and resolve conflicts
-        for day_period, rooms in day_period_rooms.items():
+        # Identify conflicts (same room, multiple classes at same time)
+        for time_slot, rooms in time_slot_rooms.items():
             for room_id, room_entries in rooms.items():
                 if len(room_entries) > 1:
-                    # Multiple entries in same room at same time - conflict!
-                    print(f"Found room conflict: {len(room_entries)} entries in room {room_entries[0].classroom.name} at {day_period}")
+                    conflicts.append({
+                        'time_slot': time_slot,
+                        'room_id': room_id,
+                        'room': room_entries[0].classroom,
+                        'conflicting_entries': room_entries,
+                        'conflict_count': len(room_entries)
+                    })
 
-                    # Try to reassign all but the first entry
-                    for i in range(1, len(room_entries)):
-                        entry_to_reassign = room_entries[i]
-                        day, period = day_period.split('-')
+        return conflicts
 
-                        # Find an available room for this time slot
-                        reassigned = self._find_available_room_and_reassign(entry_to_reassign, day, int(period))
-                        if reassigned:
-                            conflicts_resolved += 1
-                            print(f"Successfully reassigned {entry_to_reassign.subject} to new room")
+    def _resolve_single_room_conflict(self, conflict, entries):
+        """Resolve a single room conflict by intelligent room reassignment"""
+        from timetable.models import Classroom
+
+        changes_made = 0
+        details = []
+
+        conflicting_entries = conflict['conflicting_entries']
+        room = conflict['room']
+        day, period = conflict['time_slot']
+
+        # Strategy: Keep the first entry, reassign others
+        entries_to_reassign = conflicting_entries[1:]
+
+        for entry_to_reassign in entries_to_reassign:
+            # Find alternative rooms for this entry
+            alternative_rooms = self._find_alternative_rooms_for_entry(entry_to_reassign, day, period, entries)
+
+            for alternative_room in alternative_rooms:
+                try:
+                    # Reassign the room
+                    old_room = entry_to_reassign.classroom
+                    entry_to_reassign.classroom = alternative_room
+                    entry_to_reassign.save()
+
+                    changes_made += 1
+                    details.append(f"Reassigned {entry_to_reassign.subject.code} for {entry_to_reassign.class_group} from {old_room.name} to {alternative_room.name} at {day} P{period}")
+                    break
+
+                except Exception as e:
+                    continue
+
+        return {
+            'success': changes_made > 0,
+            'changes': changes_made,
+            'details': details
+        }
+
+    def _find_alternative_rooms_for_entry(self, entry, day, period, entries):
+        """Find alternative rooms for a specific entry at specific time"""
+        from timetable.models import Classroom
+
+        # Get all occupied rooms at this time slot
+        occupied_rooms = set()
+        for e in entries:
+            if e.classroom and e.day == day and e.period == period:
+                occupied_rooms.add(e.classroom.id)
+
+        # Find available rooms based on entry type
+        if entry.subject and entry.subject.is_practical:
+            # For practical subjects, find available labs (rooms with 'lab' in name)
+            available_rooms = Classroom.objects.filter(
+                name__icontains='lab'
+            ).exclude(id__in=occupied_rooms)
+        else:
+            # For theory subjects, find available theory rooms (rooms without 'lab' in name)
+            available_rooms = Classroom.objects.exclude(
+                name__icontains='lab'
+            ).exclude(id__in=occupied_rooms)
+
+        return list(available_rooms)
+
+    def _resolve_subject_frequency(self, entries):
+        """Intelligent Subject Frequency resolution that respects all other constraints"""
+        from timetable.models import TeacherSubjectAssignment, Subject, TimetableEntry
+        from timetable.constraint_validator import ConstraintValidator
+        from collections import defaultdict
+
+        changes_made = 0
+        resolution_details = []
+
+        try:
+            # Initialize constraint validator to check all constraints
+            validator = ConstraintValidator()
+
+            # STEP 1: Analyze current subject frequency violations
+            print("🔍 Analyzing Subject Frequency violations...")
+            analysis = self._analyze_subject_frequency(entries)
+
+            if analysis['total_violations'] == 0:
+                return {
+                    'action': 'Subject frequency already compliant - no changes needed',
+                    'success': True,
+                    'changes_made': 0,
+                    'details': ['All subjects already have correct frequency distribution']
+                }
+
+            resolution_details.append(f"Found {analysis['total_violations']} Subject Frequency violations")
+
+            # STEP 2: Process violations while respecting all constraints
+            for violation in analysis['violations']:
+                if violation.get('violation_type') in ['frequency_mismatch', 'missing_subject']:
+                    class_group = violation['class_group']
+                    subject_code = violation['subject_code']
+                    expected = violation['expected_count']
+                    actual = violation['actual_count']
+
+                    if actual < expected:
+                        # Need to add classes
+                        added = self._safely_add_subject_classes(
+                            entries, class_group, subject_code, expected - actual, validator
+                        )
+                        changes_made += added
+                        if added > 0:
+                            resolution_details.append(f"Added {added} {subject_code} classes for {class_group}")
                         else:
-                            print(f"Failed to reassign {entry_to_reassign.subject} - no available rooms")
+                            resolution_details.append(f"Could not add {subject_code} classes for {class_group} - would violate other constraints")
 
-        if conflicts_resolved > 0:
-            return {'action': f'Reassigned {conflicts_resolved} conflicting room assignments'}
+                    elif actual > expected:
+                        # Need to remove classes
+                        removed = self._safely_remove_subject_classes(
+                            entries, class_group, subject_code, actual - expected, validator
+                        )
+                        changes_made += removed
+                        if removed > 0:
+                            resolution_details.append(f"Removed {removed} excess {subject_code} classes for {class_group}")
+
+            # STEP 3: Final validation to ensure no other constraints were violated
+            final_validation = validator.validate_all_constraints(list(TimetableEntry.objects.all()))
+
+            return {
+                'action': f'Subject frequency resolution completed: {changes_made} changes made',
+                'success': changes_made > 0,
+                'changes_made': changes_made,
+                'details': resolution_details,
+                'final_constraint_status': f"Total violations across all constraints: {final_validation['total_violations']}"
+            }
+
+        except Exception as e:
+            print(f"❌ Subject frequency resolution failed: {str(e)}")
+            return {
+                'action': f'Subject frequency resolution failed: {str(e)}',
+                'success': False,
+                'changes_made': 0,
+                'error': str(e),
+                'details': [f"Error occurred: {str(e)}"]
+            }
+
+    def _safely_add_subject_classes(self, entries, class_group, subject_code, classes_to_add, validator):
+        """Safely add subject classes while respecting all constraints"""
+        from timetable.models import Subject, TeacherSubjectAssignment, TimetableEntry
+
+        try:
+            subject = Subject.objects.get(code=subject_code)
+        except Subject.DoesNotExist:
+            return 0
+
+        # Get assigned teacher for this subject
+        assignments = TeacherSubjectAssignment.objects.filter(subject=subject)
+        if not assignments.exists():
+            return 0
+
+        teacher = assignments.first().teacher
+        classes_added = 0
+
+        # Try to find safe slots for the required classes
+        for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']:
+            if classes_added >= classes_to_add:
+                break
+
+            for period in range(1, 8):  # Periods 1-7
+                if classes_added >= classes_to_add:
+                    break
+
+                # Check if this slot would violate any constraints
+                if self._would_violate_any_constraint(entries, class_group, day, period, subject, teacher, validator):
+                    continue
+
+                # Find available room
+                available_room = self._find_safe_available_room(entries, day, period, subject.is_practical)
+                if not available_room:
+                    continue
+
+                # Create the new entry
+                try:
+                    new_entry = TimetableEntry.objects.create(
+                        class_group=class_group,
+                        subject=subject,
+                        teacher=teacher,
+                        classroom=available_room,
+                        day=day,
+                        period=period,
+                        start_time=self._get_period_start_time(period),
+                        end_time=self._get_period_end_time(period),
+                        is_practical=subject.is_practical
+                    )
+                    classes_added += 1
+                    print(f"✅ Added {subject_code} class: {day} P{period} in {available_room.name}")
+
+                except Exception as e:
+                    print(f"❌ Failed to create entry: {str(e)}")
+                    continue
+
+        return classes_added
+
+    def _safely_remove_subject_classes(self, entries, class_group, subject_code, classes_to_remove, validator):
+        """Safely remove excess subject classes"""
+        from timetable.models import TimetableEntry
+
+        # Find entries to remove (prefer removing from less optimal slots)
+        excess_entries = TimetableEntry.objects.filter(
+            class_group=class_group,
+            subject__code=subject_code
+        ).order_by('-period', 'day')  # Remove later periods first
+
+        classes_removed = 0
+        for entry in excess_entries[:classes_to_remove]:
+            try:
+                day = entry.day
+                period = entry.period
+                room = entry.classroom.name if entry.classroom else 'N/A'
+
+                entry.delete()
+                classes_removed += 1
+                print(f"✅ Removed {subject_code} class: {day} P{period} in {room}")
+
+            except Exception as e:
+                print(f"❌ Failed to remove entry: {str(e)}")
+                continue
+
+        return classes_removed
+
+    def _would_violate_any_constraint(self, entries, class_group, day, period, subject, teacher, validator):
+        """Check if adding a class would violate any constraint"""
+        from timetable.models import TimetableEntry
+
+        # Create a temporary entry to test constraints
+        temp_entry = TimetableEntry(
+            class_group=class_group,
+            subject=subject,
+            teacher=teacher,
+            day=day,
+            period=period,
+            is_practical=subject.is_practical
+        )
+
+        # Check basic conflicts first
+        existing_entries = TimetableEntry.objects.filter(
+            class_group=class_group,
+            day=day,
+            period=period
+        )
+        if existing_entries.exists():
+            return True  # Class group already has a class at this time
+
+        # Check teacher conflicts
+        teacher_conflicts = TimetableEntry.objects.filter(
+            teacher=teacher,
+            day=day,
+            period=period
+        )
+        if teacher_conflicts.exists():
+            return True  # Teacher already teaching at this time
+
+        # Check Friday time limits
+        if day.lower() == 'friday':
+            friday_entries = TimetableEntry.objects.filter(
+                class_group=class_group,
+                day__icontains='friday'
+            )
+            practical_count = friday_entries.filter(subject__is_practical=True).count()
+
+            if subject.is_practical:
+                if period > 6:  # Practical subjects can go up to P6 on Friday
+                    return True
+            else:
+                if practical_count > 0 and period > 4:  # Has practical, theory limit P4
+                    return True
+                elif practical_count == 0 and period > 3:  # No practical, limit P3
+                    return True
+
+        # Check max theory per day constraint
+        if not subject.is_practical:
+            theory_classes_today = TimetableEntry.objects.filter(
+                class_group=class_group,
+                day=day,
+                subject__is_practical=False
+            ).count()
+            if theory_classes_today >= 1:
+                return True  # Already has one theory class today
+
+        # Check if this would exceed credit hours
+        current_count = TimetableEntry.objects.filter(
+            class_group=class_group,
+            subject=subject
+        ).count()
+        if current_count >= subject.credits:
+            return True  # Already has enough classes for this subject
+
+        return False
+
+    def _find_safe_available_room(self, entries, day, period, is_practical):
+        """Find an available room that doesn't conflict"""
+        from timetable.models import Classroom, TimetableEntry
+
+        # Get occupied rooms at this time
+        occupied_rooms = TimetableEntry.objects.filter(
+            day=day,
+            period=period
+        ).values_list('classroom_id', flat=True)
+
+        # Find appropriate room type
+        if is_practical:
+            # For practical subjects, find labs
+            available_rooms = Classroom.objects.filter(
+                name__icontains='lab'
+            ).exclude(id__in=occupied_rooms)
+        else:
+            # For theory subjects, find regular rooms
+            available_rooms = Classroom.objects.exclude(
+                name__icontains='lab'
+            ).exclude(id__in=occupied_rooms)
+
+        return available_rooms.first()
+
+    def _resolve_practical_blocks(self, entries):
+        """Universal practical block resolution - ensures 3 consecutive blocks in same lab"""
+        from timetable.models import Classroom
+        from collections import defaultdict
+
+        changes_made = 0
+        resolution_details = []
+
+        try:
+            # STEP 1: Analyze practical block violations
+            violations = self._analyze_practical_block_violations(entries)
+
+            # STEP 2: Resolve each violation
+            for violation in violations:
+                resolution = self._resolve_single_practical_block_violation(violation, entries)
+                if resolution['success']:
+                    changes_made += resolution['changes']
+                    resolution_details.extend(resolution['details'])
+
+            return {
+                'action': f'Universal practical block resolution: {changes_made} violations resolved',
+                'success': changes_made > 0,
+                'changes_made': changes_made,
+                'details': resolution_details
+            } if changes_made > 0 else None
+
+        except Exception as e:
+            return {
+                'action': f'Practical block resolution failed: {str(e)}',
+                'success': False,
+                'changes_made': 0,
+                'error': str(e)
+            }
+
+    def _analyze_practical_block_violations(self, entries):
+        """Analyze practical subjects that don't have 3 consecutive blocks in same lab"""
+        from collections import defaultdict
+
+        violations = []
+        practical_sessions = defaultdict(dict)
+
+        # Group practical entries by class group and subject
+        for entry in entries:
+            if entry.subject and entry.subject.is_practical:
+                key = (entry.class_group, entry.subject.code)
+                if 'entries' not in practical_sessions[key]:
+                    practical_sessions[key]['entries'] = []
+                practical_sessions[key]['entries'].append(entry)
+
+        # Check each practical subject
+        for (class_group, subject_code), session_data in practical_sessions.items():
+            entries_list = session_data['entries']
+
+            # Group by day to check consecutive blocks
+            days_sessions = defaultdict(list)
+            for entry in entries_list:
+                days_sessions[entry.day].append(entry)
+
+            # Check each day's session
+            for day, day_entries in days_sessions.items():
+                if len(day_entries) != 3:
+                    violations.append({
+                        'type': 'incorrect_block_count',
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'day': day,
+                        'current_blocks': len(day_entries),
+                        'entries': day_entries
+                    })
+                    continue
+
+                # Check if blocks are consecutive
+                periods = sorted([entry.period for entry in day_entries])
+                if periods != [periods[0], periods[0]+1, periods[0]+2]:
+                    violations.append({
+                        'type': 'non_consecutive_blocks',
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'day': day,
+                        'periods': periods,
+                        'entries': day_entries
+                    })
+                    continue
+
+                # Check if all blocks are in same lab
+                labs = set(entry.classroom.id for entry in day_entries if entry.classroom)
+                if len(labs) > 1:
+                    violations.append({
+                        'type': 'different_labs',
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'day': day,
+                        'labs': labs,
+                        'entries': day_entries
+                    })
+
+        return violations
+
+    def _resolve_single_practical_block_violation(self, violation, entries):
+        """Resolve a single practical block violation"""
+        changes_made = 0
+        details = []
+
+        violation_type = violation['type']
+        class_group = violation['class_group']
+        subject_code = violation['subject_code']
+
+        if violation_type in ['incorrect_block_count', 'non_consecutive_blocks']:
+            # Find consecutive slots and recreate the practical session
+            consecutive_slots = self._find_consecutive_lab_slots(entries, class_group, 3)
+            if consecutive_slots:
+                # Remove existing blocks
+                for entry in violation['entries']:
+                    entry.delete()
+                    changes_made += 1
+
+                # Create new 3-block session
+                day, start_period, lab = consecutive_slots
+                subject = violation['entries'][0].subject if violation['entries'] else None
+                teacher = violation['entries'][0].teacher if violation['entries'] else None
+
+                if subject and teacher:
+                    for period_offset in range(3):
+                        period = start_period + period_offset
+                        try:
+                            from timetable.models import TimetableEntry
+                            new_entry = TimetableEntry.objects.create(
+                                class_group=class_group,
+                                subject=subject,
+                                teacher=teacher,
+                                classroom=lab,
+                                day=day,
+                                period=period,
+                                start_time=self._get_period_start_time(period),
+                                end_time=self._get_period_end_time(period),
+                                is_practical=True
+                            )
+                            changes_made += 1
+                        except Exception as e:
+                            continue
+
+                    details.append(f"Fixed {subject_code} practical blocks for {class_group} - created 3 consecutive blocks in {lab.name}")
+
+        elif violation_type == 'different_labs':
+            # Move all blocks to same lab
+            target_lab = violation['entries'][0].classroom  # Use first entry's lab as target
+
+            for entry in violation['entries'][1:]:  # Skip first entry
+                if entry.classroom.id != target_lab.id:
+                    entry.classroom = target_lab
+                    entry.save()
+                    changes_made += 1
+
+            details.append(f"Moved all {subject_code} blocks for {class_group} to same lab: {target_lab.name}")
+
+        return {
+            'success': changes_made > 0,
+            'changes': changes_made,
+            'details': details
+        }
+
+    def _analyze_universal_subject_frequency(self, entries):
+        """Universal analysis of subject frequency state - works with any data structure"""
+        from timetable.models import TeacherSubjectAssignment, Subject
+        from collections import defaultdict
+
+        state = {
+            'class_groups': set(),
+            'expected_subjects': defaultdict(dict),  # {class_group: {subject_code: {teacher, subject, expected_count}}}
+            'current_theory_counts': defaultdict(lambda: defaultdict(int)),
+            'current_practical_sessions': defaultdict(lambda: defaultdict(set)),  # Track days for practical sessions
+            'violations': {
+                'missing_theory': [],
+                'excess_theory': [],
+                'missing_practical': [],
+                'excess_practical': []
+            }
+        }
+
+        # Get all class groups from entries
+        state['class_groups'] = set(entry.class_group for entry in entries if entry.class_group)
+
+        # Get expected subjects for each class group (universal approach)
+        for assignment in TeacherSubjectAssignment.objects.all():
+            for section in assignment.sections:
+                for class_group in state['class_groups']:
+                    # Universal matching - works with any naming convention
+                    if self._class_group_matches_section(class_group, section):
+                        state['expected_subjects'][class_group][assignment.subject.code] = {
+                            'teacher': assignment.teacher,
+                            'subject': assignment.subject,
+                            'expected_count': 1 if assignment.subject.is_practical else assignment.subject.credits
+                        }
+
+        # Count current frequencies
+        for entry in entries:
+            if entry.subject and entry.class_group:
+                class_group = entry.class_group
+                subject_code = entry.subject.code
+
+                if entry.subject.is_practical:
+                    # For practical subjects, track days (sessions)
+                    state['current_practical_sessions'][class_group][subject_code].add(entry.day)
+                else:
+                    # For theory subjects, count individual classes
+                    state['current_theory_counts'][class_group][subject_code] += 1
+
+        # Identify violations
+        for class_group in state['class_groups']:
+            for subject_code, subject_info in state['expected_subjects'][class_group].items():
+                expected_count = subject_info['expected_count']
+                subject = subject_info['subject']
+
+                if subject.is_practical:
+                    actual_sessions = len(state['current_practical_sessions'][class_group][subject_code])
+                    if actual_sessions < expected_count:
+                        state['violations']['missing_practical'].append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_info': subject_info,
+                            'missing_sessions': expected_count - actual_sessions
+                        })
+                    elif actual_sessions > expected_count:
+                        state['violations']['excess_practical'].append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_info': subject_info,
+                            'excess_sessions': actual_sessions - expected_count
+                        })
+                else:
+                    actual_count = state['current_theory_counts'][class_group][subject_code]
+                    if actual_count < expected_count:
+                        state['violations']['missing_theory'].append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_info': subject_info,
+                            'missing_classes': expected_count - actual_count
+                        })
+                    elif actual_count > expected_count:
+                        state['violations']['excess_theory'].append({
+                            'class_group': class_group,
+                            'subject_code': subject_code,
+                            'subject_info': subject_info,
+                            'excess_classes': actual_count - expected_count
+                        })
+
+        return state
+
+    def _class_group_matches_section(self, class_group, section):
+        """Universal class group to section matching - works with any naming convention"""
+        class_group_clean = class_group.replace('-', '').replace('_', '').upper()
+        section_clean = section.replace('-', '').replace('_', '').upper()
+        return section_clean in class_group_clean or class_group_clean in section_clean
+
+    def _resolve_theory_frequency_violations(self, entries, state):
+        """Enhanced theory subject frequency resolution with detailed tracking"""
+        from timetable.models import TimetableEntry
+
+        changes_made = 0
+        details = []
+
+        if not state['violations']['missing_theory']:
+            details.append("No missing theory classes to add")
+            return {'count': 0, 'details': details}
+
+        for violation in state['violations']['missing_theory']:
+            class_group = violation['class_group']
+            subject_code = violation['subject_code']
+            subject_info = violation['subject_info']
+            missing_classes = violation['missing_classes']
+
+            details.append(f"Processing {subject_code} for {class_group}: need {missing_classes} more classes")
+
+            # Find available slots for this class group
+            available_slots = self._find_universal_available_slots(entries, class_group, missing_classes)
+
+            if not available_slots:
+                details.append(f"⚠️ No available slots found for {subject_code} in {class_group}")
+                continue
+
+            classes_added = 0
+            for i in range(min(missing_classes, len(available_slots))):
+                day, period = available_slots[i]
+
+                # Find available room
+                available_room = self._find_universal_available_room(entries, day, period)
+
+                if available_room:
+                    try:
+                        # Skip this slot for now - using safer constraint checking in new implementation
+
+                        # Create new timetable entry
+                        new_entry = TimetableEntry.objects.create(
+                            class_group=class_group,
+                            subject=subject_info['subject'],
+                            teacher=subject_info['teacher'],
+                            classroom=available_room,
+                            day=day,
+                            period=period,
+                            start_time=self._get_period_start_time(period),
+                            end_time=self._get_period_end_time(period),
+                            is_practical=False
+                        )
+                        classes_added += 1
+                        changes_made += 1
+                        details.append(f"✅ Added {subject_code} class: {day} P{period} in {available_room.name}")
+
+                    except Exception as e:
+                        details.append(f"❌ Failed to add {subject_code} class at {day} P{period}: {str(e)}")
+                        continue
+                else:
+                    details.append(f"⚠️ No available room for {subject_code} at {day} P{period}")
+
+            if classes_added > 0:
+                details.append(f"✅ Successfully added {classes_added}/{missing_classes} {subject_code} classes for {class_group}")
+            else:
+                details.append(f"❌ Could not add any {subject_code} classes for {class_group}")
+
+        return {'count': changes_made, 'details': details}
+
+    def _would_violate_other_constraints(self, entries, class_group, day, period, subject):
+        """Check if adding a class would violate other constraints"""
+
+        # Check for class group conflicts (no simultaneous classes for same section)
+        for entry in entries:
+            if (entry.class_group == class_group and
+                entry.day == day and entry.period == period):
+                return True
+
+        # Check Friday time limits
+        if day.lower().startswith('fri'):
+            # Count existing practical classes on Friday for this class group
+            friday_practicals = sum(1 for e in entries
+                                  if e.class_group == class_group and
+                                     e.day.lower().startswith('fri') and
+                                     e.subject and e.subject.is_practical)
+
+            if subject.is_practical:
+                # Practical subjects can go up to P6 on Friday
+                if period > 6:
+                    return True
+            else:
+                # Theory subjects limited by practical presence
+                if friday_practicals > 0 and period > 4:  # Has practical, theory limit P4
+                    return True
+                elif friday_practicals == 0 and period > 3:  # No practical, limit P3
+                    return True
+
+        # Check max theory per day constraint (only one theory class per day per section)
+        if not subject.is_practical:
+            theory_classes_today = sum(1 for e in entries
+                                     if e.class_group == class_group and
+                                        e.day == day and
+                                        e.subject and not e.subject.is_practical)
+            if theory_classes_today >= 1:
+                return True
+
+        # Check teacher conflicts
+        for entry in entries:
+            if (entry.teacher and entry.teacher.id == subject.id and  # Same teacher
+                entry.day == day and entry.period == period):
+                return True
+
+        return False
+
+    def _resolve_practical_frequency_violations(self, entries, state):
+        """Resolve practical subject frequency violations by adding missing sessions"""
+        from timetable.models import TimetableEntry
+
+        changes_made = 0
+        details = []
+
+        for violation in state['violations']['missing_practical']:
+            class_group = violation['class_group']
+            subject_code = violation['subject_code']
+            subject_info = violation['subject_info']
+            missing_sessions = violation['missing_sessions']
+
+            # For each missing session, find 3 consecutive slots in the same lab
+            for session in range(missing_sessions):
+                consecutive_slots = self._find_consecutive_lab_slots(entries, class_group, 3)
+
+                if consecutive_slots:
+                    day, start_period, lab = consecutive_slots
+
+                    session_added = 0
+                    for period_offset in range(3):  # 3 consecutive periods
+                        period = start_period + period_offset
+
+                        try:
+                            new_entry = TimetableEntry.objects.create(
+                                class_group=class_group,
+                                subject=subject_info['subject'],
+                                teacher=subject_info['teacher'],
+                                classroom=lab,
+                                day=day,
+                                period=period,
+                                start_time=self._get_period_start_time(period),
+                                end_time=self._get_period_end_time(period),
+                                is_practical=True
+                            )
+                            session_added += 1
+                            changes_made += 1
+
+                        except Exception as e:
+                            continue
+
+                    if session_added == 3:
+                        details.append(f"Added {subject_code} practical session for {class_group} on {day}")
+
+        return {'count': changes_made, 'details': details}
+
+    def _remove_excess_subject_instances(self, entries, state):
+        """Enhanced removal of excess subject instances with detailed tracking"""
+        changes_made = 0
+        details = []
+
+        if not state['violations']['excess_theory'] and not state['violations']['excess_practical']:
+            details.append("No excess classes to remove")
+            return {'count': 0, 'details': details}
+
+        # Remove excess theory classes
+        for violation in state['violations']['excess_theory']:
+            class_group = violation['class_group']
+            subject_code = violation['subject_code']
+            excess_classes = violation['excess_classes']
+
+            details.append(f"Processing excess {subject_code} for {class_group}: removing {excess_classes} classes")
+
+            # Find entries to remove (prefer removing from less optimal slots)
+            excess_entries = [e for e in entries
+                            if e.class_group == class_group
+                            and e.subject
+                            and e.subject.code == subject_code
+                            and not e.subject.is_practical]
+
+            # Sort by preference (remove Friday late periods first, then other suboptimal slots)
+            excess_entries.sort(key=lambda e: (
+                e.day.lower().startswith('fri') and e.period > 3,  # Friday late periods first
+                e.period > 5,  # Late periods
+                e.period  # Higher periods
+            ), reverse=True)
+
+            removed_count = 0
+            for i in range(min(excess_classes, len(excess_entries))):
+                try:
+                    entry_to_remove = excess_entries[i]
+                    day = entry_to_remove.day
+                    period = entry_to_remove.period
+                    room = entry_to_remove.classroom.name if entry_to_remove.classroom else 'N/A'
+
+                    entry_to_remove.delete()
+                    changes_made += 1
+                    removed_count += 1
+                    details.append(f"✅ Removed {subject_code} class: {day} P{period} in {room}")
+
+                except Exception as e:
+                    details.append(f"❌ Failed to remove {subject_code} class: {str(e)}")
+                    continue
+
+            if removed_count > 0:
+                details.append(f"✅ Successfully removed {removed_count}/{excess_classes} excess {subject_code} classes for {class_group}")
+            else:
+                details.append(f"❌ Could not remove any excess {subject_code} classes for {class_group}")
+
+        # Remove excess practical sessions
+        for violation in state['violations']['excess_practical']:
+            class_group = violation['class_group']
+            subject_code = violation['subject_code']
+            excess_sessions = violation['excess_sessions']
+
+            # Find practical entries grouped by day
+            practical_entries = [e for e in entries
+                               if e.class_group == class_group
+                               and e.subject
+                               and e.subject.code == subject_code
+                               and e.subject.is_practical]
+
+            # Group by day and remove excess days
+            from collections import defaultdict
+            entries_by_day = defaultdict(list)
+            for entry in practical_entries:
+                entries_by_day[entry.day].append(entry)
+
+            days_to_remove = list(entries_by_day.keys())[-excess_sessions:]
+
+            for day in days_to_remove:
+                for entry in entries_by_day[day]:
+                    try:
+                        entry.delete()
+                        changes_made += 1
+                    except Exception as e:
+                        continue
+
+                details.append(f"Removed excess {subject_code} practical session for {class_group} on {day}")
+
+        return {'count': changes_made, 'details': details}
+
+    def _class_group_matches_section(self, class_group, section):
+        """Universal class group to section matching - works with any naming convention"""
+        # Handle various naming patterns: 21SW-III, 21SW3, SW-21-III, etc.
+        class_group_clean = class_group.replace('-', '').replace('_', '').upper()
+        section_clean = section.replace('-', '').replace('_', '').upper()
+
+        # Check if section is contained in class_group or vice versa
+        return section_clean in class_group_clean or class_group_clean in section_clean
+
+    def _find_available_slots(self, entries, class_group, needed_slots):
+        """Find available time slots for a class group"""
+        # Get all occupied slots for this class group
+        occupied_slots = set()
+        for entry in entries:
+            if entry.class_group == class_group:
+                occupied_slots.add((entry.day, entry.period))
+
+        # Define all possible slots (Monday-Friday, periods 1-8)
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+        periods = list(range(1, 9))
+
+        available_slots = []
+        for day in days:
+            for period in periods:
+                if (day, period) not in occupied_slots:
+                    available_slots.append((day, period))
+                    if len(available_slots) >= needed_slots:
+                        break
+            if len(available_slots) >= needed_slots:
+                break
+
+        return available_slots[:needed_slots]
+
+    def _find_available_room(self, entries, day, period):
+        """Find an available room for a specific day and period"""
+        from timetable.models import Classroom
+
+        # Get all occupied rooms for this time slot
+        occupied_rooms = set()
+        for entry in entries:
+            if entry.day == day and entry.period == period and entry.classroom:
+                occupied_rooms.add(entry.classroom.id)
+
+        # Find an available room
+        available_rooms = Classroom.objects.exclude(id__in=occupied_rooms)
+        return available_rooms.first() if available_rooms.exists() else None
+
+    def _get_period_start_time(self, period):
+        """Get start time for a period"""
+        start_times = {
+            1: "08:00", 2: "09:00", 3: "10:00", 4: "11:00",
+            5: "12:00", 6: "13:00", 7: "14:00", 8: "15:00"
+        }
+        return start_times.get(period, "08:00")
+
+    def _get_period_end_time(self, period):
+        """Get end time for a period"""
+        end_times = {
+            1: "09:00", 2: "10:00", 3: "11:00", 4: "12:00",
+            5: "13:00", 6: "14:00", 7: "15:00", 8: "16:00"
+        }
+        return end_times.get(period, "09:00")
+
+    def _find_universal_available_slots(self, entries, class_group, needed_slots):
+        """Universal method to find available time slots - works with any timetable structure"""
+        # Get all occupied slots for this class group
+        occupied_slots = set()
+        for entry in entries:
+            if entry.class_group == class_group:
+                occupied_slots.add((entry.day, entry.period))
+
+        # Define all possible slots (universal approach)
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+        periods = list(range(1, 9))  # Periods 1-8 (universal)
+
+        # Normalize day names to handle different formats
+        day_mapping = {
+            'Monday': 'Mon', 'Tuesday': 'Tue', 'Wednesday': 'Wed',
+            'Thursday': 'Thu', 'Friday': 'Fri'
+        }
+
+        available_slots = []
+        for day in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']:
+            for period in periods:
+                # Check all possible day name formats
+                slot_occupied = False
+                for day_variant in [day, day_mapping.get(day, day)]:
+                    if (day_variant, period) in occupied_slots:
+                        slot_occupied = True
+                        break
+
+                if not slot_occupied:
+                    available_slots.append((day, period))
+                    if len(available_slots) >= needed_slots:
+                        break
+            if len(available_slots) >= needed_slots:
+                break
+
+        return available_slots[:needed_slots]
+
+    def _find_universal_available_room(self, entries, day, period):
+        """Universal method to find available room - works with any room structure"""
+        from timetable.models import Classroom
+
+        # Get all occupied rooms for this time slot
+        occupied_rooms = set()
+        for entry in entries:
+            if entry.day == day and entry.period == period and entry.classroom:
+                occupied_rooms.add(entry.classroom.id)
+
+        # Find available room (prefer theory rooms for theory subjects)
+        available_rooms = Classroom.objects.exclude(id__in=occupied_rooms).exclude(name__icontains='lab')
+        return available_rooms.first() if available_rooms.exists() else None
+
+    def _find_consecutive_lab_slots(self, entries, class_group, consecutive_periods):
+        """Find consecutive periods in the same lab for practical subjects"""
+        from timetable.models import Classroom
+
+        # Get all occupied slots for this class group
+        occupied_slots = set()
+        for entry in entries:
+            if entry.class_group == class_group:
+                occupied_slots.add((entry.day, entry.period))
+
+        # Get all lab rooms
+        labs = Classroom.objects.filter(name__icontains='lab')
+
+        for lab in labs:
+            for day in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']:
+                for start_period in range(1, 9 - consecutive_periods + 1):
+                    # Check if consecutive periods are available
+                    consecutive_available = True
+                    lab_occupied = False
+
+                    for period_offset in range(consecutive_periods):
+                        period = start_period + period_offset
+
+                        # Check if class group has conflict
+                        if (day, period) in occupied_slots:
+                            consecutive_available = False
+                            break
+
+                        # Check if lab is occupied
+                        for entry in entries:
+                            if (entry.day == day and entry.period == period and
+                                entry.classroom and entry.classroom.id == lab.id):
+                                lab_occupied = True
+                                break
+
+                        if lab_occupied:
+                            consecutive_available = False
+                            break
+
+                    if consecutive_available:
+                        return (day, start_period, lab)
+
         return None
 
     def _resolve_compact_scheduling(self, entries):
@@ -2549,8 +3672,8 @@ class ConstraintResolverView(APIView):
 
         violations_resolved = 0
 
-        # Get all lab rooms (using is_lab field instead of name matching)
-        lab_rooms = Classroom.objects.filter(is_lab=True)
+        # Get all lab rooms (using name matching for labs)
+        lab_rooms = Classroom.objects.filter(name__icontains='lab')
 
         if not lab_rooms.exists():
             print("No lab rooms found in the system")
