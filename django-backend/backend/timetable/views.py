@@ -1194,13 +1194,21 @@ class ConstraintTestingView(APIView):
 
         # Group by class_group and subject
         class_subject_counts = defaultdict(lambda: defaultdict(int))
+        class_practical_sessions = defaultdict(lambda: defaultdict(int))
         subject_details = defaultdict(list)
 
         for entry in entries:
             if entry.subject:
                 class_group = entry.class_group
                 subject_code = entry.subject.code
-                class_subject_counts[class_group][subject_code] += 1
+
+                # For practical subjects, count sessions (not individual blocks)
+                if entry.subject.is_practical:
+                    # Group practical entries by day to count sessions
+                    class_practical_sessions[class_group][subject_code] += 1
+                else:
+                    # For theory subjects, count individual classes
+                    class_subject_counts[class_group][subject_code] += 1
 
                 subject_details[f"{class_group}-{subject_code}"].append({
                     'day': entry.day,
@@ -1213,6 +1221,7 @@ class ConstraintTestingView(APIView):
         violations = []
         compliant_subjects = []
 
+        # Check theory subjects
         for class_group, subject_counts in class_subject_counts.items():
             for subject_code, actual_count in subject_counts.items():
                 try:
@@ -1231,6 +1240,42 @@ class ConstraintTestingView(APIView):
 
                     if actual_count != expected_count:
                         subject_info['violation_type'] = 'frequency_mismatch'
+                        violations.append(subject_info)
+                    else:
+                        compliant_subjects.append(subject_info)
+
+                except Subject.DoesNotExist:
+                    violations.append({
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'violation_type': 'subject_not_found',
+                        'schedule_details': subject_details[f"{class_group}-{subject_code}"]
+                    })
+
+        # Check practical subjects (count sessions, not blocks)
+        for class_group, session_counts in class_practical_sessions.items():
+            for subject_code, actual_sessions in session_counts.items():
+                try:
+                    subject = Subject.objects.get(code=subject_code)
+                    expected_sessions = 1  # Practical subjects: 1 session per week (3 consecutive blocks)
+
+                    # Count actual sessions by grouping blocks by day
+                    practical_details = subject_details[f"{class_group}-{subject_code}"]
+                    days_with_practical = set(detail['day'] for detail in practical_details)
+                    actual_sessions = len(days_with_practical)
+
+                    subject_info = {
+                        'class_group': class_group,
+                        'subject_code': subject_code,
+                        'subject_name': subject.name,
+                        'expected_count': expected_sessions,
+                        'actual_count': actual_sessions,
+                        'is_practical': subject.is_practical,
+                        'schedule_details': practical_details
+                    }
+
+                    if actual_sessions != expected_sessions:
+                        subject_info['violation_type'] = 'practical_session_mismatch'
                         violations.append(subject_info)
                     else:
                         compliant_subjects.append(subject_info)
@@ -2822,37 +2867,6 @@ class ConstraintResolverView(APIView):
             'total_violations': len(violations),
             'violations': violations,
             'message': f'Found {len(violations)} working hours violations'
-        }
-
-    def _analyze_max_theory_per_day(self, entries):
-        """Analyze maximum one theory class per day constraint"""
-        from collections import defaultdict
-
-        violations = []
-        section_daily_theory = defaultdict(lambda: defaultdict(list))
-
-        # Count theory classes per section per day
-        for entry in entries:
-            if entry.subject and not entry.subject.is_practical:
-                section_daily_theory[entry.class_group][entry.day].append(entry)
-
-        # Check for violations (more than 1 theory class per day)
-        for class_group, daily_classes in section_daily_theory.items():
-            for day, theory_classes in daily_classes.items():
-                if len(theory_classes) > 1:
-                    violations.append({
-                        'class_group': class_group,
-                        'day': day,
-                        'theory_count': len(theory_classes),
-                        'subjects': [e.subject.code for e in theory_classes],
-                        'description': f'{class_group} has {len(theory_classes)} theory classes on {day}'
-                    })
-
-        return {
-            'status': 'PASS' if len(violations) == 0 else 'FAIL',
-            'total_violations': len(violations),
-            'violations': violations,
-            'message': f'Found {len(violations)} multiple theory per day violations'
         }
 
     # Additional constraint resolution methods for new constraint types
