@@ -658,3 +658,5 @@ class ConstraintValidator:
                         'labs_used': len(labs_used),
                         'details': lab_details
                     })
+
+        return violations

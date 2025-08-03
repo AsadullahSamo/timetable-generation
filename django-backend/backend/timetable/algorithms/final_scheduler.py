@@ -528,7 +528,7 @@ class FinalUniversalScheduler:
         available_slots = []
         for day in self.days:
             for period in self.periods:
-                if self._can_schedule_single(class_schedule, day, period, class_group):
+                if self._can_schedule_single(class_schedule, day, period, class_group, subject):
                     # Calculate Friday-aware priority score for this slot
                     friday_score = self._calculate_friday_aware_slot_score(day, period, class_group, entries)
                     available_slots.append((day, period, friday_score))
@@ -880,7 +880,7 @@ class FinalUniversalScheduler:
                 return False
         return True
 
-    def _can_schedule_single(self, class_schedule: dict, day: str, period: int, class_group: str) -> bool:
+    def _can_schedule_single(self, class_schedule: dict, day: str, period: int, class_group: str, subject: Subject = None) -> bool:
         """Check if single period can be scheduled."""
         # Basic availability check
         if (day, period) in class_schedule:
@@ -893,6 +893,26 @@ class FinalUniversalScheduler:
             if base_batch.startswith('21SW'):
                 print(f"         🚫 Avoiding Wednesday P{period} - reserved for Thesis in {class_group}")
                 return False
+
+        # NEW CONSTRAINT: No Duplicate Theory Classes Per Day
+        # Check if this subject (if theory) already has a class scheduled on this day
+        # EXCEPTION: Thesis subjects are allowed multiple times on Wednesday for final year (existing constraint)
+        if subject and not subject.is_practical:  # Only apply to theory subjects
+            # Check if this is a Thesis subject for final year
+            is_thesis_subject = ('thesis' in subject.name.lower() or 'thesis' in subject.code.lower())
+            is_final_year = class_group.split('-')[0].startswith('21SW') if '-' in class_group else class_group.startswith('21SW')
+            is_wednesday = day.lower().startswith('wed')
+
+            # Skip constraint for Thesis subjects on Wednesday for final year (existing constraint takes precedence)
+            if is_thesis_subject and is_final_year and is_wednesday:
+                pass  # Allow multiple Thesis classes on Wednesday for final year
+            else:
+                for (existing_day, existing_period), existing_entry in class_schedule.items():
+                    if (existing_entry.class_group == class_group and
+                        existing_entry.subject and existing_entry.subject.code == subject.code and
+                        existing_day == day and not existing_entry.is_practical):
+                        print(f"         🚫 No duplicate theory: {subject.code} already scheduled on {day} P{existing_period} for {class_group}")
+                        return False
 
         return True
 

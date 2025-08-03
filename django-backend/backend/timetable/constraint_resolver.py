@@ -1954,20 +1954,6 @@ class IntelligentConstraintResolver:
         # Theory subjects can use any room
         return True
 
-        # JUNIOR BATCHES: Should use regular rooms, labs only for practicals
-        else:
-            if entry.subject and entry.subject.is_practical:
-                # Practicals need labs
-                if not classroom.is_lab:
-                    return False
-            else:
-                # Theory classes should use regular rooms
-                if classroom.is_lab:
-                    print(f"    🚫 Junior batch {entry.class_group} should not use lab {classroom.name} for theory")
-                    return False
-
-        return True
-
     def _resolve_compact_scheduling(self, entries: List[TimetableEntry], violation: Dict) -> List[TimetableEntry]:
         """Resolve compact scheduling violations by filling gaps and making schedule compact."""
         print(f"    🔧 Resolving compact scheduling: {violation['description']}")

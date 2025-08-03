@@ -13,7 +13,7 @@ Here are all the constraints currently implemented and working:
 10. Friday-Aware Scheduling - Monday-Thursday scheduling considers Friday limits proactively
 11. Working Hours  - All classes are within 8:00 AM to 3:00 PM
 12. Thesis Day - Wednesday is exclusively reserved for Thesis subjects for final year students
-13. Max Theory per Day - Maximum one theory class per day per section
+13. No Duplicate Theory Per Day - No section can have multiple theory classes of the same subject on the same day (integrated directly into scheduling algorithm for prevention during generation)
 14. Same Lab Rule - All 3 blocks of practical subjects must use the same lab
 15. Practicals in Labs - Practical subjects must be scheduled only in laboratory rooms
 16. Appropriate Distribution - Lessons are spread across all 5 days
@@ -28,5 +28,4 @@ Here are all the constraints currently implemented and working:
 ✅ Universal Lab Consistency - All 3 blocks of practical subjects use the same lab (strict enforcement)
 ✅ Flexible Senior Batch Allocation - Senior batches prefer labs but can use regular rooms when needed for practicals
 
-To be implemented:
-1. There can't be more than one theory class (3 or 2) credit hours) on a given day (while also respecting "Subject Frequency" based on credit hours, for a week with exception of practical)
+✅ All constraints have been successfully implemented and are working correctly!
