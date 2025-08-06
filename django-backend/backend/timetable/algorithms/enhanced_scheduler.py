@@ -213,7 +213,14 @@ class EnhancedScheduler:
         
         for assignment in assignments:
             if assignment.batch.name == batch_name:
-                if section is None or section in assignment.sections:
+                if section is None:
+                    return True
+                
+                # Map section letters to Roman numerals
+                section_mapping = {'A': 'I', 'B': 'II', 'C': 'III'}
+                mapped_section = section_mapping.get(section, section)
+                
+                if mapped_section in assignment.sections:
                     return True
         
         return False
@@ -485,8 +492,15 @@ class EnhancedScheduler:
                 batch_name = class_group.split('-')[0] if '-' in class_group else class_group
                 if assignment.batch.name == batch_name:
                     section = class_group.split('-')[1] if '-' in class_group else None
-                    if section is None or section in assignment.sections:
+                    if section is None:
                         teachers.append(assignment.teacher)
+                    else:
+                        # Map section letters to Roman numerals
+                        section_mapping = {'A': 'I', 'B': 'II', 'C': 'III'}
+                        mapped_section = section_mapping.get(section, section)
+                        
+                        if mapped_section in assignment.sections:
+                            teachers.append(assignment.teacher)
             else:
                 teachers.append(assignment.teacher)
         

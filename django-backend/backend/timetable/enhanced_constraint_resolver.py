@@ -45,6 +45,7 @@ class EnhancedConstraintResolver:
             'Cross Semester Conflicts': self._resolve_cross_semester_conflicts,
             'Teacher Assignments': self._resolve_teacher_assignments,
             'Friday Aware Scheduling': self._resolve_friday_aware_scheduling,
+            'Empty Friday Fix': self._resolve_empty_fridays,
             # NEW CONSTRAINTS
             'Same Theory Subject Distribution': self._resolve_same_theory_subject_distribution,
             'Breaks Between Classes': self._resolve_breaks_between_classes,
@@ -119,6 +120,7 @@ class EnhancedConstraintResolver:
             'Teacher Conflicts',
             'Friday Time Limits',
             'Minimum Daily Classes',
+            'Empty Friday Fix',
             'Compact Scheduling',
             'Cross Semester Conflicts',
             'Teacher Assignments',
@@ -634,6 +636,79 @@ class EnhancedConstraintResolver:
                     print(f"    ✅ Moved {entry.subject.code} to earlier week slot")
         
         return current_entries
+    
+    def _resolve_empty_fridays(self, entries: List[TimetableEntry], violations: List[Dict]) -> List[TimetableEntry]:
+        """Resolve empty Friday violations by adding classes to empty Fridays."""
+        print("  📅 Resolving empty Friday violations...")
+        
+        current_entries = list(entries)
+        
+        # Get all class groups
+        all_class_groups = set(entry.class_group for entry in current_entries)
+        
+        # Check each class group for empty Friday
+        for class_group in all_class_groups:
+            friday_entries = [entry for entry in current_entries 
+                             if entry.class_group == class_group and entry.day == 'Friday']
+            
+            if not friday_entries:
+                print(f"    🔧 Adding classes to empty Friday for {class_group}")
+                current_entries = self._add_classes_to_empty_friday(current_entries, class_group)
+        
+        return current_entries
+    
+    def _add_classes_to_empty_friday(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """Add classes to an empty Friday for a class group."""
+        # Get subjects that need more classes for this class group
+        subjects_needing = self._get_subjects_needing_more_classes(entries, class_group)
+        
+        if not subjects_needing:
+            return entries
+        
+        # Get available periods on Friday
+        available_periods = self._find_available_periods_on_day(entries, class_group, 'Friday')
+        
+        if not available_periods:
+            return entries
+        
+        # Add classes to Friday
+        classes_added = 0
+        max_classes_to_add = min(3, len(available_periods))  # Add up to 3 classes to Friday
+        
+        for subject_code, needed_count in subjects_needing.items():
+            if classes_added >= max_classes_to_add:
+                break
+            
+            if needed_count > 0:
+                # Find subject and teacher
+                subject = Subject.objects.filter(code=subject_code).first()
+                if subject:
+                    teacher = self._find_appropriate_teacher_for_subject(subject, class_group)
+                    
+                    if teacher:
+                        # Find available period
+                        for period in available_periods:
+                            if self._is_slot_available(entries, class_group, 'Friday', period):
+                                # Allocate room
+                                if subject.is_practical:
+                                    room = self.room_allocator.allocate_room_for_practical(
+                                        'Friday', period, class_group, subject, entries
+                                    )
+                                else:
+                                    room = self.room_allocator.allocate_room_for_theory(
+                                        'Friday', period, class_group, subject, entries
+                                    )
+                                
+                                if room:
+                                    # Create entry
+                                    new_entry = self._create_entry('Friday', period, subject, teacher, room, class_group, subject.is_practical)
+                                    entries.append(new_entry)
+                                    available_periods.remove(period)
+                                    classes_added += 1
+                                    print(f"    ✅ Added {subject_code} to Friday P{period} for {class_group}")
+                                    break
+        
+        return entries
     
     # Helper methods (keep all existing ones)
     

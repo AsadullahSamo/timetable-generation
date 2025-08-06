@@ -44,6 +44,7 @@ class EnhancedConstraintValidator:
             self._check_room_conflicts,
             self._check_friday_time_limits,
             self._check_minimum_daily_classes,
+            self._check_empty_fridays,
             self._check_thesis_day_constraint,
             self._check_compact_scheduling,
             self._check_cross_semester_conflicts,
@@ -815,4 +816,25 @@ class EnhancedConstraintValidator:
         if current_sequence:
             sequences.append(current_sequence)
         
-        return sequences 
+        return sequences
+    
+    def _check_empty_fridays(self, entries: List[TimetableEntry]) -> List[Dict]:
+        """Check for empty Fridays - each class group should have at least one class on Friday."""
+        violations = []
+        
+        # Get all class groups
+        all_class_groups = set(entry.class_group for entry in entries)
+        
+        # Check each class group for empty Friday
+        for class_group in all_class_groups:
+            friday_entries = [entry for entry in entries 
+                             if entry.class_group == class_group and entry.day == 'Friday']
+            
+            if not friday_entries:
+                violations.append({
+                    'type': 'Empty Friday',
+                    'class_group': class_group,
+                    'description': f"Class group {class_group} has no classes on Friday"
+                })
+        
+        return violations 
