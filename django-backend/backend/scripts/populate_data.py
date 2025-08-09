@@ -16,6 +16,12 @@ import os
 import sys
 import django
 
+# Add the parent directory to Python path so we can import backend module
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
@@ -73,22 +79,21 @@ def populate_subjects():
     # 21SW - 8th Semester (Final Year)
     subjects_21sw = [
         ('SM', 'Simulation and Modeling', 3, False),
-        ('FYP2', 'Final Year Project II', 3, False),
         ('SQE', 'Software Quality Engineering', 3, False),
+        ('SQE2', 'Software Quality Engineering (PR)', 1, True),
         ('CC', 'Cloud Computing', 3, False),
-        ('CC2', 'Cloud Computing Lab', 1, True),
-        ('SQE2', 'Software Quality Engineering Lab', 1, True),
+        ('CC2', 'Cloud Computing (PR)', 1, True),
     ]
     
     # 22SW - 6th Semester (3rd Year)
     subjects_22sw = [
-        ('SPM', 'Software Project Management', 1, False),
+        ('SPM', 'Software Project Management', 3, False),
         ('TSW', 'Technical & Scientific Writing', 2, False),
-        ('DS', 'Distributed Systems', 3, False),
+        ('DS', 'Discrete Structures', 3, False),
         ('DSA2', 'Data Science & Analytics', 3, False),
-        ('DSA3', 'Data Science & Analytics Lab', 1, True),
+        ('DSA3', 'Data Science & Analytics (PR)', 1, True),
         ('MAD', 'Mobile Application Development', 3, False),
-        ('MAD2', 'Mobile Application Development Lab', 1, True),
+        ('MAD2', 'Mobile Application Development (PR)', 1, True),
     ]
     
     # 23SW - 4th Semester (2nd Year)
@@ -96,20 +101,20 @@ def populate_subjects():
         ('ABIS', 'Agent based Intelligent Systems', 3, False),
         ('ISEC', 'Information Security', 3, False),
         ('HCI', 'Human Computer Interaction', 3, False),
-        ('SCD', 'Software Construction & Development', 2, False),
-        ('SCD2', 'Software Construction & Development Lab', 1, True),
         ('SP', 'Statistics & Probability', 1, False),
+        ('SCD', 'Software Construction & Development', 2, False),
+        ('SCD2', 'Software Construction & Development (PR)', 1, True),
     ]
     
     # 24SW - 2nd Semester (1st Year)
     subjects_24sw = [
         ('DBS', 'Database Systems', 3, False),
-        ('DSA', 'Data Structure & Algorithm', 3, False),
+        ('DBS2', 'Database Systems (PR)', 1, True),
+        ('DSA', 'Data Structures & Algorithm', 3, False),
+        ('DSA4', 'Data Structures & Algorithm (PR)', 1, True),
         ('SRE', 'Software Requirement Engineering', 3, False),
         ('OR', 'Operations Research', 3, False),
         ('SEM', 'Software Economics & Management', 3, False),
-        ('DSA4', 'Data Structure & Algorithm Lab', 1, True),
-        ('DBS2', 'Database Systems Lab', 1, True),
     ]
     
     all_subjects = [
@@ -148,16 +153,19 @@ def populate_classrooms():
     """Create all classrooms"""
     print('\n=== CREATING CLASSROOMS ===')
     classrooms_data = [
-        {'name': 'Room 101', 'capacity': 40, 'building': 'Main Block'},
-        {'name': 'Room 102', 'capacity': 35, 'building': 'Main Block'},
-        {'name': 'Room 103', 'capacity': 45, 'building': 'Main Block'},
-        {'name': 'Room 201', 'capacity': 40, 'building': 'Main Block'},
-        {'name': 'Room 202', 'capacity': 35, 'building': 'Main Block'},
-        {'name': 'Lab 1', 'capacity': 30, 'building': 'Lab Block'},
-        {'name': 'Lab 2', 'capacity': 30, 'building': 'Lab Block'},
-        {'name': 'Lab 3', 'capacity': 25, 'building': 'Lab Block'},
-        {'name': 'Seminar Hall', 'capacity': 100, 'building': 'Main Block'},
-        {'name': 'Conference Room', 'capacity': 20, 'building': 'Admin Block'},
+        {'name': 'Room 01', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Room 02', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Room 03', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Room 04', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'A.C. Room 01', 'capacity': 50, 'building': 'Academic Building'},
+        {'name': 'A.C. Room 02', 'capacity': 50, 'building': 'Academic Building'},
+        {'name': 'A.C. Room 03', 'capacity': 50, 'building': 'Academic Building'},
+        {'name': 'Lab 1', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Lab 2', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Lab 3', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Lab 4', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Lab 5', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Lab 6', 'capacity': 50, 'building': 'Main Building'},
     ]
 
     for classroom_data in classrooms_data:
@@ -180,34 +188,34 @@ def populate_teacher_assignments():
     assignments_data = [
         # 21SW assignments
         ('Dr. Sania Bhatti', 'SM', '21SW', ['I', 'II']),
+        ('Mr.Umar Farooq', 'SM', '21SW', ['III']),
         ('Mr. Aqib Ali', 'SQE', '21SW', ['I', 'II', 'III']),
         ('Mr. Aqib Ali', 'SQE2', '21SW', ['I', 'II', 'III']),
         ('Dr. Rabeea Jaffari', 'CC', '21SW', ['I', 'II', 'III']),
         ('Ms. Sana Faiz', 'CC2', '21SW', ['I', 'II', 'III']),
-        ('Prof. Dr. Qasim Ali', 'FYP2', '21SW', ['I', 'II', 'III']),
         
         # 22SW assignments
         ('Mr. Salahuddin Saddar', 'SPM', '22SW', ['I', 'II', 'III']),
-        ('Mr. Sarwar Ali', 'TSW', '22SW', ['I']),
-        ('Ms. Shazma Memon', 'TSW', '22SW', ['II', 'III']),
+        ('Ms. Shazma Memon', 'TSW', '22SW', ['I', 'II']),
+        ('Mr. Sarwar Ali', 'TSW', '22SW', ['III']),
         ('Ms. Shafya Qadeer', 'DS', '22SW', ['I', 'II', 'III']),
-        ('Ms. Aisha Esani', 'DSA2', '22SW', ['I', 'II', 'III']),
+        ('Dr.Areej Fatemah', 'DSA2', '22SW', ['I', 'II', 'III']),
         ('Ms. Aisha Esani', 'DSA3', '22SW', ['I', 'II', 'III']),
-        ('Ms. Mariam Memon', 'MAD', '22SW', ['I', 'II']),
-        ('Mr. Umar Farooq', 'MAD', '22SW', ['III']),
+        ('Ms. Mariam Memon', 'MAD', '22SW', ['I', 'II', 'III']),
         ('Mr. Umar Farooq', 'MAD2', '22SW', ['I', 'II', 'III']),
         
         # 23SW assignments
-        ('Mr. Naveen Kumar', 'ABIS', '23SW', ['I', 'III']),
+        ('Mr. Naveen Kumar', 'ABIS', '23SW', ['I', 'II', 'III']),
+        ('Prof. Dr. Qasim Ali', 'ISEC', '23SW', ['I']),
         ('Ms. Soonti Taj', 'ISEC', '23SW', ['II', 'III']),
-        ('Dr. S. M. Shehram Shah', 'HCI', '23SW', ['II']),
+        ('Dr. S. M. Shehram Shah', 'HCI', '23SW', ['I', 'II']),
         ('Mr. Arsalan', 'HCI', '23SW', ['III']),
-        ('Ms. Dua Agha', 'SCD', '23SW', ['II', 'III']),
+        ('Mr. Mansoor Bhaagat', 'SP', '23SW', ['I', 'II', 'III']),
+        ('Ms. Dua Agha', 'SCD', '23SW', ['I', 'II', 'III']),
         ('Ms. Dua Agha', 'SCD2', '23SW', ['I', 'II', 'III']),
-        ('Mr. Mansoor Bhaagat', 'SP', '23SW', ['I', 'III']),
         
         # 24SW assignments
-        ('Ms. Aleena', 'DBS', '24SW', ['II', 'III']),
+        ('Ms. Aleena', 'DBS', '24SW', ['I', 'II', 'III']),
         ('Ms. Hina Ali', 'DBS2', '24SW', ['I', 'II', 'III']),
         ('Dr. Mohsin Memon', 'DSA', '24SW', ['I', 'II']),
         ('Mr. Mansoor', 'DSA', '24SW', ['III']),
