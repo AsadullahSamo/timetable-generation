@@ -47,7 +47,7 @@ const AddTeacher = () => {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const configRes = await api.get("/api/timetable/configs/");
+        const configRes = await api.get("/api/timetable/schedule-configs/");
         if (configRes.data.length > 0) {
           // Get the latest config (highest ID) that has generated_periods
           const latestConfig = configRes.data

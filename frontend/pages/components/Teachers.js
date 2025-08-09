@@ -62,7 +62,7 @@ const TeachersConfig = () => {
         const [teachersRes, subjectsRes, configRes, assignmentsRes] = await Promise.all([
           api.get("/api/timetable/teachers/"),
           api.get("/api/timetable/subjects/"),
-          api.get("/api/timetable/configs/"),
+          api.get("/api/timetable/schedule-configs/"),
           api.get("/api/timetable/teacher-assignments/")
         ]);
         

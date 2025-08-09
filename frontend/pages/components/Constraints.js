@@ -193,7 +193,7 @@ const Constraints = () => {
     try {
       // Check if basic data exists
       const [configRes, subjectsRes, teachersRes, classroomsRes, batchesRes, assignmentsRes] = await Promise.all([
-        api.get('/api/timetable/configs/'),
+        api.get('/api/timetable/schedule-configs/'),
         api.get('/api/timetable/subjects/'),
         api.get('/api/timetable/teachers/'),
         api.get('/api/timetable/classrooms/'),
@@ -204,7 +204,7 @@ const Constraints = () => {
       const issues = [];
 
       // Check department configuration
-      if (!configRes.data.length || !configRes.data[0].start_time) {
+      if (!configRes.data.length || !configRes.data[0].start_time || !configRes.data[0].days?.length || !configRes.data[0].periods?.length) {
         issues.push('⚙️ Department Configuration: Set up working days, periods, and times');
       }
 
