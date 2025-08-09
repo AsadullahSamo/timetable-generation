@@ -1,178 +1,171 @@
-# Timetable Generation System
+# 🗓️ Automated Timetable Generation System
 
-A comprehensive web-based timetable generation system built with Django REST API backend and Next.js frontend. This system uses advanced genetic algorithms to automatically generate optimal class schedules while respecting various constraints.
+A web-based, AI-powered class scheduling platform that automates the creation of conflict-free, optimized academic timetables. Built using **Next.js** and **Django REST**, the system leverages a custom **genetic algorithm** to generate schedules while adhering to over 18 real-world academic and infrastructure constraints.
 
-## Features
+---
 
-- **Advanced Timetable Generation**: Uses genetic algorithms to create optimal schedules
-- **Constraint Management**: Supports teacher availability, classroom assignments, and subject requirements
-- **Real-time Generation**: Fast and efficient timetable generation with progress tracking
-- **Responsive UI**: Modern, user-friendly interface built with Next.js
-- **RESTful API**: Clean Django REST API for all operations
-- **Multi-user Support**: Firebase authentication integration
-- **Export Capabilities**: Generate and export timetables in various formats
+## 🚀 Key Features
 
-## Technology Stack
+### 🔄 AI-Powered Timetable Generation
 
-### Backend
-- **Django 4.2.7**: Web framework
-- **Django REST Framework**: API development
-- **SQLite**: Database (can be easily migrated to PostgreSQL/MySQL)
-- **Celery**: Background task processing
-- **JWT**: Authentication
+* Genetic algorithm-based optimization
+* Real-time generation with progress tracking
+* Generates compact, practical, and conflict-free schedules
+
+### 📋 Comprehensive Constraint Management
+
+* Handles academic, infrastructure, and institutional rules
+* Avoids common conflicts like teacher overlaps or double-booked rooms
+* Ensures practical classes are in labs, with consistent room usage
+
+### 🧠 Intelligent Scheduling Logic
+
+* Smart teacher-subject matching
+* Friday-aware scheduling (early dismissal rules)
+* Reserved thesis days for final-year students
+* Distribution of sessions across all weekdays
+
+### 🏫 Room & Lab Allocation
+
+* Enforces “same-lab” rule for practical blocks
+* Guarantees no room overlap and lab-only allocation for practicals
+* Adaptive assignment for senior batches with flexible lab preferences
+
+### 🔐 User Management & Auth
+
+* Firebase Authentication integration
+* Multi-user access for administrators, faculty, and staff
+
+### 📤 Export & Accessibility
+
+* Export generated timetables in multiple formats (PDF, Excel, etc.)
+* Mobile-friendly, responsive UI for on-the-go access
+
+---
+
+## ⚙️ Constraint Highlights
+
+> The system currently respects **18+ academic and room constraints**, including:
+
+#### Academic & Scheduling
+
+1. Subject-wise frequency per week (based on credit hours)
+2. 3-hour practical blocks (auto-grouped)
+3. No duplicate theory classes of the same subject per day
+4. Minimum number of classes per day enforced
+5. Thesis scheduling on Wednesdays (final year only)
+6. Intelligent subject-teacher mapping
+7. Avoids scheduling classes beyond institutional working hours (8AM–3PM)
+
+#### Room Allocation
+
+8. No room overlaps or double-bookings
+9. Same-lab rule for practical subjects
+10. Practical subjects scheduled **only** in lab rooms
+11. Room consistency for theory classes
+12. Flexible room usage for senior batches (labs preferred)
+
+#### Conflict Prevention
+
+13. No teacher overlaps across classes
+14. Cross-semester conflict detection
+15. Section-level conflict prevention
+16. Friday constraints (earlier cutoff for classes)
+17. Compact and student-friendly scheduling
+18. Balanced subject distribution throughout the week
+
+✅ All constraints have been successfully implemented and tested in real-time use cases.
+
+---
+
+## 🛠️ Tech Stack
 
 ### Frontend
-- **Next.js 15.1.4**: React framework
-- **Tailwind CSS**: Styling
-- **Font Awesome**: Icons
-- **Axios**: HTTP client
 
-## Installation & Setup
+* **Next.js 15.1.4**
+* **Tailwind CSS** for UI styling
+* **Axios** for API communication
+* **Font Awesome** for icons
+
+### Backend
+
+* **Django 4.2.7** with Django REST Framework
+* **Celery** for asynchronous task processing
+* **JWT** for secure API authentication
+* **SQLite** (default DB, can scale to PostgreSQL/MySQL)
+
+### Infrastructure
+
+* **Firebase Authentication** for user login and management
+* **Docker-ready** backend for easy deployment
+
+---
+
+## 📦 Getting Started
 
 ### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- npm or yarn
 
-### Backend Setup
+* Python 3.8+
+* Node.js 16+
 
-1. **Navigate to backend directory:**
-   ```bash
-   cd django-backend
-   ```
+### Setup Instructions
 
-2. **Create virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+1. **Clone the repo**
 
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run migrations:**
-   ```bash
-   cd backend
-   python manage.py migrate
-   ```
-
-5. **Start the backend server:**
-   ```bash
-   python manage.py runserver 8000
-   ```
-
-### Frontend Setup
-
-1. **Navigate to frontend directory:**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-4. **Access the application:**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-
-## Usage
-
-### 1. School Configuration
-- Set up school details, working days, and time periods
-- Configure lesson duration and break times
-
-### 2. Add Data
-- **Subjects**: Add courses with credit hours and practical indicators
-- **Teachers**: Assign teachers to subjects with availability constraints
-- **Classrooms**: Add classrooms and labs with capacity
-- **Class Groups**: Create student groups for scheduling
-
-### 3. Generate Timetable
-- Navigate to the Constraints page
-- Set any additional constraints (optional)
-- Click "Generate Timetable" to create an optimal schedule
-- View the generated timetable on the Timetable page
-
-## API Endpoints
-
-### Core Endpoints
-- `GET /api/timetable/` - List all timetables
-- `GET /api/timetable/latest/` - Get latest timetable
-- `POST /api/timetable/generate-timetable/` - Generate new timetable
-- `GET /api/timetable/subjects/` - List subjects
-- `GET /api/timetable/teachers/` - List teachers
-- `GET /api/timetable/classrooms/` - List classrooms
-- `GET /api/timetable/class-groups/` - List class groups
-
-### Configuration Endpoints
-- `GET /api/timetable/configs/` - List schedule configurations
-- `POST /api/timetable/configs/` - Create schedule configuration
-
-## Project Structure
-
-```
-timetable-generation-master/
-├── django-backend/          # Django backend
-│   ├── backend/            # Django project
-│   │   ├── timetable/      # Main app
-│   │   │   ├── algorithms/ # Scheduling algorithms
-│   │   │   ├── models.py   # Database models
-│   │   │   ├── views.py    # API views
-│   │   │   └── serializers.py
-│   │   └── users/          # User management
-│   └── requirements.txt
-├── frontend/               # Next.js frontend
-│   ├── pages/             # Next.js pages
-│   │   ├── components/    # React components
-│   │   └── utils/         # Utility functions
-│   └── package.json
-└── README.md
+```bash
+git clone https://github.com/yourusername/timetable-gen.git
+cd timetable-gen
 ```
 
-## Configuration
+2. **Install Backend Dependencies**
 
-### Environment Variables
-Create a `.env` file in the backend directory:
-
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key
-DATABASE_URL=sqlite:///db.sqlite3
+```bash
+cd backend
+pip install -r requirements.txt
 ```
 
-## Deployment
+3. **Install Frontend Dependencies**
 
-### Backend Deployment
-1. Set `DEBUG=False` in settings
-2. Configure production database
-3. Set up static file serving
-4. Use Gunicorn or uWSGI for production
+```bash
+cd frontend
+npm install
+```
 
-### Frontend Deployment
-1. Build the application: `npm run build`
-2. Deploy to Vercel, Netlify, or any static hosting
+4. **Set Environment Variables**
+   Create `.env` files for both backend and frontend with required Firebase and Django secrets.
 
-## Contributing
+5. **Run the App**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+```bash
+# Start backend
+cd backend
+python manage.py runserver
 
-## License
+# Start frontend
+cd frontend
+npm run dev
+```
 
-This project is licensed under the MIT License.
+---
 
-## Support
+## 🧪 Development Notes
 
-For support and questions, please contact the development team. 
+* Modular architecture with separation between UI, API, and scheduling logic
+* Easily extendable for additional constraints or calendar export formats
+* Supports real-time progress updates during timetable generation
+
+---
+
+## 🧠 Use Case
+
+This system solves the tedious, error-prone, and time-consuming process of manually creating academic timetables. It’s designed for colleges, universities, and institutions looking to automate scheduling while retaining full control over educational and infrastructure constraints.
+
+---
+
+## 📄 License
+
+MIT License — open to contributions and customization for institutional use.
+
+---
+
+Let me know if you want a **multi-institute version description**, **deployment instructions**, or a short version for a GitHub profile summary!
