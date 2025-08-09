@@ -205,29 +205,25 @@ class FinalUniversalScheduler:
             print(f"   📚 Found {len(subjects)} subjects for {base_batch} from database")
             return subjects
 
-        # Method 2: Fallback to hardcoded mapping for backward compatibility
-        semester_mapping = {
-            '21SW': ['SM', 'CC', 'SQE', 'CC Pr', 'SQE Pr'],  # 8th semester
-            '22SW': ['SPM', 'DS&A', 'MAD', 'DS', 'TSW', 'DS&A Pr', 'MAD Pr'],  # 6th semester
-            '23SW': ['IS', 'HCI', 'ABIS', 'SCD', 'SP', 'SCD Pr'],  # 4th semester
-            '24SW': ['DSA', 'OR', 'SRE', 'SEM', 'DBS', 'DSA Pr', 'DBS Pr']  # 2nd semester
-        }
+        # Method 2: If no batch-specific subjects, try subjects without batch assignment
+        if not subjects:
+            subjects = list(Subject.objects.filter(batch__isnull=True))
+            if subjects:
+                print(f"   📚 Found {len(subjects)} subjects without batch assignment")
+                return subjects
 
-        subject_codes = semester_mapping.get(base_batch, [])
-        subjects = []
-
-        for code in subject_codes:
-            subject = Subject.objects.filter(code=code).first()
-            if subject:
-                subjects.append(subject)
-
-        if subjects:
-            print(f"   📚 Found {len(subjects)} subjects for {base_batch} from hardcoded mapping")
-            return subjects
-
-        # Method 3: Final fallback - use all subjects
-        print(f"   ⚠️  Unknown class group {class_group} (base: {base_batch}), using all subjects")
-        return self.all_subjects
+        # Method 3: Final fallback - use all subjects (distributed fairly)
+        if not subjects:
+            all_subjects = list(Subject.objects.all())
+            if all_subjects:
+                # Distribute subjects fairly across batches
+                batch_count = 4  # Assuming 4 batches typically
+                subjects_per_batch = max(1, len(all_subjects) // batch_count)
+                print(f"   📚 Using {subjects_per_batch} subjects from all available subjects")
+                return all_subjects[:subjects_per_batch]
+        
+        print(f"   ⚠️ No subjects found for {class_group}")
+        return []
     
     def _generate_for_class_group(self, class_group: str, subjects: List[Subject]) -> List[TimetableEntry]:
         """Generate timetable for a specific class group."""
