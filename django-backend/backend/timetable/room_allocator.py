@@ -5,6 +5,7 @@ Implements intelligent room allocation with building-based assignment,
 practical class lab allocation, and zero-conflict room assignment.
 """
 
+import random
 from typing import List, Dict, Optional, Tuple, Set
 from collections import defaultdict
 from django.db.models import Q
@@ -27,6 +28,9 @@ class RoomAllocator:
         self.current_lab_usage = {}  # {lab_id: usage_count}
         self.practical_lab_assignments = {}  # {(class_group, subject_code): lab_id} for same-lab rule
 
+        # 🎲 Set random seed for variety in room selection
+        random.seed(int(random.random() * 1000000))
+        
         self._initialize_room_data()
     
     def _initialize_room_data(self):
@@ -429,20 +433,21 @@ class RoomAllocator:
         return False
 
     def _select_best_lab_for_practical(self, available_labs: List[Classroom], class_group: str) -> Optional[Classroom]:
-        """Select the best lab for practical allocation based on priority rules."""
+        """Select the best lab for practical classes with randomization."""
         if not available_labs:
             return None
-
-        # Sort labs by building priority and capacity
-        sorted_labs = sorted(available_labs, key=lambda lab: (lab.building_priority, -lab.capacity, lab.name))
-
-        # Prefer labs in Lab Block for practicals
-        lab_block_labs = [lab for lab in sorted_labs if 'Lab Block' in lab.building]
-        if lab_block_labs:
-            return lab_block_labs[0]
-
-        # Fallback to any available lab
-        return sorted_labs[0]
+        
+        # 🎲 RANDOMIZE LAB SELECTION for variety in each generation
+        # Sort by seniority priority and capacity, then randomly select from top candidates
+        sorted_labs = sorted(available_labs, key=lambda lab: (
+            -self._get_batch_priority(class_group),  # Senior batches first
+            -lab.capacity,  # Higher capacity first
+            lab.name  # Consistent ordering
+        ))
+        
+        # Select randomly from top 2 labs (or all if less than 2) for variety
+        top_candidates = sorted_labs[:min(2, len(sorted_labs))]
+        return random.choice(top_candidates)
 
     def _select_best_lab(self, available_labs: List[Classroom]) -> Optional[Classroom]:
         """Select the best available lab based on building priority."""
@@ -1637,9 +1642,13 @@ class RoomAllocator:
         if not available_rooms:
             return None
 
-        # Sort by building priority and capacity
+        # 🎲 RANDOMIZE ROOM SELECTION for variety in each generation
+        # Sort by building priority and capacity, then randomly select from top candidates
         sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, -room.capacity, room.name))
-        return sorted_rooms[0]
+        
+        # Select randomly from top 3 rooms (or all if less than 3) for variety
+        top_candidates = sorted_rooms[:min(3, len(sorted_rooms))]
+        return random.choice(top_candidates)
     
     def _count_occupied_labs_at_time(self, day: str, period: int,
                                    entries: List[TimetableEntry]) -> int:
@@ -2936,3 +2945,23 @@ class RoomAllocator:
                     violations += 1
 
         return violations
+
+    def _get_batch_priority(self, class_group: str) -> int:
+        """Get batch priority for room allocation (higher = more priority)."""
+        if not class_group:
+            return 0
+        
+        # Extract batch year from class group (e.g., "21SW-III" -> 21)
+        batch_name = class_group.split('-')[0] if '-' in class_group else class_group
+        
+        try:
+            # Extract year digits and convert to priority
+            year_digits = ''.join(filter(str.isdigit, batch_name))[:2]
+            if year_digits:
+                year = int(year_digits)
+                # Higher priority for older batches (senior students)
+                return year
+        except:
+            pass
+        
+        return 0
