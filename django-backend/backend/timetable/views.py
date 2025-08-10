@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from .algorithms.advanced_scheduler import AdvancedTimetableScheduler
 from .algorithms.working_scheduler import WorkingTimetableScheduler
 from .algorithms.final_scheduler import FinalUniversalScheduler
+from .algorithms.constraint_enforced_scheduler import ConstraintEnforcedScheduler
 from .constraint_manager import ConstraintManager
 import logging
 from rest_framework.pagination import PageNumberPagination
@@ -286,7 +287,8 @@ class SimpleTimetableView(APIView):
                 )
             
             # Use the FINAL UNIVERSAL scheduler - works with ANY data
-            scheduler = FinalUniversalScheduler(config)
+            # Create scheduler instance - use CONSTRAINT ENFORCED scheduler
+            scheduler = ConstraintEnforcedScheduler(config)
 
             # Generate timetable synchronously (faster)
             result = scheduler.generate_timetable()
@@ -663,10 +665,8 @@ class TimetableView(APIView):
             
             # Update config with the constraints
             config.constraints = constraints
-            
             # Create scheduler instance - use FINAL UNIVERSAL scheduler
             scheduler = FinalUniversalScheduler(config)
-            
             # Generate timetable
             print("🎲 Generating timetable with enhanced randomization...")
             timetable = scheduler.generate_timetable()
@@ -695,10 +695,23 @@ class TimetableView(APIView):
                         logger.warning(f"Classroom '{entry['classroom']}' not found, setting to None")
                         classroom = None
 
+                # Handle subject assignment with error handling
+                subject = None
+                try:
+                    # Try to find subject by code first (since _entry_to_dict uses subject.code)
+                    subject = Subject.objects.get(code=subject_name)
+                except Subject.DoesNotExist:
+                    try:
+                        # Fallback: try to find by name
+                        subject = Subject.objects.get(name=subject_name)
+                    except Subject.DoesNotExist:
+                        logger.warning(f"Subject '{subject_name}' not found by code or name, skipping entry")
+                        continue  # Skip this entry if subject doesn't exist
+
                 entries_to_create.append(TimetableEntry(
                     day=entry['day'],
                     period=entry['period'],
-                    subject=Subject.objects.get(name=subject_name),
+                    subject=subject,
                     teacher=teacher,
                     classroom=classroom,
                     class_group=entry['class_group'],
@@ -731,6 +744,12 @@ class TimetableView(APIView):
             return Response(
                 {'error': 'No schedule configuration found'}, 
                 status=404
+            )
+        except Subject.DoesNotExist as e:
+            logger.error(f"Subject not found during timetable generation: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate timetable: One or more subjects referenced in the schedule do not exist in the database. Please check your subject data.'}, 
+                status=400
             )
         except Exception as e:
             logger.error(f"Timetable generation error: {str(e)}")
