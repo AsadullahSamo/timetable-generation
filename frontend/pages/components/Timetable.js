@@ -49,10 +49,25 @@ const Timetable = () => {
       await api.post('/api/timetable/regenerate/');
       setTimetableData(null); // Clear existing data
       setError("");
-      setLoading(true); // Re-fetch to regenerate
+      setLoading(true); // Set loading state
+      
+      // Manually fetch new timetable data
+      const params = new URLSearchParams();
+      if (selectedClassGroup) {
+        params.append('class_group', selectedClassGroup);
+      }
+      
+      const { data } = await api.get(`/api/timetable/latest/?${params}`);
+      if (!data || !data.entries || !Array.isArray(data.entries)) {
+        throw new Error("Invalid timetable data received after regeneration");
+      }
+      console.log("Received new timetable data after regeneration:", data);
+      setTimetableData(data);
+      setLoading(false); // Clear loading state
     } catch (err) {
       setError("Failed to regenerate timetable. Please try again.");
       console.error("Regenerate timetable error:", err);
+      setLoading(false); // Clear loading state on error
     } finally {
       setRegenerating(false);
     }
