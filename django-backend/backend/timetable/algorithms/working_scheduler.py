@@ -147,20 +147,7 @@ class WorkingTimetableScheduler:
             subjects = list(Subject.objects.all())
             print(f"   📚 No specific subjects found for {class_group}, using all {len(subjects)} subjects")
 
-        # Method 3: Fallback to hardcoded mapping for known batches (backward compatibility)
-        if not subjects:
-            semester_mapping = {
-                '21SW': ['SM', 'CC', 'SQE', 'CC Pr', 'SQE Pr'],
-                '22SW': ['SPM', 'DS&A', 'MAD', 'DS', 'TSW', 'DS&A Pr', 'MAD Pr'],
-                '23SW': ['IS', 'HCI', 'ABIS', 'SCD', 'SP', 'SCD Pr'],
-                '24SW': ['DSA', 'OR', 'SRE', 'SEM', 'DBS', 'DSA Pr', 'DBS Pr']
-            }
-
-            subject_codes = semester_mapping.get(class_group, [])
-            for code in subject_codes:
-                subject = Subject.objects.filter(code=code).first()
-                if subject:
-                    subjects.append(subject)
+        # Method 3: This fallback is no longer needed - the system is now fully universal
 
         return subjects
 
