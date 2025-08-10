@@ -643,16 +643,35 @@ class TimetableView(APIView):
                     {'error': 'Schedule configuration is missing start time. Please update the configuration.'},
                     status=400
                 )
-            # Get active constraints from request
-            constraints = request.data.get('constraints', [])
-            # Update config with the constraints from the request
+            
+            # Check if this is a regenerate request
+            is_regenerate = request.path.endswith('/regenerate/')
+            
+            if is_regenerate:
+                # For regeneration: Clear ALL existing timetable data first
+                print("🔄 REGENERATING TIMETABLE - Clearing all existing data...")
+                deleted_count = TimetableEntry.objects.all().delete()[0]
+                print(f"🗑️ Deleted {deleted_count} existing timetable entries")
+                
+                # Get active constraints from the latest config (not from request)
+                constraints = getattr(config, 'constraints', [])
+                print(f"📋 Using {len(constraints)} constraints from config for regeneration")
+            else:
+                # For normal generation: Get active constraints from request
+                constraints = request.data.get('constraints', [])
+                print(f"📋 Using {len(constraints)} constraints from request for generation")
+            
+            # Update config with the constraints
             config.constraints = constraints
+            
             # Create scheduler instance - use FINAL UNIVERSAL scheduler
             scheduler = FinalUniversalScheduler(config)
+            
             # Generate timetable
+            print("🎲 Generating timetable with enhanced randomization...")
             timetable = scheduler.generate_timetable()
+            
             # Save entries to database
-            TimetableEntry.objects.all().delete()  # Clear existing entries
             entries_to_create = []
             for entry in timetable['entries']:
                 # Remove (PR) from subject name if present
@@ -690,13 +709,24 @@ class TimetableView(APIView):
                     semester=config.semester,
                     academic_year=config.academic_year
                 ))
+            
             # Bulk create entries for better performance
             TimetableEntry.objects.bulk_create(entries_to_create)
-            # Return success message
+            
+            # Return success message with appropriate text
+            if is_regenerate:
+                message = 'Timetable regenerated successfully'
+                print(f"✅ Timetable regenerated with {len(entries_to_create)} entries")
+            else:
+                message = 'Timetable generated successfully'
+                print(f"✅ Timetable generated with {len(entries_to_create)} entries")
+            
             return Response({
-                'message': 'Timetable generated successfully',
-                'entries_count': len(entries_to_create)
+                'message': message,
+                'entries_count': len(entries_to_create),
+                'regenerated': is_regenerate
             })
+            
         except ScheduleConfig.DoesNotExist:
             return Response(
                 {'error': 'No schedule configuration found'}, 

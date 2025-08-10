@@ -9,6 +9,7 @@ const Timetable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedClassGroup, setSelectedClassGroup] = useState("");
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     const fetchTimetable = async () => {
@@ -41,6 +42,21 @@ const Timetable = () => {
     };
     fetchTimetable();
   }, [selectedClassGroup]);
+
+  const handleRegenerateTimetable = async () => {
+    setRegenerating(true);
+    try {
+      await api.post('/api/timetable/regenerate/');
+      setTimetableData(null); // Clear existing data
+      setError("");
+      setLoading(true); // Re-fetch to regenerate
+    } catch (err) {
+      setError("Failed to regenerate timetable. Please try again.");
+      console.error("Regenerate timetable error:", err);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -92,6 +108,34 @@ const Timetable = () => {
             <h1 className="text-3xl text-gray-50 mb-2">Generated Timetable</h1>
             <p className="text-gray-400">
               View and manage your generated class schedules. Use the filter to view specific sections.
+            </p>
+          </div>
+          
+          {/* Regenerate Timetable Button */}
+          <div className="flex flex-col items-end gap-3">
+            <button
+              onClick={handleRegenerateTimetable}
+              disabled={regenerating}
+              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                regenerating
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white hover:shadow-lg hover:shadow-purple-500/25'
+              }`}
+            >
+              {regenerating ? (
+                <>
+                  <i className="fas fa-spinner fa-spin mr-2"></i>
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-sync-alt mr-2"></i>
+                  Regenerate Timetable
+                </>
+              )}
+            </button>
+            <p className="text-xs text-gray-500 text-right max-w-xs">
+              Wipes existing data and generates<br/>a completely new timetable
             </p>
           </div>
         </div>

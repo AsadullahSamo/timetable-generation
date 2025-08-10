@@ -54,6 +54,7 @@ router.register(r'teacher-assignments', TeacherSubjectAssignmentViewSet, basenam
 urlpatterns = [
     # Basic timetable operations
     path('generate-timetable/', TimetableView.as_view(), name='generate-timetable'),
+    path('regenerate/', TimetableView.as_view(), name='regenerate-timetable'),  # New regenerate endpoint
     path('latest/', LatestTimetableView.as_view(), name='latest-timetable'),
     
     # Advanced timetable operations
