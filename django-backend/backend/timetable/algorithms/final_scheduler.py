@@ -340,20 +340,41 @@ class FinalUniversalScheduler:
         return entries
 
     def _is_final_year_with_thesis(self, class_group: str, subjects: List[Subject]) -> bool:
-        """Check if this is a final year section with Thesis subjects."""
+        """Check if this batch has Thesis subjects (applies to ALL batches now)."""
         # Get the base batch (e.g., "21SW" from "21SW-I")
         base_batch = class_group.split('-')[0] if '-' in class_group else class_group
-
-        # Check if it's 21SW (final year)
-        if not base_batch.startswith('21SW'):
-            return False
 
         # Check if it has Thesis subjects
         thesis_subjects = [s for s in subjects if
                           s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
                           'thesis' in s.name.lower()]
 
-        return len(thesis_subjects) > 0
+        # If we found thesis subjects directly, return True
+        if len(thesis_subjects) > 0:
+            print(f"       ✅ Found Thesis subjects for {class_group} in provided subjects")
+            return True
+            
+        # If no thesis subjects found in the provided list, check the database
+        # This handles cases where thesis might be in another section of the same batch
+        try:
+            # Check if any thesis subjects exist for any section of this batch
+            from django.db.models import Q
+            from timetable.models import Subject
+            
+            batch_thesis_subjects = Subject.objects.filter(
+                Q(code__icontains='thesis') | Q(name__icontains='thesis'),
+                batch=base_batch
+            )
+            
+            has_thesis = batch_thesis_subjects.exists()
+            if has_thesis:
+                print(f"       ✅ Found Thesis subjects for {class_group} in database")
+            else:
+                print(f"       ℹ️ No Thesis subjects found for {class_group}")
+            return has_thesis
+        except Exception as e:
+            print(f"       ⚠️ Error checking for thesis subjects in database: {e}")
+            return False
 
     def _is_thesis_subject(self, subject: Subject) -> bool:
         """Check if a subject is a Thesis subject."""
@@ -365,37 +386,76 @@ class FinalUniversalScheduler:
         """
         Apply Thesis Day constraint EARLY - before scheduling other subjects.
         This reserves Wednesday for Thesis and creates placeholder entries.
+        
+        STRICT REQUIREMENT: Thesis is ONLY scheduled on Wednesday for ALL sections of a batch,
+        with ABSOLUTELY NO other subjects on Wednesday.
         """
-        print(f"     🎓 EARLY Thesis Day constraint for {class_group} - reserving Wednesday")
+        print(f"     🎓 STRICT EARLY Thesis Day constraint for {class_group} - reserving Wednesday")
 
         # Find Thesis subjects
         thesis_subjects = [s for s in subjects if
                           s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
                           'thesis' in s.name.lower()]
 
+        # If no thesis subjects found but we need to enforce the constraint for all sections
+        # We'll check if any thesis subjects exist in the database for this batch
         if not thesis_subjects:
-            return entries
+            # Get the base batch (e.g., "21SW" from "21SW-I")
+            base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+            
+            # Check if any thesis subjects exist for any section of this batch
+            batch_thesis_subjects = Subject.objects.filter(
+                Q(code__icontains='thesis') | Q(name__icontains='thesis'),
+                batch=base_batch
+            )
+            
+            if batch_thesis_subjects.exists():
+                # Use the first thesis subject found for this batch
+                thesis_subjects = list(batch_thesis_subjects)
+                print(f"       📖 Found Thesis subjects from batch: {[s.code for s in thesis_subjects]}")
+            else:
+                # Create a special 'Thesis Day' subject if no thesis subjects exist
+                # This ensures Wednesday is reserved even if no specific thesis subject exists
+                print(f"       ⚠️ No Thesis subjects found for batch {base_batch} - creating placeholder")
+                from timetable.models import Subject
+                
+                # Create a temporary thesis subject (not saved to database)
+                thesis_subject = Subject()
+                thesis_subject.code = "Thesis Day"
+                thesis_subject.name = f"Thesis Day ({base_batch})"
+                thesis_subject.credit_hours = 8  # Full day
+                thesis_subject.batch = base_batch
+                thesis_subject.semester = "Final Year"
+                
+                thesis_subjects = [thesis_subject]
+                print(f"       🆕 Created placeholder Thesis subject: {thesis_subject.code}")
+                
+                # Note: This subject is not saved to the database, it's just for scheduling
+        else:
+            print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
 
-        print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
+        # STRICT ENFORCEMENT: First, remove ANY existing entries on Wednesday for this class group
+        # This ensures we start with a clean slate for Wednesday
+        updated_entries = [e for e in entries if not (e.day.lower().startswith('wed') and e.class_group == class_group)]
+        if len(entries) != len(updated_entries):
+            print(f"       🧹 Removed {len(entries) - len(updated_entries)} existing entries from Wednesday for {class_group}")
 
-        # Create placeholder Thesis entries on Wednesday to reserve the day
-        # This will guide other subjects to avoid Wednesday
-        updated_entries = list(entries)
-
-        for thesis_subject in thesis_subjects:
-            # Schedule EXACTLY the required number of Thesis classes on Wednesday
-            required_classes = thesis_subject.credits  # Usually 3 for THESISDAY
-            for period in range(1, required_classes + 1):  # P1, P2, P3 for 3-credit
+        # Schedule ALL periods on Wednesday for Thesis to ensure no other subjects are scheduled
+        # This is a stronger enforcement than before - irrespective of credit hours
+        for thesis_subject in thesis_subjects[:1]:  # Use only the first thesis subject for consistency
+            # Schedule for ALL periods on Wednesday (typically 1-8)
+            # Irrespective of credit hours - reserve all periods
+            for period in range(1, 9):  # Cover all possible periods
                 thesis_entry = self._create_entry(
                     'Wednesday', period,
                     thesis_subject, None, None,  # No teacher/classroom for Thesis
                     class_group, False  # Not practical
                 )
                 updated_entries.append(thesis_entry)
-                print(f"       📅 Reserved Wednesday P{period} for {thesis_subject.code}")
+                print(f"       📅 STRICT: Reserved Wednesday P{period} for {thesis_subject.code} (irrespective of credit hours)")
 
-        print(f"     ✅ Wednesday reserved for Thesis - other subjects will avoid this day")
-        print(f"     🔒 Thesis subjects fully scheduled - preventing additional scheduling")
+        print(f"     ✅ Wednesday COMPLETELY reserved for Thesis ONLY - NO other subjects will be scheduled")
+        print(f"     🔒 STRICT ENFORCEMENT: Thesis subjects fully scheduled on Wednesday - preventing ANY other scheduling")
         return updated_entries
 
     def _is_practical_subject(self, subject: Subject) -> bool:
@@ -569,7 +629,7 @@ class FinalUniversalScheduler:
         available_slots = []
         for day in self.days:
             for period in self.periods:
-                if self._can_schedule_single(class_schedule, day, period, class_group, subject):
+                if self._can_schedule_single(class_schedule, day, period, class_group, subject, entries):
                     # Calculate Friday-aware priority score for this slot
                     friday_score = self._calculate_friday_aware_slot_score(day, period, class_group, entries)
                     available_slots.append((day, period, friday_score))
@@ -671,19 +731,26 @@ class FinalUniversalScheduler:
 
     def _try_same_day_scheduling(self, entries: List[TimetableEntry], class_schedule: dict,
                                subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
-        """Try to schedule multiple classes of the same subject on the same day."""
+        """Try to schedule classes on different days (RESPECTING no duplicate theory per day constraint)."""
         scheduled = current_scheduled
 
-        # Find days that already have this subject and can accommodate more
-        subject_days = {}
-        for entry in entries:
-            if entry.class_group == class_group and entry.subject == subject:
-                if entry.day not in subject_days:
-                    subject_days[entry.day] = []
-                subject_days[entry.day].append(entry.period)
+        print(f"           🚫 CONSTRAINT ENFORCED: No duplicate theory classes per day - skipping same-day scheduling")
+        print(f"           📋 Will try alternative scheduling strategies instead")
 
-        # Try to add more classes to existing days
-        for day in subject_days.keys():
+        # CONSTRAINT ENFORCEMENT: Do not allow multiple theory classes of the same subject on the same day
+        # This method now respects the "No Duplicate Theory Classes Per Day" constraint
+        # Instead of adding to existing days, we'll try to find completely new days
+
+        # Find days that already have this subject (to avoid them)
+        used_days = set()
+        for entry in entries:
+            if entry.class_group == class_group and entry.subject == subject and not entry.is_practical:
+                used_days.add(entry.day)
+
+        # Try to schedule on days that don't already have this subject
+        available_days = [day for day in self.days if day not in used_days]
+
+        for day in available_days:
             if scheduled >= target:
                 break
 
@@ -693,16 +760,19 @@ class FinalUniversalScheduler:
                     break
 
                 if (day, period) not in class_schedule:
-                    teacher = self._find_available_teacher(teachers, day, period, 1)
-                    if teacher:
-                        classroom = self._find_available_classroom(day, period, 1, class_group, subject)
-                        if classroom:
-                            entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
-                            entries.append(entry)
-                            class_schedule[(day, period)] = entry
-                            self._mark_global_schedule(teacher, classroom, day, period)
-                            scheduled += 1
-                            print(f"           ✅ Same-day: {subject.code} on {day} P{period}")
+                    # Check if this slot respects all constraints including no duplicate theory
+                    if self._can_schedule_single(class_schedule, day, period, class_group, subject, entries):
+                        teacher = self._find_available_teacher(teachers, day, period, 1)
+                        if teacher:
+                            classroom = self._find_available_classroom(day, period, 1, class_group, subject)
+                            if classroom:
+                                entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                                entries.append(entry)
+                                class_schedule[(day, period)] = entry
+                                self._mark_global_schedule(teacher, classroom, day, period)
+                                scheduled += 1
+                                print(f"           ✅ Different-day: {subject.code} on {day} P{period}")
+                                break  # Only one class per day for this subject
 
         return scheduled
 
@@ -822,30 +892,46 @@ class FinalUniversalScheduler:
 
     def _duplicate_classes_emergency(self, entries: List[TimetableEntry], class_schedule: dict,
                                    subject: Subject, class_group: str, teachers: List, target: int, current_scheduled: int) -> int:
-        """Duplicate existing classes on different days as emergency measure."""
+        """Emergency scheduling respecting no duplicate theory per day constraint."""
         scheduled = current_scheduled
 
-        # Find any available slot and force schedule
+        print(f"           🚫 CONSTRAINT ENFORCED: No duplicate theory classes per day - using constraint-aware emergency scheduling")
+
+        # Find days that already have this subject (to avoid them)
+        used_days = set()
+        for entry in entries:
+            if entry.class_group == class_group and entry.subject == subject and not entry.is_practical:
+                used_days.add(entry.day)
+
+        # Find any available slot that doesn't violate the constraint
         for day in self.days:
             if scheduled >= target:
                 break
+
+            # Skip days that already have this subject
+            if day in used_days:
+                continue
 
             for period in range(1, 8):  # Try all possible periods
                 if scheduled >= target:
                     break
 
                 if (day, period) not in class_schedule:
-                    # Use first available teacher
-                    teacher = teachers[0] if teachers else self.all_teachers[0]
-                    # Use first available classroom
-                    classroom = self.all_classrooms[0]
+                    # Check if this slot respects all constraints
+                    if self._can_schedule_single(class_schedule, day, period, class_group, subject, entries):
+                        # Use first available teacher
+                        teacher = teachers[0] if teachers else self.all_teachers[0]
+                        # Use first available classroom
+                        classroom = self.all_classrooms[0]
 
-                    entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
-                    entries.append(entry)
-                    class_schedule[(day, period)] = entry
-                    self._mark_global_schedule(teacher, classroom, day, period)
-                    scheduled += 1
-                    print(f"           🚨 Emergency-duplicate: {subject.code} on {day} P{period}")
+                        entry = self._create_entry(day, period, subject, teacher, classroom, class_group, False)
+                        entries.append(entry)
+                        class_schedule[(day, period)] = entry
+                        self._mark_global_schedule(teacher, classroom, day, period)
+                        scheduled += 1
+                        used_days.add(day)  # Mark this day as used
+                        print(f"           🚨 Emergency-constraint-aware: {subject.code} on {day} P{period}")
+                        break  # Only one class per day
 
         return scheduled
 
@@ -909,12 +995,15 @@ class FinalUniversalScheduler:
 
     def _can_schedule_block(self, class_schedule: dict, day: str, start_period: int, duration: int, class_group: str) -> bool:
         """Check if block can be scheduled."""
-        # CRITICAL FIX: For final year sections, avoid Wednesday if it's reserved for Thesis
+        # STRICT CONSTRAINT: For ANY batch with Thesis subjects, ONLY allow Thesis blocks on Wednesday
         if day.lower().startswith('wed'):
-            # Get the base batch (e.g., "21SW" from "21SW-I")
-            base_batch = class_group.split('-')[0] if '-' in class_group else class_group
-            if base_batch.startswith('21SW'):
-                print(f"         🚫 Avoiding Wednesday block - reserved for Thesis in {class_group}")
+            # Check if this batch has Thesis subjects using the dedicated method
+            has_thesis = self._is_final_year_with_thesis(class_group, [])
+            
+            # If this batch has Thesis subjects, prevent scheduling ANY blocks on Wednesday
+            # This is because blocks are for practical subjects, and Thesis is not practical
+            if has_thesis:
+                print(f"         🚫 STRICT: Preventing ANY block scheduling on Wednesday for {class_group} - reserved for Thesis only")
                 return False
 
         for i in range(duration):
@@ -925,19 +1014,31 @@ class FinalUniversalScheduler:
                 return False
         return True
 
-    def _can_schedule_single(self, class_schedule: dict, day: str, period: int, class_group: str, subject: Subject = None) -> bool:
+    def _can_schedule_single(self, class_schedule: dict, day: str, period: int, class_group: str, subject: Subject = None, all_entries: List = None) -> bool:
         """Check if single period can be scheduled."""
         # Basic availability check
         if (day, period) in class_schedule:
             return False
 
-        # CRITICAL FIX: For final year sections, avoid Wednesday if it's reserved for Thesis
+        # STRICT CONSTRAINT: For ANY batch with Thesis subjects, ONLY allow Thesis subjects on Wednesday
         if day.lower().startswith('wed'):
-            # Get the base batch (e.g., "21SW" from "21SW-I")
-            base_batch = class_group.split('-')[0] if '-' in class_group else class_group
-            if base_batch.startswith('21SW'):
-                print(f"         🚫 Avoiding Wednesday P{period} - reserved for Thesis in {class_group}")
-                return False
+            # Check if this batch has Thesis subjects using the dedicated method
+            has_thesis = self._is_final_year_with_thesis(class_group, [])
+
+            # If this batch has Thesis subjects, ONLY allow Thesis subjects on Wednesday
+            if has_thesis:
+                # If subject is not a Thesis subject, prevent scheduling on Wednesday
+                if not subject or not self._is_thesis_subject(subject):
+                    print(f"         🚫 STRICT: Preventing non-Thesis subject on Wednesday for {class_group}")
+                    return False
+                # If it is a Thesis subject, allow it on Wednesday
+                else:
+                    print(f"         ✅ Allowing Thesis subject {subject.code} on Wednesday for {class_group}")
+                    # For Thesis subjects on Wednesday, override normal constraints
+                    # This allows multiple Thesis classes on Wednesday if needed
+                    print(f"         🔄 Overriding normal constraints for Thesis on Wednesday")
+                    return True
+            # For batches without Thesis, normal scheduling applies
 
         # NEW CONSTRAINT: No Duplicate Theory Classes Per Day
         # Check if this subject (if theory) already has a class scheduled on this day
@@ -952,12 +1053,23 @@ class FinalUniversalScheduler:
             if is_thesis_subject and is_final_year and is_wednesday:
                 pass  # Allow multiple Thesis classes on Wednesday for final year
             else:
+                # FIXED: Check against ALL entries, not just class_schedule
+                # First check class_schedule (current class group)
                 for (existing_day, existing_period), existing_entry in class_schedule.items():
                     if (existing_entry.class_group == class_group and
                         existing_entry.subject and existing_entry.subject.code == subject.code and
                         existing_day == day and not existing_entry.is_practical):
-                        print(f"         🚫 No duplicate theory: {subject.code} already scheduled on {day} P{existing_period} for {class_group}")
+                        print(f"         🚫 No duplicate theory (local): {subject.code} already scheduled on {day} P{existing_period} for {class_group}")
                         return False
+
+                # CRITICAL FIX: Also check against all previously scheduled entries
+                if all_entries:
+                    for existing_entry in all_entries:
+                        if (existing_entry.class_group == class_group and
+                            existing_entry.subject and existing_entry.subject.code == subject.code and
+                            existing_entry.day == day and not existing_entry.is_practical):
+                            print(f"         🚫 No duplicate theory (global): {subject.code} already scheduled on {day} P{existing_entry.period} for {class_group}")
+                            return False
 
         return True
 
@@ -2128,27 +2240,42 @@ class FinalUniversalScheduler:
 
     def _strategy_create_duplicate_session(self, entries: List[TimetableEntry], target_day: str,
                                          class_group: str, class_type: str) -> List[TimetableEntry]:
-        """Strategy 4: Create a duplicate session (temporary violation to fix constraint)."""
-        print(f"           📋 Strategy 4: Creating duplicate session")
+        """Strategy 4: Create session respecting no duplicate theory per day constraint."""
+        print(f"           📋 Strategy 4: Creating session (constraint-aware)")
+        print(f"           🚫 CONSTRAINT ENFORCED: No duplicate theory classes per day")
 
-        # Find a theory subject to duplicate
+        # Find subjects that don't already have classes on target_day
+        existing_subjects_on_day = set()
+        for entry in entries:
+            if entry.class_group == class_group and entry.day == target_day and not entry.is_practical:
+                existing_subjects_on_day.add(entry.subject.code)
+
+        # Find a theory subject that doesn't already have a class on target_day
         theory_entries = [e for e in entries if e.class_group == class_group and not e.is_practical]
-        if theory_entries:
-            entry_to_duplicate = theory_entries[0]
+        suitable_entry = None
+
+        for entry in theory_entries:
+            if entry.subject.code not in existing_subjects_on_day:
+                suitable_entry = entry
+                break
+
+        if suitable_entry:
             available_period = self._find_available_period(entries, target_day, class_group)
 
             if available_period:
-                duplicate_entry = self._create_entry(
+                new_entry = self._create_entry(
                     target_day, available_period,
-                    entry_to_duplicate.subject, entry_to_duplicate.teacher, entry_to_duplicate.classroom,
+                    suitable_entry.subject, suitable_entry.teacher, suitable_entry.classroom,
                     class_group, False
                 )
 
                 updated_entries = list(entries)
-                updated_entries.append(duplicate_entry)
+                updated_entries.append(new_entry)
 
-                print(f"             ✅ Created duplicate {entry_to_duplicate.subject.code} on {target_day} P{available_period}")
+                print(f"             ✅ Created constraint-aware session {suitable_entry.subject.code} on {target_day} P{available_period}")
                 return updated_entries
+        else:
+            print(f"             🚫 No suitable subject found that doesn't violate constraint on {target_day}")
 
         return entries
 
@@ -2907,76 +3034,79 @@ class FinalUniversalScheduler:
     def _enforce_thesis_day_constraint(self, entries: List[TimetableEntry], subjects: List[Subject],
                                      class_group: str) -> List[TimetableEntry]:
         """
-        ENHANCEMENT 9: Enforce Thesis Day constraint for final year batches.
+        STRICT CONSTRAINT: Enforce Thesis Day constraint for ALL batches with Thesis subjects.
 
-        Simplified approach:
+        Approach:
         1. Find Thesis subjects for this class group
-        2. Move any existing Thesis entries to Wednesday
-        3. Remove teacher assignment from Thesis entries
+        2. REMOVE ALL non-Thesis entries from Wednesday
+        3. Schedule Thesis for ALL periods on Wednesday
+        4. Ensure NO other subjects are scheduled on Wednesday
         """
-        print(f"     📚 Enforcing Thesis Day constraint for {class_group}...")
+        print(f"     📚 STRICT Enforcing Thesis Day constraint for {class_group}...")
 
         # Check if this class group has Thesis subject
         thesis_subjects = [s for s in subjects if
                           s.code.lower() in ['thesis', 'thesis day', 'thesisday'] or
                           'thesis' in s.name.lower()]
 
+        # If no thesis subjects found in the provided list, check the database
         if not thesis_subjects:
-            print(f"       ℹ️  No Thesis subject found for {class_group} - skipping")
-            return entries
-
-        print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
-
-        # Get the base batch (e.g., "21SW" from "21SW-I")
-        base_batch = class_group.split('-')[0] if '-' in class_group else class_group
-
-        # Only apply to 21SW (final year)
-        if not base_batch.startswith('21SW'):
-            print(f"       ℹ️  {class_group} is not 21SW - skipping Thesis Day constraint")
-            return entries
-
-        print(f"       🎓 {class_group} is final year - applying COMPLETE Thesis Day constraint")
-
-        # COMPLETE THESIS DAY IMPLEMENTATION:
-        # 1. Move all Thesis entries to Wednesday and remove teachers
-        # 2. Move all non-Thesis entries FROM Wednesday to other days
-        # 3. Ensure Wednesday is dedicated ONLY to Thesis
-
-        updated_entries = []
-        entries_to_relocate = []  # Non-Thesis entries currently on Wednesday
-
-        for entry in entries:
-            if entry.class_group == class_group:
-                if entry.subject in thesis_subjects:
-                    # This is a Thesis entry - move to Wednesday and remove teacher
-                    if not entry.day.lower().startswith('wed'):
-                        print(f"         🔄 Moving {entry.subject.code} from {entry.day} to Wednesday")
-                        entry.day = 'Wednesday'
-
-                    # Remove teacher
-                    if entry.teacher is not None:
-                        print(f"         👤 Removing teacher from {entry.subject.code}")
-                        entry.teacher = None
-
-                    updated_entries.append(entry)
-
-                elif entry.day.lower().startswith('wed'):
-                    # Non-Thesis entry on Wednesday - needs to be moved
-                    print(f"         📤 Scheduling {entry.subject.code} for relocation from Wednesday")
-                    entries_to_relocate.append(entry)
+            try:
+                # Check if any thesis subjects exist for this batch
+                from django.db.models import Q
+                from timetable.models import Subject
+                
+                # Get the base batch (e.g., "21SW" from "21SW-I")
+                base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+                
+                batch_thesis_subjects = Subject.objects.filter(
+                    Q(code__icontains='thesis') | Q(name__icontains='thesis'),
+                    batch=base_batch
+                )
+                
+                if batch_thesis_subjects.exists():
+                    # Use the first thesis subject found for this batch
+                    thesis_subjects = list(batch_thesis_subjects)
+                    print(f"       📖 Found Thesis subjects from database: {[s.code for s in thesis_subjects]}")
                 else:
-                    # Non-Thesis entry not on Wednesday - keep as is
-                    updated_entries.append(entry)
-            else:
-                # Different class group - keep as is
-                updated_entries.append(entry)
+                    print(f"       ℹ️  No Thesis subject found for {class_group} - skipping")
+                    return entries
+            except Exception as e:
+                print(f"       ⚠️ Error checking for thesis subjects in database: {e}")
+                print(f"       ℹ️  No Thesis subject found for {class_group} - skipping")
+                return entries
+        else:
+            print(f"       📖 Found Thesis subjects: {[s.code for s in thesis_subjects]}")
 
-        # Relocate non-Thesis entries from Wednesday to other days
-        if entries_to_relocate:
-            print(f"         🔄 Relocating {len(entries_to_relocate)} non-Thesis entries from Wednesday")
-            updated_entries = self._relocate_entries_from_wednesday(updated_entries, entries_to_relocate, class_group)
+        print(f"       🎓 {class_group} has Thesis subjects - applying STRICT Thesis Day constraint")
 
-        print(f"       ✅ COMPLETE Thesis Day constraint applied - Wednesday dedicated to Thesis!")
+        # STRICT THESIS DAY IMPLEMENTATION:
+        # 1. REMOVE ALL non-Thesis entries from Wednesday
+        # 2. Schedule Thesis for ALL periods on Wednesday
+        # 3. Ensure NO other subjects are scheduled on Wednesday
+
+        # First, identify all entries that are not on Wednesday or are Thesis entries
+        # STRICT APPROACH: Remove ALL entries on Wednesday and create fresh Thesis entries
+        # Keep only non-Wednesday entries
+        updated_entries = [e for e in entries if not (e.day.lower().startswith('wed') and e.class_group == class_group)]
+        removed_count = len(entries) - len(updated_entries)
+        print(f"         🧹 STRICT: Removed ALL {removed_count} entries from Wednesday for {class_group}")
+        
+        # Now create fresh Thesis entries for ALL periods on Wednesday
+        if thesis_subjects:
+            # Use the first thesis subject for consistency
+            thesis_subject = thesis_subjects[0]
+            # Create Thesis entries for ALL periods (1-8)
+            for period in range(1, 9):  # Cover all possible periods (1-8)
+                print(f"         ➕ STRICT: Adding Thesis entry for Wednesday P{period} (irrespective of credit hours)")
+                thesis_entry = self._create_entry(
+                    'Wednesday', period,
+                    thesis_subject, None, None,  # No teacher/classroom for Thesis
+                    class_group, False  # Not practical
+                )
+                updated_entries.append(thesis_entry)
+
+        print(f"       ✅ STRICT Thesis Day constraint applied - Wednesday EXCLUSIVELY dedicated to Thesis!")
         return updated_entries
 
     def _relocate_entries_from_wednesday(self, entries: List[TimetableEntry],
@@ -3213,7 +3343,11 @@ class FinalUniversalScheduler:
 
     def _schedule_thesis_on_wednesday(self, entries: List[TimetableEntry],
                                     thesis_subjects: List[Subject], base_batch: str) -> List[TimetableEntry]:
-        """Schedule Thesis subjects on Wednesday for all sections of the batch."""
+        """Schedule Thesis subjects on Wednesday for all sections of the batch.
+        
+        UPDATED REQUIREMENT: Thesis is scheduled for ALL periods on Wednesday (1-8),
+        irrespective of credit hours, for ALL sections of a batch with Thesis subjects.
+        """
 
         # Get all sections of this batch that should have Thesis
         all_sections = [f"{base_batch}-I", f"{base_batch}-II", f"{base_batch}-III"]
@@ -3221,39 +3355,36 @@ class FinalUniversalScheduler:
         for section in all_sections:
             print(f"         📚 Scheduling Thesis for {section}")
 
-            # Check if this section already has Thesis on Wednesday
-            existing_thesis = [e for e in entries
-                             if e.class_group == section and e.day.lower().startswith('wed')
-                             and e.subject in thesis_subjects]
-
-            if existing_thesis:
-                print(f"           ✅ {section} already has Thesis on Wednesday")
+            # Check if this section already has Thesis on Wednesday for ALL periods
+            wednesday_entries = [e for e in entries if e.day.lower().startswith('wed') and e.class_group == section]
+            existing_thesis_periods = [e.period for e in wednesday_entries 
+                                     if e.subject in thesis_subjects]
+            
+            # If we already have Thesis entries for all periods (1-8), skip
+            if set(existing_thesis_periods) == set(range(1, 9)):
+                print(f"           ✅ {section} already has Thesis on Wednesday for all periods")
                 continue
 
-            # Schedule Thesis for this section
+            # Schedule Thesis for this section for ALL periods on Wednesday
             thesis_subject = thesis_subjects[0]  # Use first Thesis subject
-
-            # Find available periods on Wednesday
-            wednesday_entries = [e for e in entries if e.day.lower().startswith('wed') and e.class_group == section]
             used_periods = set(e.period for e in wednesday_entries)
-
-            # Schedule Thesis for the required number of periods (based on credits)
-            periods_needed = thesis_subject.credits
-            available_periods = [p for p in range(1, 8) if p not in used_periods]
-
-            if len(available_periods) >= periods_needed:
-                for i in range(periods_needed):
-                    period = available_periods[i]
-
+            
+            # First, remove any non-Thesis entries on Wednesday for this section
+            entries = [e for e in entries if not (e.day.lower().startswith('wed') and 
+                                                e.class_group == section and 
+                                                e.subject not in thesis_subjects)]
+            
+            # Schedule Thesis for ALL periods on Wednesday (1-8), irrespective of credit hours
+            for period in range(1, 9):  # Cover all periods 1-8
+                if period not in existing_thesis_periods:
                     # Create Thesis entry WITHOUT teacher (as specified)
                     thesis_entry = self._create_thesis_entry(
                         'Wednesday', period, thesis_subject, section
                     )
                     entries.append(thesis_entry)
-
-                print(f"           ✅ Scheduled {periods_needed} Thesis periods for {section}")
-            else:
-                print(f"           ⚠️  Not enough periods available on Wednesday for {section}")
+                    print(f"           ➕ Added Thesis for {section} on Wednesday P{period} (irrespective of credit hours)")
+            
+            print(f"           ✅ Scheduled Thesis for ALL periods on Wednesday for {section}")
 
         return entries
 
