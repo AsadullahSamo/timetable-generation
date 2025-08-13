@@ -183,7 +183,8 @@ class TeacherSubjectAssignment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['teacher', 'subject', 'batch']
+        # Remove unique_together constraint to allow multiple assignments for same teacher-subject-batch
+        # This allows teachers to be assigned to different sections of the same subject
         verbose_name = "Teacher Subject Assignment"
         verbose_name_plural = "Teacher Subject Assignments"
 

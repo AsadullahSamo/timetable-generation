@@ -106,6 +106,45 @@ class TeacherSubjectAssignmentViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         try:
+            # Check if this teacher is already assigned to this subject and batch
+            teacher_id = request.data.get('teacher')
+            subject_id = request.data.get('subject')
+            batch_id = request.data.get('batch')
+            new_sections = request.data.get('sections', [])
+            
+            if teacher_id and subject_id and batch_id:
+                # Find existing assignments for this teacher-subject-batch combination
+                existing_assignments = TeacherSubjectAssignment.objects.filter(
+                    teacher_id=teacher_id,
+                    subject_id=subject_id,
+                    batch_id=batch_id
+                )
+                
+                # Check for section conflicts with existing assignments
+                for existing_assignment in existing_assignments:
+                    if existing_assignment.sections and new_sections:
+                        overlapping_sections = set(existing_assignment.sections) & set(new_sections)
+                        if overlapping_sections:
+                            return Response(
+                                {'error': f'Sections {", ".join(overlapping_sections)} are already assigned to this teacher for {existing_assignment.subject.name} in {existing_assignment.batch.name}'},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                
+                # Check for conflicts with other teachers' assignments
+                other_assignments = TeacherSubjectAssignment.objects.filter(
+                    subject_id=subject_id,
+                    batch_id=batch_id
+                ).exclude(teacher_id=teacher_id)
+                
+                for other_assignment in other_assignments:
+                    if other_assignment.sections and new_sections:
+                        overlapping_sections = set(other_assignment.sections) & set(new_sections)
+                        if overlapping_sections:
+                            return Response(
+                                {'error': f'Sections {", ".join(overlapping_sections)} are already assigned to {other_assignment.teacher.name} for {other_assignment.subject.name} in {other_assignment.batch.name}'},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+            
             return super().create(request, *args, **kwargs)
         except Exception as e:
             # Handle validation errors and provide user-friendly messages

@@ -85,8 +85,20 @@ const TeacherAssignments = () => {
 
       await Promise.all(assignmentPromises);
 
+      // Generate detailed success message
       const subjectNames = selectedSubjects.map(s => s.code).join(', ');
-      setSuccess(`✅ Assigned ${selectedTeacher.name} to teach ${subjectNames} for ${selectedBatch.name} (${selectedSections.join(', ')})`);
+      const sectionNames = selectedSections.join(', ');
+      
+      // Check if this is adding to existing assignments
+      const isAddingToExisting = selectedSubjects.some(subject => 
+        getExistingAssignments(selectedTeacher.id, subject.id, selectedBatch.id).length > 0
+      );
+      
+      const message = isAddingToExisting 
+        ? `✅ Added sections ${sectionNames} to ${selectedTeacher.name}'s existing assignments for ${subjectNames} in ${selectedBatch.name}`
+        : `✅ Assigned ${selectedTeacher.name} to teach ${subjectNames} for ${selectedBatch.name} (${sectionNames})`;
+      
+      setSuccess(message);
 
       // Reset selections
       setSelectedTeacher(null);
@@ -114,6 +126,65 @@ const TeacherAssignments = () => {
       assignment.subject === subjectId &&
       assignment.batch === batchId
     );
+  };
+
+  // Get existing assignments for a teacher-subject-batch combination
+  const getExistingAssignments = (teacherId, subjectId, batchId) => {
+    return assignments.filter(assignment =>
+      assignment.teacher === teacherId &&
+      assignment.subject === subjectId &&
+      assignment.batch === batchId
+    );
+  };
+
+  // Get assigned sections for a teacher-subject-batch combination
+  const getTeacherAssignedSections = (teacherId, subjectId, batchId) => {
+    const teacherAssignments = getExistingAssignments(teacherId, subjectId, batchId);
+    const assignedSections = new Set();
+    teacherAssignments.forEach(assignment => {
+      if (assignment.sections) {
+        assignment.sections.forEach(section => assignedSections.add(section));
+      }
+    });
+    return Array.from(assignedSections);
+  };
+
+  // Get available sections for a teacher-subject-batch combination
+  const getAvailableSectionsForTeacher = (teacherId, subjectId, batchId) => {
+    if (!selectedBatch) return [];
+    
+    const allSections = selectedBatch.get_sections ? 
+      selectedBatch.get_sections() : 
+      ['I', 'II', 'III'].slice(0, selectedBatch.total_sections);
+    
+    const teacherAssignedSections = getTeacherAssignedSections(teacherId, subjectId, batchId);
+    const otherAssignedSections = getAssignedSections(subjectId, batchId);
+    
+    // Return sections that are not assigned to anyone
+    return allSections.filter(section => 
+      !otherAssignedSections.includes(section)
+    );
+  };
+
+  // Check if a batch is fully assigned (all subjects have all sections covered)
+  const isBatchFullyAssigned = (batchId) => {
+    if (!batchId) return false;
+    
+    const batch = batches.find(b => b.id === batchId);
+    if (!batch) return false;
+    
+    const batchSubjects = subjects.filter(subject => subject.batch === batch.name);
+    if (batchSubjects.length === 0) return false;
+    
+    const allSections = batch.get_sections ? 
+      batch.get_sections() : 
+      ['I', 'II', 'III'].slice(0, batch.total_sections);
+    
+    // Check if every subject has all sections assigned
+    return batchSubjects.every(subject => {
+      const assignedSections = getAssignedSections(subject.id, batchId);
+      return assignedSections.length === allSections.length;
+    });
   };
 
   // Get available subjects for selected batch
@@ -164,6 +235,44 @@ const TeacherAssignments = () => {
           return true;
       }
     });
+  };
+
+  // Get filtered assignments based on search term
+  const getFilteredAssignments = () => {
+    if (!searchTerm.trim()) return assignments;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return assignments.filter(assignment => 
+      assignment.teacher_name?.toLowerCase().includes(searchLower) ||
+      assignment.subject_name?.toLowerCase().includes(searchLower) ||
+      assignment.batch_name?.toLowerCase().includes(searchLower) ||
+      assignment.sections?.some(section => section.toLowerCase().includes(searchLower)) ||
+      assignment.sections_display?.toLowerCase().includes(searchLower)
+    );
+  };
+
+  // Check if a subject is completely assigned (all sections taken)
+  const isSubjectCompletelyAssigned = (subjectId, batchId) => {
+    if (!selectedBatch) return false;
+    
+    const allSections = selectedBatch.get_sections ? 
+      selectedBatch.get_sections() : 
+      ['I', 'II', 'III'].slice(0, selectedBatch.total_sections);
+    
+    const assignedSections = getAssignedSections(subjectId, batchId);
+    return assignedSections.length === allSections.length;
+  };
+
+  // Check if a subject is partially assigned (some sections taken, some available)
+  const isSubjectPartiallyAssigned = (subjectId, batchId) => {
+    if (!selectedBatch) return false;
+    
+    const allSections = selectedBatch.get_sections ? 
+      selectedBatch.get_sections() : 
+      ['I', 'II', 'III'].slice(0, selectedBatch.total_sections);
+    
+    const assignedSections = getAssignedSections(subjectId, batchId);
+    return assignedSections.length > 0 && assignedSections.length < allSections.length;
   };
 
   // Check if a subject is already assigned to any teacher for the selected batch
@@ -238,17 +347,17 @@ const TeacherAssignments = () => {
               onClick={() => setViewMode('assign')}
               className={`px-4 py-2 rounded-lg font-medium transition-all ${
                 viewMode === 'assign'
-                  ? 'bg-accent-cyan text-white'
+                  ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-surface text-secondary hover:bg-surface/80'
               }`}
             >
-              Create Assignments
+              Assignments
             </button>
             <button
               onClick={() => setViewMode('manage')}
               className={`px-4 py-2 rounded-lg font-medium transition-all ${
                 viewMode === 'manage'
-                  ? 'bg-accent-cyan text-white'
+                  ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-surface text-secondary hover:bg-surface/80'
               }`}
             >
@@ -312,7 +421,8 @@ const TeacherAssignments = () => {
                 </div>
               </div>
               {/* Selection Summary */}
-              <div className="bg-surface/50 rounded-xl p-4 border border-border">
+              {(selectedTeacher || selectedSubjects.length > 0 || selectedBatch || selectedSections.length > 0) && (
+                <div className="bg-surface/50 rounded-xl p-4 border border-border">
                 <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                   <Plus className="h-4 w-4 text-accent-cyan" />
                   Create New Assignment
@@ -374,6 +484,7 @@ const TeacherAssignments = () => {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Step 1: Select Teacher */}
               <div className="bg-surface/30 rounded-xl p-4 border border-border">
@@ -388,7 +499,7 @@ const TeacherAssignments = () => {
                     onClick={() => setTeacherFilter('all')}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
                       teacherFilter === 'all'
-                        ? 'bg-accent-cyan text-white'
+                        ? 'bg-slate-700 text-white shadow-sm'
                         : 'bg-surface/50 text-secondary hover:bg-surface/80'
                     }`}
                   >
@@ -398,8 +509,8 @@ const TeacherAssignments = () => {
                     onClick={() => setTeacherFilter('unassigned')}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
                       teacherFilter === 'unassigned'
-                        ? 'bg-red-500 text-white'
-                        : 'bg-red-500/10 text-red-600 hover:bg-red-500/20'
+                        ? 'bg-orange-600 text-white shadow-sm'
+                        : 'bg-orange-500/10 text-orange-600 hover:bg-orange-500/20'
                     }`}
                   >
                     Unassigned ({teachers.filter(t => getTeacherStats(t.id).totalAssignments === 0).length})
@@ -408,8 +519,8 @@ const TeacherAssignments = () => {
                     onClick={() => setTeacherFilter('assigned')}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
                       teacherFilter === 'assigned'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-green-500/10 text-green-600 hover:bg-green-500/20'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
                     }`}
                   >
                     Assigned ({teachers.filter(t => getTeacherStats(t.id).totalAssignments > 0).length})
@@ -496,34 +607,52 @@ const TeacherAssignments = () => {
               </div>
 
               {/* Step 2: Select Batch */}
-              <div className="bg-surface/30 rounded-xl p-4 border border-border">
-                <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
-                  <GraduationCap className="h-4 w-4 text-accent-cyan" />
-                  Step 2: Select Batch
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {batches.map((batch) => (
-                    <div
-                      key={batch.id}
-                      onClick={() => setSelectedBatch(batch)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                        selectedBatch?.id === batch.id
-                          ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
-                          : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
-                      }`}
-                    >
-                      <div className="font-medium text-sm">{batch.name}</div>
-                      <div className="text-xs opacity-75">{batch.description}</div>
-                      <div className="text-xs mt-1">
-                        {batch.total_sections} sections
+              {selectedTeacher && (
+                <div className="bg-surface/30 rounded-xl p-4 border border-border">
+                  <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-accent-cyan" />
+                    Step 2: Select Batch
+                  </h3>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {batches.map((batch) => {
+                    const isFullyAssigned = isBatchFullyAssigned(batch.id);
+                    
+                    return (
+                      <div
+                        key={batch.id}
+                        onClick={() => setSelectedBatch(batch)}
+                        className={`p-3 rounded-lg border cursor-pointer transition-all relative ${
+                          selectedBatch?.id === batch.id
+                            ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
+                            : isFullyAssigned
+                            ? 'bg-green-500/10 border-green-500/50 text-white'
+                            : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
+                        }`}
+                      >
+                        {/* Fully assigned indicator */}
+                        {isFullyAssigned && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">✓</span>
+                          </div>
+                        )}
+                        
+                        <div className="font-medium text-sm">{batch.name}</div>
+                        <div className="text-xs opacity-75">{batch.description}</div>
+                        <div className="text-xs mt-1 flex items-center gap-2">
+                          <span>{batch.total_sections} sections</span>
+                          {isFullyAssigned && (
+                            <span className="text-white font-medium">Complete</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
+                </div>
+              )}
 
               {/* Step 3: Select Subjects */}
-              {selectedBatch && (
+              {selectedTeacher && selectedBatch && (
                 <div className="bg-surface/30 rounded-xl p-4 border border-border">
                   <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-accent-cyan" />
@@ -532,13 +661,50 @@ const TeacherAssignments = () => {
 
                   {/* Selection Info */}
                   <div className="mb-3 text-sm text-secondary">
-                    Click to select multiple subjects. Selected: {selectedSubjects.length}
+                    Select one subject at a time
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {getAvailableSubjects().map((subject) => {
                       const isSelected = selectedSubjects.some(s => s.id === subject.id);
-                      const isAlreadyAssigned = isSubjectAssigned(subject.id, selectedBatch.id);
+                      const isCompletelyAssigned = isSubjectCompletelyAssigned(subject.id, selectedBatch.id);
+                      const isPartiallyAssigned = isSubjectPartiallyAssigned(subject.id, selectedBatch.id);
+                      const teacherExistingAssignments = selectedTeacher ? 
+                        getExistingAssignments(selectedTeacher.id, subject.id, selectedBatch.id) : [];
+                      const teacherAssignedSections = selectedTeacher ? 
+                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id) : [];
+                      const availableSections = selectedTeacher ? 
+                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id) : [];
+
+                      // Determine the visual style based on assignment status
+                      let cardStyle = 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary';
+                      let statusIndicator = null;
+                      let statusText = '';
+
+                      if (isSelected) {
+                        cardStyle = 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan';
+                        statusIndicator = (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-accent-cyan rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">✓</span>
+                          </div>
+                        );
+                      } else if (isCompletelyAssigned) {
+                        cardStyle = 'bg-yellow-500/10 border-yellow-500/50 text-yellow-600';
+                        statusIndicator = (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">✓</span>
+                          </div>
+                        );
+                        statusText = 'Fully Assigned';
+                      } else if (isPartiallyAssigned) {
+                        cardStyle = 'bg-blue-500/10 border-blue-500/50 text-white';
+                        statusIndicator = (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">!</span>
+                          </div>
+                        );
+                        statusText = 'Partially Assigned';
+                      }
 
                       return (
                         <div
@@ -550,39 +716,48 @@ const TeacherAssignments = () => {
                               setSelectedSubjects([...selectedSubjects, subject]);
                             }
                           }}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all relative ${
-                            isSelected
-                              ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
-                              : isAlreadyAssigned
-                              ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-600'
-                              : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
-                          }`}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all relative ${cardStyle}`}
                         >
-                          {/* Selection indicator */}
-                          {isSelected && (
-                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-accent-cyan rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">✓</span>
-                            </div>
-                          )}
+                          {/* Status indicator */}
+                          {statusIndicator}
 
-                          {/* Already assigned indicator */}
-                          {isAlreadyAssigned && !isSelected && (
-                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">!</span>
-                            </div>
-                          )}
-
-                          <div className="font-medium text-sm">{subject.code}</div>
-                          <div className="text-xs opacity-75 truncate">{subject.name}</div>
-                          <div className="text-xs mt-1 flex items-center gap-2">
+                          <div className="font-medium text-sm text-current">{subject.code}</div>
+                          <div className="text-xs opacity-90 truncate text-current">{subject.name}</div>
+                          <div className="text-xs mt-1 flex items-center gap-2 text-current">
                             <span>{subject.credits} credits</span>
                             {subject.is_practical && (
                               <span className="text-accent-pink font-medium">Lab</span>
                             )}
-                            {isAlreadyAssigned && (
-                              <span className="text-yellow-600 font-medium">Assigned</span>
+                            {statusText && (
+                              <span className="font-medium">{statusText}</span>
                             )}
                           </div>
+
+                          {/* Show existing teacher assignments */}
+                          {teacherExistingAssignments.length > 0 && (
+                            <div className="mt-2 p-2 bg-green-500/10 rounded border border-green-500/20">
+                              <div className="text-xs text-white font-medium mb-1">
+                                Already teaching sections: {teacherAssignedSections.join(', ')}
+                              </div>
+                              {availableSections.length > 0 && (
+                                <div className="text-xs text-white">
+                                  Available sections: {availableSections.length} remaining
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Show assignment status summary */}
+                          {!teacherExistingAssignments.length && (isCompletelyAssigned || isPartiallyAssigned) && (
+                            <div className="mt-2 p-2 bg-gray-500/10 rounded border border-gray-500/20">
+                              <div className="text-xs text-white font-medium mb-1">
+                                Assignment Status
+                              </div>
+                              <div className="text-xs text-white">
+                                {isCompletelyAssigned ? 'All sections assigned' : 'Some sections available'}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -591,24 +766,53 @@ const TeacherAssignments = () => {
               )}
 
               {/* Step 4: Select Sections */}
-              {selectedBatch && (
+              {selectedTeacher && selectedBatch && selectedSubjects.length > 0 && (
                 <div className="bg-surface/30 rounded-xl p-4 border border-border">
                   <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                     <Hash className="h-4 w-4 text-accent-cyan" />
                     Step 4: Select Sections for {selectedBatch.name}
                   </h3>
 
-                  {/* Show assigned sections info if any */}
-                  {selectedSubjects.some(subject => getAssignedSections(subject.id, selectedBatch.id).length > 0) && (
-                    <div className="mb-3 text-sm text-yellow-600">
-                      Some sections are already assigned to other teachers for selected subjects
-                    </div>
-                  )}
+                  {/* Show assignment status info */}
+                  <div className="mb-3 space-y-2">
+                    {selectedSubjects.map(subject => {
+                      const teacherAssignedSections = getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id);
+                      const otherAssignedSections = getAssignedSections(subject.id, selectedBatch.id);
+                      const availableSections = getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id);
+                      
+                      return (
+                        <div key={subject.id} className="text-sm">
+                          <div className="font-medium text-primary mb-1">{subject.code}:</div>
+                          {teacherAssignedSections.length > 0 && (
+                            <div className="text-green-600 mb-1">
+                              ✓ Already teaching sections: {teacherAssignedSections.join(', ')}
+                            </div>
+                          )}
+                          {availableSections.length > 0 && (
+                            <div className="text-accent-cyan mb-1">
+                              ➕ Available sections: {availableSections.join(', ')}
+                            </div>
+                          )}
+                          {otherAssignedSections.length > 0 && (
+                            <div className="text-yellow-600">
+                              ⚠️ Other teachers assigned to: {otherAssignedSections.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   <div className="flex gap-2">
                     {selectedBatch.get_sections ? selectedBatch.get_sections().map((section) => {
                       const isAssignedToAnySubject = selectedSubjects.some(subject =>
                         isSectionAssigned(subject.id, selectedBatch.id, section)
+                      );
+                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
+                      const isAvailableForTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
                       );
 
                       return (
@@ -617,28 +821,39 @@ const TeacherAssignments = () => {
                           onClick={() => {
                             if (selectedSections.includes(section)) {
                               setSelectedSections(selectedSections.filter(s => s !== section));
-                            } else {
+                            } else if (isAvailableForTeacher || isAssignedToSelectedTeacher) {
                               setSelectedSections([...selectedSections, section]);
                             }
                           }}
                           className={`px-4 py-2 rounded-lg border font-medium transition-all relative ${
                             selectedSections.includes(section)
                               ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
-                              : isAssignedToAnySubject
-                              ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-600'
-                              : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
+                              : isAssignedToSelectedTeacher
+                              ? 'bg-green-500/10 border-green-500/50 text-green-600'
+                              : isAvailableForTeacher
+                              ? 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
+                              : 'bg-red-500/10 border-red-500/50 text-red-600 cursor-not-allowed'
                           }`}
+                          disabled={!isAvailableForTeacher && !isAssignedToSelectedTeacher}
                         >
-                          {/* Already assigned indicator */}
-                          {isAssignedToAnySubject && !selectedSections.includes(section) && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">!</span>
+                          {/* Assignment status indicators */}
+                          {isAssignedToSelectedTeacher && !selectedSections.includes(section) && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">✓</span>
+                            </div>
+                          )}
+                          {!isAssignedToSelectedTeacher && !isAvailableForTeacher && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">✗</span>
                             </div>
                           )}
 
                           Section {section}
-                          {isAssignedToAnySubject && (
-                            <span className="ml-1 text-xs opacity-75">Assigned</span>
+                          {isAssignedToSelectedTeacher && (
+                            <span className="ml-1 text-xs opacity-75">Your sections</span>
+                          )}
+                          {!isAvailableForTeacher && !isAssignedToSelectedTeacher && (
+                            <span className="ml-1 text-xs opacity-75">Unavailable</span>
                           )}
                         </button>
                       );
@@ -646,6 +861,12 @@ const TeacherAssignments = () => {
                       const isAssignedToAnySubject = selectedSubjects.some(subject =>
                         isSectionAssigned(subject.id, selectedBatch.id, section)
                       );
+                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
+                      const isAvailableForTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
 
                       return (
                         <button
@@ -653,28 +874,39 @@ const TeacherAssignments = () => {
                           onClick={() => {
                             if (selectedSections.includes(section)) {
                               setSelectedSections(selectedSections.filter(s => s !== section));
-                            } else {
+                            } else if (isAvailableForTeacher || isAssignedToSelectedTeacher) {
                               setSelectedSections([...selectedSections, section]);
                             }
                           }}
                           className={`px-4 py-2 rounded-lg border font-medium transition-all relative ${
                             selectedSections.includes(section)
                               ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan'
-                              : isAssignedToAnySubject
-                              ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-600'
-                              : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
+                              : isAssignedToSelectedTeacher
+                              ? 'bg-green-500/10 border-green-500/50 text-green-600'
+                              : isAvailableForTeacher
+                              ? 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary'
+                              : 'bg-red-500/10 border-red-500/50 text-red-600 cursor-not-allowed'
                           }`}
+                          disabled={!isAvailableForTeacher && !isAssignedToSelectedTeacher}
                         >
-                          {/* Already assigned indicator */}
-                          {isAssignedToAnySubject && !selectedSections.includes(section) && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">!</span>
+                          {/* Assignment status indicators */}
+                          {isAssignedToSelectedTeacher && !selectedSections.includes(section) && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">✓</span>
+                            </div>
+                          )}
+                          {!isAssignedToSelectedTeacher && !isAvailableForTeacher && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">✗</span>
                             </div>
                           )}
 
                           Section {section}
-                          {isAssignedToAnySubject && (
-                            <span className="ml-1 text-xs opacity-75">Assigned</span>
+                          {isAssignedToSelectedTeacher && (
+                            <span className="ml-1 text-xs opacity-75">Your sections</span>
+                          )}
+                          {!isAvailableForTeacher && !isAssignedToSelectedTeacher && (
+                            <span className="ml-1 text-xs opacity-75">Unavailable</span>
                           )}
                         </button>
                       );
@@ -708,7 +940,7 @@ const TeacherAssignments = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {assignments.map((assignment) => (
+                  {getFilteredAssignments().map((assignment) => (
                     <div key={assignment.id} className="p-6 bg-card/50 backdrop-blur-sm border border-border rounded-xl hover:shadow-lg hover:shadow-accent-cyan/10 transition-all duration-300">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -746,11 +978,20 @@ const TeacherAssignments = () => {
                     </div>
                   ))}
 
-                  {assignments.length === 0 && (
+                  {getFilteredAssignments().length === 0 && (
                     <div className="text-center py-12">
                       <Users className="h-12 w-12 text-secondary/50 mx-auto mb-4" />
-                      <p className="text-secondary">No teacher assignments found</p>
-                      <p className="text-secondary/70 text-sm mt-2">Switch to "Create Assignments" to add some!</p>
+                      {searchTerm.trim() ? (
+                        <>
+                          <p className="text-secondary">No assignments found for "{searchTerm}"</p>
+                          <p className="text-secondary/70 text-sm mt-2">Try a different search term or clear the search</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-secondary">No teacher assignments found</p>
+                          <p className="text-secondary/70 text-sm mt-2">Switch to "Create Assignments" to add some!</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
