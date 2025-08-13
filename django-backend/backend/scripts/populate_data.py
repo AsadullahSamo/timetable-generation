@@ -4,6 +4,7 @@ DATA POPULATION SCRIPT
 =====================
 Populates the database with all necessary data including:
 - Teachers
+- Batches with sections (21SW-8th, 22SW-6th, 23SW-5th, 24SW-3rd)
 - Subjects (assigned to batches)
 - Classrooms
 - Teacher-Subject-Section assignments
@@ -71,6 +72,70 @@ def populate_teachers():
             print(f'   ⚪ Exists: {teacher.name}')
 
     print(f'Total teachers: {Teacher.objects.count()}')
+
+def populate_batches():
+    """Create all batches with their sections"""
+    print('\n=== CREATING BATCHES ===')
+    
+    batches_data = [
+        {
+            'name': '21SW',
+            'description': '8th Semester - Final Year',
+            'semester_number': 8,
+            'total_sections': 3,
+            'academic_year': '2024-2025'
+        },
+        {
+            'name': '22SW',
+            'description': '6th Semester - 3rd Year',
+            'semester_number': 6,
+            'total_sections': 3,
+            'academic_year': '2024-2025'
+        },
+        {
+            'name': '23SW',
+            'description': '5th Semester - 2nd Year',
+            'semester_number': 5,
+            'total_sections': 3,
+            'academic_year': '2024-2025'
+        },
+        {
+            'name': '24SW',
+            'description': '3rd Semester - 1st Year',
+            'semester_number': 3,
+            'total_sections': 3,
+            'academic_year': '2024-2025'
+        }
+    ]
+    
+    for batch_data in batches_data:
+        batch, created = Batch.objects.get_or_create(
+            name=batch_data['name'],
+            defaults=batch_data
+        )
+        if created:
+            print(f'   ✅ Created: {batch.name} - {batch.description} ({batch.total_sections} sections)')
+        else:
+            # Update batch data if it exists but has different values
+            updated = False
+            for field, value in batch_data.items():
+                if field != 'name' and getattr(batch, field) != value:
+                    setattr(batch, field, value)
+                    updated = True
+            
+            if updated:
+                batch.save()
+                print(f'   🔄 Updated: {batch.name} - {batch.description} ({batch.total_sections} sections)')
+            else:
+                print(f'   ⚪ Exists: {batch.name} - {batch.description} ({batch.total_sections} sections)')
+    
+    print(f'Total batches: {Batch.objects.count()}')
+    
+    # Show all batches with their sections
+    print('\n📋 Batch Details:')
+    for batch in Batch.objects.all().order_by('-semester_number'):
+        sections = batch.get_sections()
+        print(f'   {batch.name}: {batch.description} - Sections: {", ".join(sections)}')
 
 def populate_subjects():
     """Create all subjects and assign them to batches"""
@@ -265,6 +330,7 @@ def main():
     
     # Populate in order
     populate_teachers()
+    populate_batches()
     populate_subjects()
     populate_classrooms()
     populate_teacher_assignments()
@@ -273,9 +339,9 @@ def main():
     print('✅ DATA POPULATION COMPLETE!')
     print(f'📊 Final counts:')
     print(f'   Teachers: {Teacher.objects.count()}')
+    print(f'   Batches: {Batch.objects.count()}')
     print(f'   Subjects: {Subject.objects.count()}')
     print(f'   Classrooms: {Classroom.objects.count()}')
-    print(f'   Batches: {Batch.objects.count()}')
     print(f'   Teacher Assignments: {TeacherSubjectAssignment.objects.count()}')
     print('\n🎯 Database is ready for timetable generation!')
 
