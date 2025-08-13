@@ -18,6 +18,7 @@ from rest_framework import status
 from django.db import transaction
 from django.db.models import Q
 from django.db import models
+from django.db import IntegrityError
 
 from .serializers import (
     SubjectSerializer,
@@ -808,6 +809,68 @@ class TeacherViewSet(viewsets.ModelViewSet):
                 Q(email__icontains=search)
             )
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError as e:
+            # Handle unique constraint violations specifically
+            error_message = str(e)
+            
+            # Check which field caused the violation
+            if "email" in error_message.lower():
+                return Response(
+                    {'detail': 'A teacher with this email already exists.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif "name" in error_message.lower():
+                return Response(
+                    {'detail': 'A teacher with this name already exists.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                return Response(
+                    {'detail': 'Teacher already exists with this information.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            # Handle other types of errors
+            error_message = str(e)
+            return Response(
+                {'detail': f'Failed to create teacher: {error_message}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def update(self, request, *args, **kwargs):
+        try:
+            return super().update(request, *args, **kwargs)
+        except IntegrityError as e:
+            # Handle unique constraint violations specifically
+            error_message = str(e)
+            
+            # Check which field caused the violation
+            if "email" in error_message.lower():
+                return Response(
+                    {'detail': 'A teacher with this email already exists.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif "name" in error_message.lower():
+                return Response(
+                    {'detail': 'A teacher with this name already exists.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                return Response(
+                    {'detail': 'Teacher already exists with this information.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            # Handle other types of errors
+            error_message = str(e)
+            return Response(
+                {'detail': f'Failed to update teacher: {error_message}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class LatestTimetableView(APIView):
     authentication_classes = []  # Temporarily disable authentication for testing

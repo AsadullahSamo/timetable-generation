@@ -4,6 +4,7 @@ from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry,
 # from users.serializers import UserSerializer
 from datetime import datetime
 import traceback
+from django.db import models
 
 
 
@@ -41,6 +42,42 @@ class TeacherSerializer(serializers.ModelSerializer):
             'max_lessons_per_day',
             'unavailable_periods'
         ]
+
+    def validate(self, attrs):
+        """Custom validation to check for duplicate teachers"""
+        name = attrs.get('name')
+        email = attrs.get('email')
+        instance = getattr(self, 'instance', None)
+        
+        if name and email:
+            # Check for existing teachers with same name or email
+            existing_teachers = Teacher.objects.filter(
+                models.Q(name=name) | models.Q(email=email)
+            )
+            
+            # If updating, exclude the current instance
+            if instance:
+                existing_teachers = existing_teachers.exclude(id=instance.id)
+            
+            if existing_teachers.exists():
+                # Check which field(s) are duplicates
+                name_exists = existing_teachers.filter(name=name).exists()
+                email_exists = existing_teachers.filter(email=email).exists()
+                
+                if name_exists and email_exists:
+                    raise serializers.ValidationError({
+                        'detail': 'A teacher with this name and email already exists.'
+                    })
+                elif name_exists:
+                    raise serializers.ValidationError({
+                        'detail': 'A teacher with this name already exists.'
+                    })
+                elif email_exists:
+                    raise serializers.ValidationError({
+                        'detail': 'A teacher with this email already exists.'
+                    })
+        
+        return attrs
 
     def get_subject_names(self, obj):
         """Get subject names from TeacherSubjectAssignment"""

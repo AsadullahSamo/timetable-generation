@@ -186,8 +186,76 @@ const AddTeacher = () => {
       }
       router.push("/components/Teachers");
     } catch (err) {
+      console.log('=== ERROR HANDLING STARTED ===');
       console.error('Error response:', err.response?.data);
-      setError(err.response?.data?.detail || "Failed to save teacher.");
+      
+      // Enhanced error handling for specific duplicate scenarios
+      let errorMessage = "Failed to save teacher.";
+      
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        
+        // Check for field-specific validation errors and determine the exact duplicate scenario
+        let hasEmailError = false;
+        let hasNameError = false;
+        let emailMessage = "";
+        let nameMessage = "";
+        
+        // Check email errors
+        if (errorData.email) {
+          hasEmailError = true;
+          if (Array.isArray(errorData.email)) {
+            const emailError = errorData.email[0];
+            if (typeof emailError === 'object' && emailError.string) {
+              emailMessage = emailError.string;
+            } else {
+              emailMessage = emailError;
+            }
+          } else {
+            emailMessage = errorData.email;
+          }
+        }
+        
+        // Check name errors
+        if (errorData.name) {
+          hasNameError = true;
+          if (Array.isArray(errorData.name)) {
+            const nameError = errorData.name[0];
+            if (typeof nameError === 'object' && nameError.string) {
+              nameMessage = nameError.string;
+            } else {
+              nameMessage = nameError;
+            }
+          } else {
+            nameMessage = errorData.name;
+          }
+        }
+        
+        // Determine the specific duplicate scenario
+        if (hasEmailError && hasNameError) {
+          errorMessage = "Teacher with name and email already exists";
+        } else if (hasEmailError) {
+          errorMessage = "Email already exists";
+        } else if (hasNameError) {
+          errorMessage = "Teacher already exists";
+        } else if (errorData.detail) {
+          // Handle other error types
+          if (typeof errorData.detail === 'string') {
+            if (errorData.detail.includes('already exists')) {
+              errorMessage = "Teacher already exists";
+            } else {
+              errorMessage = errorData.detail;
+            }
+          } else {
+            errorMessage = errorData.detail;
+          }
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      }
+      
+      console.log('Final error message to display:', errorMessage);
+      setError(errorMessage);
       window.scrollTo(0, 0);
     } finally {
       setTeacherLoading(false);
