@@ -43,22 +43,53 @@ const AddTeacher = () => {
   const [activeMode, setActiveMode] = useState("preferable");
   const [formErrors, setFormErrors] = useState({});
 
+  // Helper function to generate time slots from config
+  const generateTimeSlots = (config) => {
+    if (!config || !config.start_time || !config.lesson_duration || !config.periods) {
+      return {};
+    }
+
+    const timeSlots = {};
+    const days = config.days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    
+    days.forEach(day => {
+      timeSlots[day] = [];
+      let currentTime = new Date(`2000-01-01T${config.start_time}`);
+      
+      for (let i = 0; i < config.periods.length; i++) {
+        const timeString = currentTime.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        timeSlots[day].push(timeString);
+        
+        // Add lesson duration
+        currentTime.setMinutes(currentTime.getMinutes() + config.lesson_duration);
+      }
+    });
+    
+    return timeSlots;
+  };
+
   // Fetch configuration once on mount.
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const configRes = await api.get("/api/timetable/schedule-configs/");
+        
         if (configRes.data.length > 0) {
-          // Get the latest config (highest ID) that has generated_periods
+          // Get the latest config (highest ID)
           const latestConfig = configRes.data
-            .filter(config => config.generated_periods && Object.keys(config.generated_periods).length > 0)
             .sort((a, b) => b.id - a.id)[0];
 
           if (latestConfig) {
             setTimetableConfig(latestConfig);
           } else {
-            setError("No timetable configuration with generated periods found. Please complete Department Configuration first.");
+            setError("No timetable configuration found. Please complete Department Configuration first.");
           }
+        } else {
+          setError("No timetable configuration found. Please complete Department Configuration first.");
         }
       } catch (err) {
         setError("Failed to load configuration.");
@@ -82,12 +113,13 @@ const AddTeacher = () => {
         const newState = {};
         if (data.unavailable_periods) {
           // Handle both mandatory and preferable slots
+          const timeSlots = generateTimeSlots(timetableConfig);
           for (const mode of ['mandatory', 'preferable']) {
             const dayData = data.unavailable_periods[mode] || {};
             for (const [day, times] of Object.entries(dayData)) {
               if (!newState[day]) newState[day] = {};
               times.forEach(time => {
-                const periodIndex = timetableConfig?.generated_periods[day]?.findIndex(p => p === time);
+                const periodIndex = timeSlots[day]?.findIndex(p => p === time);
                 if (periodIndex !== -1 && periodIndex !== undefined) {
                   newState[day][periodIndex] = mode;
                 }
@@ -188,13 +220,15 @@ const AddTeacher = () => {
   // { mandatory: { day: [time, ...], ... }, preferable: { day: [time, ...], ... } }
   const convertAvailability = () => {
     const result = { mandatory: {}, preferable: {} };
-    if (!timetableConfig || !timetableConfig.generated_periods) return result;
+    if (!timetableConfig) return result;
+    
+    const timeSlots = generateTimeSlots(timetableConfig);
     
     // Then populate the times
     for (const [day, periodsObj] of Object.entries(availabilityState)) {
       for (const [periodIndexStr, cellMode] of Object.entries(periodsObj)) {
         const periodIndex = parseInt(periodIndexStr, 10);
-        const dayPeriods = timetableConfig.generated_periods[day] || [];
+        const dayPeriods = timeSlots[day] || [];
         const time = dayPeriods[periodIndex];
         if (time) {
           if (!result[cellMode][day]) {
@@ -431,30 +465,33 @@ const AddTeacher = () => {
                 </button>
               </div>
               
-              {timetableConfig && timetableConfig.generated_periods ? (
+              {timetableConfig ? (
                 <div className="space-y-6">
-                  {Object.entries(timetableConfig.generated_periods).map(([day, times]) => (
-                    <div key={day}>
-                      <h3 className="text-md font-medium text-primary mb-3">{day}</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                        {times.map((time, idx) => (
-                          <button
-                            key={`${day}-${idx}`}
-                            type="button"
-                            onClick={() => toggleTimeSlot(day, idx)}
-                            className={`py-3 px-4 rounded-lg text-center transition-colors ${getTimeSlotClass(day, idx)}`}
-                          >
-                            <span className="text-sm">{time}</span>
-                          </button>
-                        ))}
+                  {(() => {
+                    const timeSlots = generateTimeSlots(timetableConfig);
+                    return Object.entries(timeSlots).map(([day, times]) => (
+                      <div key={day}>
+                        <h3 className="text-md font-medium text-primary mb-3">{day}</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                          {times.map((time, idx) => (
+                            <button
+                              key={`${day}-${idx}`}
+                              type="button"
+                              onClick={() => toggleTimeSlot(day, idx)}
+                              className={`py-3 px-4 rounded-lg text-center transition-colors ${getTimeSlotClass(day, idx)}`}
+                            >
+                              <span className="text-sm">{time}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-8 text-secondary">
-                  <p>No timetable configuration with generated periods available.</p>
-                  <p className="text-sm mt-2">Please complete Department Configuration and generate periods first.</p>
+                  <p>No timetable configuration available.</p>
+                  <p className="text-sm mt-2">Please complete Department Configuration first.</p>
                 </div>
               )}
             </div>

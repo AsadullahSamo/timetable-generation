@@ -56,6 +56,35 @@ const TeachersConfig = () => {
       : 0
   };
 
+  // Helper function to generate time slots from config
+  const generateTimeSlots = (config) => {
+    if (!config || !config.start_time || !config.lesson_duration || !config.periods) {
+      return {};
+    }
+
+    const timeSlots = {};
+    const days = config.days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    
+    days.forEach(day => {
+      timeSlots[day] = [];
+      let currentTime = new Date(`2000-01-01T${config.start_time}`);
+      
+      for (let i = 0; i < config.periods.length; i++) {
+        const timeString = currentTime.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        timeSlots[day].push(timeString);
+        
+        // Add lesson duration
+        currentTime.setMinutes(currentTime.getMinutes() + config.lesson_duration);
+      }
+    });
+    
+    return timeSlots;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -71,15 +100,15 @@ const TeachersConfig = () => {
         setAssignments(assignmentsRes.data);
         
         if (configRes.data.length > 0) {
-          // Get the latest config (highest ID) that has generated_periods
+          // Get the latest config (highest ID)
           const latestConfig = configRes.data
-            .filter(config => config.generated_periods && Object.keys(config.generated_periods).length > 0)
             .sort((a, b) => b.id - a.id)[0];
 
           if (latestConfig) {
             setTimetableConfig(latestConfig);
             // Get weekdays from config
-            const configDays = Object.keys(latestConfig.generated_periods || {});
+            const timeSlots = generateTimeSlots(latestConfig);
+            const configDays = Object.keys(timeSlots);
             if (configDays.length > 0) {
               setWeekDays(configDays);
             }
