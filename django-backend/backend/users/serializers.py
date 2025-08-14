@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
+from rest_framework_simplejwt.exceptions import InvalidToken
 from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
@@ -43,22 +44,32 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         password = attrs.get('password')
 
         if username_or_email and password:
-            # Try to authenticate with email first
             user = None
+            user_exists = False
 
             # Check if it's an email format
             if '@' in username_or_email:
                 try:
                     user_obj = User.objects.get(email=username_or_email)
+                    user_exists = True
                     user = authenticate(username=user_obj.username, password=password)
                 except User.DoesNotExist:
-                    pass
+                    user_exists = False
+            else:
+                # Not an email, try as username
+                try:
+                    User.objects.get(username=username_or_email)
+                    user_exists = True
+                    user = authenticate(username=username_or_email, password=password)
+                except User.DoesNotExist:
+                    user_exists = False
 
-            # If email auth failed or it's not email format, try username
-            if not user:
-                user = authenticate(username=username_or_email, password=password)
-
-            if user:
+            # Provide specific error messages
+            if not user_exists:
+                raise serializers.ValidationError("User doesn't exist")
+            elif user_exists and not user:
+                raise serializers.ValidationError("Invalid password")
+            else:
                 # Update attrs with the correct username for parent validation
                 attrs['username'] = user.username
 

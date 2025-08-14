@@ -82,8 +82,8 @@ export default function Signup() {
       <div className="min-h-screen bg-background text-primary font-sans">
         {/* Background Effects */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-accent-pink/10 rounded-full blur-[120px] animate-pulse-slow animation-delay-4000"></div>
+          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-accent-pink/10 rounded-full blur-[120px] animate-pulse"></div>
         </div>
 
         <div className="relative z-10 w-full min-h-screen flex justify-center items-center p-4">
