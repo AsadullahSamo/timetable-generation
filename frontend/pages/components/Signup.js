@@ -56,7 +56,9 @@ export default function Signup() {
 
     } catch (error) {
       if (error.response?.data?.email) {
-        setErrMsg('This email address is already in use. Please try logging in.');
+        setErrMsg(error.response.data.email[0]);
+      } else if (error.response?.data?.username) {
+        setErrMsg(error.response.data.username[0]);
       } else if (error.response?.data?.password) {
         setErrMsg(error.response.data.password[0]);
       } else if (error.response?.data?.detail) {
