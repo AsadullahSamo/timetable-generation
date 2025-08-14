@@ -49,7 +49,15 @@ const SubjectConfig = () => {
   const stats = {
     totalSubjects: subjects.length,
     totalCredits: subjects.reduce((acc, subject) => acc + subject.credits, 0),
-    avgCredits: subjects.length ? (subjects.reduce((acc, subject) => acc + subject.credits, 0) / subjects.length).toFixed(1) : 0
+    avgCredits: subjects.length ? (subjects.reduce((acc, subject) => acc + subject.credits, 0) / subjects.length).toFixed(1) : 0,
+    duplicateCodes: (() => {
+      const codeCounts = {};
+      subjects.forEach(subject => {
+        const code = subject.code.toLowerCase();
+        codeCounts[code] = (codeCounts[code] || 0) + 1;
+      });
+      return Object.values(codeCounts).filter(count => count > 1).length;
+    })()
   };
 
   // Fetch subjects from backend
@@ -117,12 +125,25 @@ const SubjectConfig = () => {
       errors.name = "Subject name is required";
     } else if (formData.name.length < 2) {
       errors.name = "Subject name must be at least 2 characters";
+    } else if (formData.name.length > 100) {
+      errors.name = "Subject name cannot exceed 100 characters";
     }
+    // Note: Subject name allows letters, numbers, spaces, and special characters
     
     if (!formData.code.trim()) {
       errors.code = "Subject code is required";
     } else if (!/^[A-Z0-9]+$/i.test(formData.code)) {
-      errors.code = "Subject code should only contain letters and numbers";
+      errors.code = "Subject code should only contain letters and numbers (no spaces or special characters)";
+    } else {
+      // Check for duplicate subject codes (allow max 2 - theory and practical)
+      const existingSubjectsWithSameCode = subjects.filter(subject => 
+        subject.code.toLowerCase() === formData.code.trim().toLowerCase() && 
+        subject.id !== editingId
+      );
+      
+      if (existingSubjectsWithSameCode.length >= 2) {
+        errors.code = "Subject code already used twice (max allowed for theory and practical versions)";
+      }
     }
     
     if (formData.credits < 1) {
@@ -277,7 +298,7 @@ const SubjectConfig = () => {
           )}
 
           {/* Stats Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
               <div className="flex items-center gap-3 mb-2">
                 <BookOpen className="h-5 w-5 text-accent-cyan" />
@@ -298,6 +319,19 @@ const SubjectConfig = () => {
                 <h3 className="text-sm font-medium text-secondary">Avg. Credits</h3>
               </div>
               <p className="text-2xl font-bold text-primary">{stats.avgCredits}</p>
+            </div>
+            <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
+              <div className="flex items-center gap-3 mb-2">
+                <Hash className="h-5 w-5 text-accent-cyan" />
+                <h3 className="text-sm font-medium text-secondary">Duplicate Codes</h3>
+              </div>
+              <p className="text-2xl font-bold text-primary">{stats.duplicateCodes}</p>
+              {stats.duplicateCodes === 0 && (
+                <p className="text-xs text-secondary/70 mt-1">All codes unique</p>
+              )}
+              {stats.duplicateCodes > 0 && (
+                <p className="text-xs text-secondary/70 mt-1">Theory + Practical</p>
+              )}
             </div>
           </div>
 
@@ -334,7 +368,7 @@ const SubjectConfig = () => {
                   </button>
                   {showTooltip === "form" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Enter subject details like name, code, and credits. Subject codes should be unique identifiers.
+                      Enter subject details like name, code, and credits. Subject names can include letters, numbers, spaces, and special characters. Subject codes can be used twice (for theory and practical versions) but not more than twice.
                     </div>
                   )}
                 </div>
@@ -355,6 +389,7 @@ const SubjectConfig = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Subject Name</label>
+                  <p className="text-xs text-secondary/70">Accepts letters, numbers, spaces, and special characters</p>
                   <div className="relative">
                     <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
@@ -362,7 +397,7 @@ const SubjectConfig = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      placeholder="e.g. Mathematics"
+                      placeholder="e.g. Mathematics 101, Advanced Calculus"
                       className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.name ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
                     />
                   </div>
@@ -373,6 +408,7 @@ const SubjectConfig = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Subject Code</label>
+                  <p className="text-xs text-secondary/70">Letters and numbers only. Can be used twice (theory + practical)</p>
                   <div className="relative">
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
@@ -386,6 +422,28 @@ const SubjectConfig = () => {
                   </div>
                   {formErrors.code && (
                     <p className="text-red-500 text-xs mt-1">{formErrors.code}</p>
+                  )}
+                  {!formErrors.code && formData.code && (
+                    (() => {
+                      const existingCount = subjects.filter(subject => 
+                        subject.code.toLowerCase() === formData.code.trim().toLowerCase() && 
+                        subject.id !== editingId
+                      ).length;
+                      if (existingCount === 1) {
+                        return (
+                          <p className="text-blue-500 text-xs mt-1">
+                            This code is used 1 time (can use 1 more time for theory/practical)
+                          </p>
+                        );
+                      } else if (existingCount >= 2) {
+                        return (
+                          <p className="text-orange-500 text-xs mt-1">
+                            This code is used {existingCount} times (maximum allowed reached)
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()
                   )}
                 </div>
                 
@@ -510,7 +568,12 @@ const SubjectConfig = () => {
                         >
                           <td className="px-4 py-3 border border-border">
                             <div className="flex items-center gap-2">
-                              {subject.name}
+                              <span>{subject.name}</span>
+                              {subject.is_practical && (
+                                <span className="px-2 py-1 text-xs bg-blue-500/20 text-white rounded-full border border-blue-500/30">
+                                  Practical
+                                </span>
+                              )}
                               {activeSubject === subject.id && (
                                 <CheckCircle2 className="h-4 w-4 text-accent-cyan" />
                               )}

@@ -142,15 +142,33 @@ class Batch(models.Model):
 
 class Subject(models.Model):
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)  # Remove unique=True to allow duplicates
     credits = models.PositiveIntegerField()
     is_practical = models.BooleanField(default=False)
     batch = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW")
 
+    class Meta:
+        # Allow up to 2 subjects with the same code (theory + practical)
+        pass
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        
+        # Check if this code is already used more than once
+        if self.code:
+            existing_count = Subject.objects.filter(code__iexact=self.code).exclude(pk=self.pk).count()
+            if existing_count >= 2:
+                raise ValidationError({
+                    'code': f'Subject code "{self.code}" is already used twice. Maximum allowed is 2 (theory and practical versions).'
+                })
+
     def save(self, *args, **kwargs):
         # Auto-detect practical subjects based on name or code
-        if '(PR)' in self.name or '(Pr)' in self.name or 'Pr' in self.code or 'PR' in self.code:
+        if '(PR)' in self.name or 'PR' in self.code:
             self.is_practical = True
+        
+        # Run validation before saving
+        self.clean()
         super().save(*args, **kwargs)
 
     def __str__(self):

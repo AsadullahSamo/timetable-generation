@@ -25,6 +25,22 @@ class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subject
         fields = '__all__'
+    
+    def validate_code(self, value):
+        """Validate that subject code is not used more than twice"""
+        if not value:
+            raise serializers.ValidationError("Subject code is required")
+        
+        # Check if this code is already used more than once
+        instance = getattr(self, 'instance', None)
+        existing_count = Subject.objects.filter(code__iexact=value).exclude(pk=instance.pk if instance else None).count()
+        
+        if existing_count >= 2:
+            raise serializers.ValidationError(
+                f'Subject code "{value}" is already used twice. Maximum allowed is 2 (theory and practical versions).'
+            )
+        
+        return value
 
 class TeacherSerializer(serializers.ModelSerializer):
     # Add read-only fields to display assignments
