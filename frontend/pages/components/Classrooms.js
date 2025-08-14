@@ -319,9 +319,9 @@ const Classrooms = () => {
                 Back to Teachers
               </button>
             </Link>
-            <Link href="/components/DepartmentConfig">
+            <Link href="/components/TeacherAssignments">
               <button className="flex items-center gap-2 px-6 py-3 bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-xl transition-all">
-                Next: Department Config
+                Next: Teacher Assignments
                 <ArrowLeft className="h-4 w-4 rotate-180" />
               </button>
             </Link>

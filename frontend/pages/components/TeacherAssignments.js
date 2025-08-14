@@ -16,8 +16,10 @@ import {
   CheckCircle2,
   User,
   Hash,
-  BarChart3
+  BarChart3,
+  ArrowLeft
 } from 'lucide-react';
+import Link from "next/link";
 
 const TeacherAssignments = () => {
   const [assignments, setAssignments] = useState([]);
@@ -999,8 +1001,15 @@ const TeacherAssignments = () => {
             </div>
           )}
 
-
-
+          {/* Navigation */}
+          <div className="flex justify-end mt-8">
+            <Link href="/components/DepartmentConfig">
+              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300">
+                Next: Department Config
+                <ArrowLeft className="h-4 w-4 rotate-180" />
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
     </>

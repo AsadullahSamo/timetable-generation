@@ -14,8 +14,10 @@ import {
   Hash,
   Calendar,
   BookOpen,
-  Users
+  Users,
+  ArrowLeft
 } from 'lucide-react';
+import Link from "next/link";
 
 const BatchManagement = () => {
   const [batches, setBatches] = useState([]);
@@ -422,6 +424,16 @@ const BatchManagement = () => {
               <p className="text-secondary">No batches found</p>
             </div>
           )}
+
+          {/* Navigation */}
+          <div className="flex justify-end mt-8">
+            <Link href="/components/Subjects">
+              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300">
+                Next: Subjects
+                <ArrowLeft className="h-4 w-4 rotate-180" />
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
     </>
