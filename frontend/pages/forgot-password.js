@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
-import { Mail, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Mail, ArrowLeft, ArrowRight, Lock } from 'lucide-react';
 import api from './utils/api';
 
 export default function ForgotPassword() {
@@ -47,33 +47,18 @@ export default function ForgotPassword() {
     setMessage('');
 
     if (newPassword !== confirmPassword) {
-// Extract password validation into its own helper
-const validatePassword = (password, confirmPassword) => {
-  if (password !== confirmPassword) {
-    return 'Passwords do not match';
-  }
-  if (password.length < 6) {
-    return 'Password must be at least 6 characters long';
-  }
-  return null;
-};
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
 
-const handleResetPassword = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
-  setMessage('');
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setLoading(false);
+      return;
+    }
 
-  // Use the new helper instead of inline checks
-  const validationError = validatePassword(newPassword, confirmPassword);
-  if (validationError) {
-    setError(validationError);
-    setLoading(false);
-    return;
-  }
-
-  // ...rest of reset logic
-};    try {
+    try {
       await api.post('/api/auth/reset-password/', {
         email,
         reset_token: resetToken,
@@ -139,9 +124,10 @@ const handleResetPassword = async (e) => {
             {/* Form */}
             <div className="bg-surface/95 backdrop-blur-sm p-8 rounded-2xl border border-border shadow-soft">
               {step === 1 ? (
+                // Step 1: Email Input
                 <form onSubmit={handleGetResetToken} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">Email</label>
+                    <label className="text-sm font-medium text-secondary">Email Address</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Mail className="h-5 w-5 text-secondary" />
@@ -151,7 +137,7 @@ const handleResetPassword = async (e) => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                        placeholder="Enter your email"
+                        placeholder="Enter your email address"
                         required
                       />
                     </div>
@@ -173,46 +159,64 @@ const handleResetPassword = async (e) => {
                   </button>
                 </form>
               ) : (
+                // Step 2: Reset Password
                 <form onSubmit={handleResetPassword} className="space-y-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-secondary">Reset Token</label>
-                    <input
-                      type="text"
-                      value={resetToken}
-                      readOnly
-                      className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary font-mono text-sm"
-                    />
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="text"
+                        value={resetToken}
+                        onChange={(e) => setResetToken(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        placeholder="Enter the reset token from your email"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-secondary">New Password</label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                      placeholder="Enter new password"
-                      required
-                    />
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        placeholder="Enter your new password"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">Confirm Password</label>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                      placeholder="Confirm new password"
-                      required
-                    />
+                    <label className="text-sm font-medium text-secondary">Confirm New Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        placeholder="Confirm your new password"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="flex space-x-3">
                     <button
                       type="button"
                       onClick={goBackToEmail}
-                      className="flex-1 py-3 px-4 bg-secondary/20 text-secondary font-medium rounded-xl flex items-center justify-center hover:bg-secondary/30 transition-colors"
+                      className="flex-1 py-3 px-4 bg-background/95 border border-border text-primary font-medium rounded-xl flex items-center justify-center hover:bg-background/80 transition-all duration-300"
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" />
                       Back
@@ -237,24 +241,25 @@ const handleResetPassword = async (e) => {
 
               {/* Messages */}
               {message && (
-                <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                <div className="mt-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                   <p className="text-green-500 text-sm text-center font-medium">{message}</p>
                 </div>
               )}
 
               {error && (
-                <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                   <p className="text-red-500 text-sm text-center font-medium">{error}</p>
                 </div>
               )}
 
-              {/* Navigation */}
-              <div className="mt-6 flex items-center justify-center">
+              {/* Back to Login */}
+              <div className="mt-6 flex items-center justify-center space-x-2 text-sm">
+                <span className="text-secondary">Remember your password?</span>
                 <Link
                   href="/components/Login"
-                  className="text-accent-cyan hover:text-accent-cyan/80 transition-colors font-medium text-sm"
+                  className="text-accent-cyan hover:text-accent-cyan/80 transition-colors font-medium"
                 >
-                  ← Back to Login
+                  Sign In
                 </Link>
               </div>
             </div>
@@ -263,6 +268,5 @@ const handleResetPassword = async (e) => {
       </div>
     </>
   );
-}
 }
 
