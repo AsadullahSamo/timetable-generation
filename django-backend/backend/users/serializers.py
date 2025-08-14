@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.exceptions import InvalidToken
 from .models import User
@@ -70,10 +71,22 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             elif user_exists and not user:
                 raise serializers.ValidationError("Invalid password")
             else:
-                # Update attrs with the correct username for parent validation
-                attrs['username'] = user.username
+                # Store the authenticated user for token generation
+                self.user = user                
+                # Create tokens manually
+                refresh = RefreshToken.for_user(user)
+                access = refresh.access_token
+                
+                # Add custom claims
+                access['role'] = getattr(user, 'role', 'TEACHER')
+                
+                return {
+                    'access': str(access),
+                    'refresh': str(refresh),
+                }
 
-        return super().validate(attrs)
+        # If we reach here, something went wrong
+        raise serializers.ValidationError("Authentication failed")
 
     @classmethod
     def get_token(cls, user):
