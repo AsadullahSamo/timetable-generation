@@ -401,12 +401,12 @@ class ConstraintEnforcedScheduler:
         # Assign based on batch year
         batch_year = class_group[:2] if len(class_group) >= 2 else "24"
         
-        if batch_year == "22":  # 2nd year
+        if batch_year == "23":  # 2nd year (23SW)
             academic_rooms = [room for room in self.all_classrooms 
                             if not room.is_lab and "academic" in room.building.lower()]
             if academic_rooms:
                 return random.choice(academic_rooms)
-        else:  # 1st, 3rd, 4th year
+        else:  # 1st, 3rd, 4th year (21SW, 22SW, 24SW)
             main_rooms = [room for room in self.all_classrooms 
                          if not room.is_lab and "main" in room.building.lower()]
             if main_rooms:
