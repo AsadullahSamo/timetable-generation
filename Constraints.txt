@@ -16,3 +16,4 @@
 16. Appropriate Distribution - Lessons are spread across all 5 days
 17. Room Consistency - Consistent room assignment for theory classes per section
 18. Section Conflicts - Prevents multiple simultaneous classes for same section
+19. Teacher Unavailability - Teachers cannot be scheduled during their unavailable periods (HARD CONSTRAINT)

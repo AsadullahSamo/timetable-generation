@@ -1040,9 +1040,21 @@ class RoomAllocator:
         print(f"    🔄 CASCADE: Initiating cascade room resolution")
         all_entries = self._get_all_relevant_entries(entries)
 
+        # Determine building preference based on year - RESPECT STRICT BUILDING RULES
+        is_second_year = self.is_second_year(class_group)
+        
+        # STRICT: Only use appropriate building rooms + labs
+        if is_second_year:
+            # 2nd year: Academic building rooms + labs only
+            preferred_rooms = self.academic_building_rooms + self.labs
+            print(f"    🚫 STRICT RULE: 2nd year batch {class_group} - only Academic building + labs allowed in cascade")
+        else:
+            # Non-2nd year: Main building rooms + labs only
+            preferred_rooms = self.main_building_rooms + self.labs
+            print(f"    🚫 STRICT RULE: Non-2nd year batch {class_group} - only Main building + labs allowed in cascade")
+
         # Try each room and see if we can create a cascade of movements
-        all_rooms = self.regular_rooms + self.labs
-        for target_room in all_rooms:
+        for target_room in preferred_rooms:
             if self._attempt_cascade_for_room(target_room, day, period, all_entries, class_group, is_senior):
                 print(f"    ✅ CASCADE: Successfully freed {target_room.name} through cascade")
                 return target_room
@@ -1078,11 +1090,20 @@ class RoomAllocator:
 
         print(f"    🔄 CASCADE DEPTH {depth}: Moving {entry.class_group} {entry.subject.code if entry.subject else 'Unknown'}")
 
-        # Find alternative rooms for this entry
+        # Find alternative rooms for this entry based on building rules
         if entry.subject and entry.subject.is_practical:
             alternative_rooms = [lab for lab in self.labs if lab.id != entry.classroom.id]
         else:
-            alternative_rooms = [room for room in self.regular_rooms + self.labs if room.id != entry.classroom.id]
+            # For theory classes, respect strict building rules
+            is_second_year = self.is_second_year(entry.class_group)
+            if is_second_year:
+                # 2nd year: Academic building rooms only
+                alternative_rooms = [room for room in self.academic_building_rooms if room.id != entry.classroom.id]
+                print(f"    🚫 STRICT RULE: Moving 2nd year batch {entry.class_group} in cascade - only Academic building rooms allowed")
+            else:
+                # Non-2nd year: Main building rooms only
+                alternative_rooms = [room for room in self.main_building_rooms if room.id != entry.classroom.id]
+                print(f"    🚫 STRICT RULE: Moving non-2nd year batch {entry.class_group} in cascade - only Main building rooms allowed")
 
         for alt_room in alternative_rooms:
             # Check if alternative room is free

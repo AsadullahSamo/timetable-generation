@@ -62,7 +62,7 @@ class EnhancedScheduler:
         
         print(f"📊 Enhanced Scheduler: {len(self.all_subjects)} subjects, {len(self.all_teachers)} teachers, {len(self.all_classrooms)} classrooms")
         print(f"🏛️ Enhanced Room Allocation: {len(self.room_allocator.labs)} labs, {len(self.room_allocator.academic_building_rooms)} academic rooms, {len(self.room_allocator.main_building_rooms)} main rooms")
-        print(f"🔧 Enhanced Constraint Validation: All 18 constraints including 3 new ones")
+        print(f"🔧 Enhanced Constraint Validation: All 19 constraints including teacher unavailability")
     
     def generate_timetable(self) -> Dict:
         """Generate complete timetable with enhanced room allocation and constraint resolution."""
@@ -323,11 +323,12 @@ class EnhancedScheduler:
                 
                 if not class_schedule[day][period]:
                     # Try to schedule here
-                    if self._can_schedule_theory_at_slot(entries, day, period, class_group, subject):
-                        teacher = self._find_available_teacher_for_subject(subject, day, period, entries)
+                    can_schedule, teacher = self._can_schedule_theory_at_slot(entries, day, period, class_group, subject)
+                    
+                    if can_schedule:
                         room = self.room_allocator.allocate_room_for_theory(day, period, class_group, subject, entries)
                         
-                        if teacher and room:
+                        if room:
                             # Mark as occupied
                             class_schedule[day][period] = True
                             self._mark_global_schedule(teacher, room, day, period)
@@ -351,40 +352,52 @@ class EnhancedScheduler:
                 if not class_schedule[day][period]:
                     # Try to force schedule here
                     if self._force_schedule_theory_at_slot(entries, day, period, class_group, subject):
-                        teacher = self._find_available_teacher_for_subject(subject, day, period, entries)
-                        room = self.room_allocator.allocate_room_for_theory(day, period, class_group, subject, entries)
+                        can_schedule, teacher = self._can_schedule_theory_at_slot(entries, day, period, class_group, subject)
                         
-                        if teacher and room:
-                            # Mark as occupied
-                            class_schedule[day][period] = True
-                            self._mark_global_schedule(teacher, room, day, period)
+                        if can_schedule:
+                            room = self.room_allocator.allocate_room_for_theory(day, period, class_group, subject, entries)
                             
-                            # Create entry
-                            entry = self._create_entry(day, period, subject, teacher, room, class_group, False)
-                            entries.append(entry)
-                            current_scheduled += 1
+                            if room:
+                                # Mark as occupied
+                                class_schedule[day][period] = True
+                                self._mark_global_schedule(teacher, room, day, period)
+                                
+                                # Create entry
+                                entry = self._create_entry(day, period, subject, teacher, room, class_group, False)
+                                entries.append(entry)
+                                current_scheduled += 1
         
         return current_scheduled
     
     def _can_schedule_theory_at_slot(self, entries: List[TimetableEntry], day: str, period: int,
-                                   class_group: str, subject: Subject) -> bool:
-        """Check if theory can be scheduled at a specific slot."""
+                                   class_group: str, subject: Subject) -> Tuple[bool, Optional[Teacher]]:
+        """
+        Check if theory can be scheduled at a specific slot.
+        Returns (can_schedule, available_teacher) tuple.
+        """
         # Check if slot is available for class group
         if any(entry.class_group == class_group and entry.day == day and entry.period == period 
                for entry in entries):
-            return False
+            return False, None
         
-        # Check teacher availability
+        # Check teacher availability and find available teacher
         teachers = self._get_teachers_for_subject(subject, class_group)
-        if not any(self._is_teacher_available(teacher, day, period, entries) for teacher in teachers):
-            return False
+        available_teacher = None
+        
+        for teacher in teachers:
+            if self._is_teacher_available(teacher, day, period, entries):
+                available_teacher = teacher
+                break
+        
+        if not available_teacher:
+            return False, None
         
         # Check room availability
         available_rooms = self.room_allocator.get_available_rooms_for_time(day, period, 1, entries)
         if not available_rooms:
-            return False
+            return False, None
         
-        return True
+        return True, available_teacher
     
     def _force_schedule_theory_at_slot(self, entries: List[TimetableEntry], day: str, period: int,
                                      class_group: str, subject: Subject) -> bool:
@@ -507,13 +520,42 @@ class EnhancedScheduler:
         return teachers
     
     def _is_teacher_available(self, teacher: Teacher, day: str, period: int,
-                            entries: List[TimetableEntry]) -> bool:
-        """Check if a teacher is available at a specific time."""
-        return not any(
+                             entries: List[TimetableEntry]) -> bool:
+        """
+        Check if a teacher is available at the specified day and period.
+        Respects teacher unavailability constraints and existing schedule conflicts.
+        """
+        # First check for existing schedule conflicts
+        if any(
             entry.teacher and entry.teacher.id == teacher.id and
             entry.day == day and entry.period == period
             for entry in entries
-        )
+        ):
+            return False
+        
+        # Then check teacher unavailability constraints
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return True
+        
+        # Check if teacher has unavailability data
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return True
+        
+        # Check if this day is in teacher's unavailable periods
+        if day in teacher.unavailable_periods:
+            unavailable_periods = teacher.unavailable_periods[day]
+            
+            # If unavailable_periods is a list, check specific periods
+            if isinstance(unavailable_periods, list):
+                if period in unavailable_periods:
+                    print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{period}")
+                    return False
+            # If unavailable_periods is not a list, assume entire day is unavailable
+            elif unavailable_periods:
+                print(f"    🚫 Teacher {teacher.name} unavailable on entire day {day}")
+                return False
+        
+        return True
     
     def _create_entry(self, day: str, period: int, subject: Subject, teacher: Teacher,
                      classroom: Classroom, class_group: str, is_practical: bool) -> TimetableEntry:

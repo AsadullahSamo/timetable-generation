@@ -33,7 +33,12 @@ class FinalUniversalScheduler:
         self.config = config
         self.days = config.days
         self.periods = [int(p) for p in config.periods]
-        self.start_time = config.start_time
+        # Convert start_time string to time object if needed
+        if isinstance(config.start_time, str):
+            from datetime import datetime
+            self.start_time = datetime.strptime(config.start_time, '%H:%M:%S').time()
+        else:
+            self.start_time = config.start_time
         self.lesson_duration = config.lesson_duration
         # Get class groups from Batch model instead of config
         self.class_groups = [batch.name for batch in Batch.objects.all()]
@@ -527,7 +532,7 @@ class FinalUniversalScheduler:
         # Try to find 3 consecutive periods, prioritizing Friday-aware days and early times
         for day in friday_aware_days:
             for start_period in prioritized_periods:
-                if self._can_schedule_block(class_schedule, day, start_period, 3, class_group):
+                if self._can_schedule_block(class_schedule, day, start_period, 3, class_group, subject):
                     teacher = self._find_available_teacher(teachers, day, start_period, 3)
                     if teacher:
                         # CRITICAL: Check if this practical already has a lab assigned
@@ -993,7 +998,7 @@ class FinalUniversalScheduler:
         print(f"     ⚠️  No specific teachers found for {subject.code}, using fallback")
         return self.all_teachers[:3]  # Limit to first 3 to avoid over-assignment
 
-    def _can_schedule_block(self, class_schedule: dict, day: str, start_period: int, duration: int, class_group: str) -> bool:
+    def _can_schedule_block(self, class_schedule: dict, day: str, start_period: int, duration: int, class_group: str, subject: Subject = None) -> bool:
         """Check if block can be scheduled."""
         # STRICT CONSTRAINT: For ANY batch with Thesis subjects, ONLY allow Thesis blocks on Wednesday
         if day.lower().startswith('wed'):
@@ -1005,6 +1010,23 @@ class FinalUniversalScheduler:
             if has_thesis:
                 print(f"         🚫 STRICT: Preventing ANY block scheduling on Wednesday for {class_group} - reserved for Thesis only")
                 return False
+
+        # CRITICAL CONSTRAINT: TEACHER UNAVAILABILITY CHECK FOR BLOCKS
+        # If we have a subject, check if ANY assigned teacher is unavailable for ANY part of the block
+        if subject:
+            teachers = self._get_teachers_for_subject(subject, class_group)
+            if teachers:
+                # Check if ANY assigned teacher is unavailable for ANY part of the block
+                # If ANY assigned teacher is unavailable for ANY period, we cannot schedule this block
+                for teacher in teachers:
+                    for i in range(duration):
+                        period = start_period + i
+                        if not self._is_teacher_available(teacher, day, period, 1):
+                            print(f"         🚫 TEACHER UNAVAILABILITY: Teacher {teacher.name} unavailable for {subject.code} block on {day} P{period}")
+                            return False
+                
+                # If we reach here, at least one assigned teacher is available for the entire block
+                print(f"         ✅ TEACHER AVAILABILITY: At least one teacher available for {subject.code} block on {day} P{start_period}-{start_period+duration-1}")
 
         for i in range(duration):
             period = start_period + i
@@ -1019,6 +1041,21 @@ class FinalUniversalScheduler:
         # Basic availability check
         if (day, period) in class_schedule:
             return False
+
+        # CRITICAL CONSTRAINT: TEACHER UNAVAILABILITY CHECK
+        # If we have a subject, check if ANY assigned teacher is unavailable at this time
+        if subject:
+            teachers = self._get_teachers_for_subject(subject, class_group)
+            if teachers:
+                # Check if ANY assigned teacher is unavailable at this time
+                # If ANY assigned teacher is unavailable, we cannot schedule this subject
+                for teacher in teachers:
+                    if not self._is_teacher_available(teacher, day, period, 1):
+                        print(f"         🚫 TEACHER UNAVAILABILITY: Teacher {teacher.name} unavailable for {subject.code} on {day} P{period}")
+                        return False
+                
+                # If we reach here, at least one assigned teacher is available
+                print(f"         ✅ TEACHER AVAILABILITY: At least one teacher available for {subject.code} on {day} P{period}")
 
         # STRICT CONSTRAINT: For ANY batch with Thesis subjects, ONLY allow Thesis subjects on Wednesday
         if day.lower().startswith('wed'):
@@ -2296,7 +2333,7 @@ class FinalUniversalScheduler:
                 if teachers:
                     emergency_entry = self._create_entry(
                         target_day, available_period,
-                        subject, teachers[0], self._get_available_classroom(target_day, available_period),
+                        subject, teachers[0], self._find_available_classroom(target_day, available_period, 1),
                         class_group, False
                     )
 
@@ -3449,29 +3486,107 @@ class FinalUniversalScheduler:
         return True
 
     def _is_teacher_available(self, teacher: Teacher, day: str, start_period: int, duration: int) -> bool:
-        """Check if a teacher is available for the given time slot."""
+        """
+        Check if a teacher is available for the given time slot.
+        Respects both schedule conflicts and teacher unavailability constraints.
+        """
+        # First check for existing schedule conflicts
         for i in range(duration):
             period = start_period + i
             if (teacher.id, day, period) in self.global_teacher_schedule:
                 return False
+        
+        # Then check teacher unavailability constraints
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return True
+        
+        # Check if teacher has unavailability data
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return True
+        
+        # Check if this day is in teacher's unavailable periods
+        
+        # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            if day in mandatory_unavailable:
+                time_slots = mandatory_unavailable[day]
+                if isinstance(time_slots, list) and len(time_slots) >= 2:
+                    # Convert time strings to period numbers
+                    start_time_str = time_slots[0]  # e.g., '8:00 AM'
+                    end_time_str = time_slots[1]    # e.g., '9:00 AM'
+                    
+                    # Convert to period numbers
+                    start_period_unavailable = self._convert_time_to_period(start_time_str)
+                    end_period_unavailable = self._convert_time_to_period(end_time_str)
+                    
+                    if start_period_unavailable is not None and end_period_unavailable is not None:
+                        # Check if any part of the requested slot overlaps with unavailable time
+                        # A slot overlaps if: requested_start < unavailable_end AND requested_end > unavailable_start
+                        requested_start = start_period
+                        requested_end = start_period + duration - 1
+                        
+                        if requested_start <= end_period_unavailable and requested_end >= start_period_unavailable:
+                            print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                            return False
+            
+            # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
+            elif isinstance(teacher.unavailable_periods, dict):
+                if day in teacher.unavailable_periods:
+                    unavailable_periods = teacher.unavailable_periods[day]
+                    if isinstance(unavailable_periods, list):
+                        for i in range(duration):
+                            period = start_period + i
+                            if str(period) in unavailable_periods:
+                                print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{period}")
+                                return False
+                    elif unavailable_periods:
+                        print(f"    🚫 Teacher {teacher.name} unavailable on entire day {day}")
+                        return False
+        
         return True
 
-    def _find_available_teacher(self, teachers: List[Teacher], day: str, start_period: int, duration: int) -> Optional[Teacher]:
-        """Find an available teacher for the given time slot."""
-        if not teachers:
+    def _convert_time_to_period(self, time_str: str) -> Optional[int]:
+        """
+        Convert time string (e.g., '8:00 AM') to period number based on schedule config.
+        Returns None if conversion fails.
+        """
+        try:
+            from datetime import datetime
+            
+            # Parse the time string
+            if 'AM' in time_str or 'PM' in time_str:
+                # Format: '8:00 AM' or '9:00 PM'
+                time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+            else:
+                # Format: '8:00' or '09:00'
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+            
+            # Get the start time from config
+            config_start_time = self.config.start_time
+            if isinstance(config_start_time, str):
+                config_start_time = datetime.strptime(config_start_time, '%H:%M:%S').time()
+            
+            # Calculate which period this time falls into
+            lesson_duration = self.config.lesson_duration
+            
+            # Calculate minutes since start of day
+            start_minutes = config_start_time.hour * 60 + config_start_time.minute
+            time_minutes = time_obj.hour * 60 + time_obj.minute
+            
+            # Calculate period number (1-based)
+            period = ((time_minutes - start_minutes) // lesson_duration) + 1
+            
+            # Ensure period is within valid range
+            if 1 <= period <= len(self.config.periods):
+                return period
+            else:
+                print(f"    ⚠️ Warning: Calculated period {period} for time {time_str} is out of range")
+                return None
+                
+        except Exception as e:
+            print(f"    ⚠️ Warning: Could not convert time '{time_str}' to period: {e}")
             return None
-        
-        # 🎲 RANDOMIZE TEACHER ORDER for variety in each generation
-        available_teachers = []
-        for teacher in teachers:
-            if self._is_teacher_available(teacher, day, start_period, duration):
-                available_teachers.append(teacher)
-        
-        if not available_teachers:
-            return None
-        
-        # Randomly select from available teachers instead of always picking the first one
-        return random.choice(available_teachers)
 
     def _randomize_teacher_preferences(self):
         """Randomize teacher preferences for variety in scheduling."""
@@ -3507,3 +3622,20 @@ class FinalUniversalScheduler:
         
         if existing_entries.exists():
             print(f"🔍 Loaded {existing_entries.count()} existing entries to avoid conflicts")
+
+    def _find_available_teacher(self, teachers: List[Teacher], day: str, start_period: int, duration: int) -> Optional[Teacher]:
+        """Find an available teacher for the given time slot."""
+        if not teachers:
+            return None
+        
+        # 🎲 RANDOMIZE TEACHER ORDER for variety in each generation
+        available_teachers = []
+        for teacher in teachers:
+            if self._is_teacher_available(teacher, day, start_period, duration):
+                available_teachers.append(teacher)
+        
+        if not available_teachers:
+            return None
+        
+        # Randomly select from available teachers instead of always picking the first one
+        return random.choice(available_teachers)
