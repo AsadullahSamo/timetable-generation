@@ -401,21 +401,32 @@ class ConstraintEnforcedScheduler:
         # Assign based on batch year
         batch_year = class_group[:2] if len(class_group) >= 2 else "24"
         
-        if batch_year == "23":  # 2nd year (23SW)
+        if batch_year == "23":  # 2nd year (23SW) - STRICT: Academic building ONLY
             academic_rooms = [room for room in self.all_classrooms 
                             if not room.is_lab and "academic" in room.building.lower()]
             if academic_rooms:
                 return random.choice(academic_rooms)
-        else:  # 1st, 3rd, 4th year (21SW, 22SW, 24SW)
+            else:
+                # 2nd year batches MUST use academic building - no fallback to main building
+                print(f"    🚫 STRICT RULE: No academic building rooms available for 2nd year batch {class_group}")
+                # Try labs as last resort
+                lab_rooms = [room for room in self.all_classrooms if room.is_lab]
+                if lab_rooms:
+                    return random.choice(lab_rooms)
+                return None
+        else:  # 1st, 3rd, 4th year (21SW, 22SW, 24SW) - STRICT: Main building ONLY
             main_rooms = [room for room in self.all_classrooms 
                          if not room.is_lab and "main" in room.building.lower()]
             if main_rooms:
                 return random.choice(main_rooms)
-        
-        # Fallback to any non-lab room
-        regular_rooms = [room for room in self.all_classrooms if not room.is_lab]
-        if regular_rooms:
-            return random.choice(regular_rooms)
+            else:
+                # Non-2nd year batches MUST use main building - no fallback to academic building
+                print(f"    🚫 STRICT RULE: No main building rooms available for non-2nd year batch {class_group}")
+                # Try labs as last resort
+                lab_rooms = [room for room in self.all_classrooms if room.is_lab]
+                if lab_rooms:
+                    return random.choice(lab_rooms)
+                return None
         
         return None
     

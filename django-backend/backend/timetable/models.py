@@ -108,7 +108,7 @@ class ClassGroup(models.Model):
         return ".".join(self.class_groups) or "No class groups"
     
 class Batch(models.Model):
-    name = models.CharField(max_length=10, unique=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW")
+    name = models.CharField(max_length=10, unique=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.")
     description = models.CharField(max_length=100, help_text="e.g., 8th Semester - Final Year")
     semester_number = models.PositiveIntegerField(help_text="e.g., 8 for 8th semester")
     academic_year = models.CharField(max_length=20, default="2024-2025")
@@ -145,7 +145,7 @@ class Subject(models.Model):
     code = models.CharField(max_length=20)  # Remove unique=True to allow duplicates
     credits = models.PositiveIntegerField()
     is_practical = models.BooleanField(default=False)
-    batch = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW")
+    batch = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.")
 
     class Meta:
         # Allow up to 2 subjects with the same code (theory + practical)

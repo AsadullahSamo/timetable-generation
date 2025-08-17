@@ -81,10 +81,10 @@ const SubjectConfig = () => {
         console.error("Batches fetch error:", err);
         // Fallback to hardcoded batches if API fails
         setBatches([
-          { id: 1, name: "21SW", description: "8th Semester - Final Year" },
-          { id: 2, name: "22SW", description: "6th Semester - 3rd Year" },
-          { id: 3, name: "23SW", description: "4th Semester - 2nd Year" },
-          { id: 4, name: "24SW", description: "2nd Semester - 1st Year" }
+          { id: 1, name: "21SW", description: "Senior Batch" },
+          { id: 2, name: "22SW", description: "Senior Batch" },
+          { id: 3, name: "23SW", description: "2nd Year Batch" },
+          { id: 4, name: "24SW", description: "1st Year Batch" }
         ]);
       }
     };
@@ -153,9 +153,9 @@ const SubjectConfig = () => {
     }
 
     if (!formData.batch.trim()) {
-      errors.batch = "Batch is required (e.g., 21SW, 22SW, 23SW, 24SW)";
-    } else if (!/^(21|22|23|24)SW$/i.test(formData.batch)) {
-      errors.batch = "Batch must be in format: 21SW, 22SW, 23SW, or 24SW";
+      errors.batch = "Batch is required (e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.)";
+    } else if (!/^\d{2}[A-Z]{2}$/i.test(formData.batch)) {
+      errors.batch = "Batch must be in format: 2 digits + 2 letters (e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.)";
     }
 
     setFormErrors(errors);

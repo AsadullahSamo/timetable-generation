@@ -59,8 +59,8 @@ const BatchManagement = () => {
     
     if (!formData.name.trim()) {
       errors.name = "Batch name is required";
-    } else if (!/^(19|20|21|22|23|24|25|26|27|28|29|30)SW$/i.test(formData.name)) {
-      errors.name = "Batch name must be in format: 21SW, 22SW, etc.";
+    } else if (!/^\d{2}[A-Z]{2}$/i.test(formData.name)) {
+      errors.name = "Batch name must be in format: 2 digits + 2 letters (e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.)";
     }
     
     if (!formData.description.trim()) {

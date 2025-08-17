@@ -78,23 +78,36 @@ class EnhancedRoomAllocator:
         return year == (current_year - 2)
     
     def get_preferred_rooms_for_section(self, section: str) -> List[Classroom]:
-        """Get preferred rooms for theory classes based on section year."""
+        """Get preferred rooms for theory classes based on section year - STRICT BUILDING RULES."""
         if self.is_second_year_section(section):
-            # 2nd year: Academic building rooms first, then main building
-            return self.academic_building_rooms + self.main_building_rooms
+            # 2nd year: Academic building rooms ONLY - no fallback to main building
+            return self.academic_building_rooms
         else:
-            # 1st, 3rd, 4th year: Main building rooms first, then academic building
-            return self.main_building_rooms + self.academic_building_rooms
+            # 1st, 3rd, 4th year: Main building rooms ONLY - no fallback to academic building
+            return self.main_building_rooms
     
     def get_available_rooms_for_time(self, day: str, period: int, duration: int = 1,
-                                   entries: List[TimetableEntry] = None) -> List[Classroom]:
-        """Get all rooms available for the specified time slot."""
+                                   entries: List[TimetableEntry] = None, section: str = None) -> List[Classroom]:
+        """Get rooms available for the specified time slot, respecting building rules if section is provided."""
         if entries is None:
             entries = []
         
         available_rooms = []
         
-        for room in self.all_rooms:
+        # If section is provided, respect building rules
+        if section:
+            is_second_year = self.is_second_year_section(section)
+            if is_second_year:
+                # 2nd year: Academic building rooms + labs only
+                rooms_to_check = self.academic_building_rooms + self.labs
+            else:
+                # Non-2nd year: Main building rooms + labs only
+                rooms_to_check = self.main_building_rooms + self.labs
+        else:
+            # If no section provided, check all rooms (for backward compatibility)
+            rooms_to_check = self.all_rooms
+        
+        for room in rooms_to_check:
             is_available = True
             
             # Check all periods for the duration
@@ -120,7 +133,7 @@ class EnhancedRoomAllocator:
     def get_available_labs_for_time(self, day: str, period: int, duration: int = 1,
                                    entries: List[TimetableEntry] = None) -> List[Classroom]:
         """Get labs available for the specified time slot."""
-        all_available = self.get_available_rooms_for_time(day, period, duration, entries)
+        all_available = self.get_available_rooms_for_time(day, period, duration, entries, section)
         return [room for room in all_available if room.is_lab]
     
     def allocate_room_for_practical(self, day: str, start_period: int, section: str,
@@ -178,12 +191,8 @@ class EnhancedRoomAllocator:
                           if self._is_room_available(room, day, period, entries)]
         
         if not available_rooms:
-            # Try all rooms if preferred rooms are not available
-            available_rooms = [room for room in self.all_rooms 
-                             if not room.is_lab and self._is_room_available(room, day, period, entries)]
-        
-        if not available_rooms:
-            # Try labs as last resort
+            # STRICT RULE: No fallback to other buildings - only labs as last resort
+            print(f"    🚫 STRICT RULE: No preferred building rooms available for {section} - trying labs only")
             available_rooms = [room for room in self.labs 
                              if self._is_room_available(room, day, period, entries)]
         
@@ -253,7 +262,7 @@ class EnhancedRoomAllocator:
         """Check if an entry can be moved to an alternative room."""
         # Find available rooms for this time slot
         available_rooms = self.get_available_rooms_for_time(
-            entry.day, entry.period, 1, entries
+            entry.day, entry.period, 1, entries, entry.class_group
         )
         
         # Filter out the current room
@@ -344,6 +353,36 @@ class EnhancedRoomAllocator:
                         'day': group_entries[0].day,
                         'description': f'Practical {group_entries[0].subject.code} uses multiple labs on {group_entries[0].day}'
                     })
+        
+        # Check strict building rules for 2nd year vs other batches
+        for entry in entries:
+            if not entry.is_practical and entry.classroom:  # Only check theory classes
+                section = entry.class_group
+                is_second_year = self.is_second_year_section(section)
+                room_building = entry.classroom.building.lower()
+                
+                if is_second_year:
+                    # 2nd year batches MUST be in academic building
+                    if "academic" not in room_building:
+                        violations.append({
+                            'type': '2nd Year Wrong Building',
+                            'entry_id': entry.id,
+                            'section': section,
+                            'room': entry.classroom.name,
+                            'building': entry.classroom.building,
+                            'description': f'2nd year batch {section} assigned to non-academic building room {entry.classroom.name} ({entry.classroom.building})'
+                        })
+                else:
+                    # Non-2nd year batches MUST be in main building
+                    if "main" not in room_building and "academic" in room_building:
+                        violations.append({
+                            'type': 'Non-2nd Year Wrong Building',
+                            'entry_id': entry.id,
+                            'section': section,
+                            'room': entry.classroom.name,
+                            'building': entry.classroom.building,
+                            'description': f'Non-2nd year batch {section} assigned to academic building room {entry.classroom.name} ({entry.classroom.building})'
+                        })
         
         return violations
     

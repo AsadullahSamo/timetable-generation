@@ -87,15 +87,79 @@ class RoomAllocator:
         # Fallback: take first 4 characters if available
         return class_group[:4] if len(class_group) >= 4 else class_group
     
+    def _get_all_active_batches(self) -> List[str]:
+        """
+        DYNAMIC: Get all active batches from the database and return them sorted by year.
+        Higher year numbers = junior batches (e.g., 24SW is more junior than 23SW).
+        """
+        try:
+            from .models import Batch
+            active_batches = Batch.objects.filter(is_active=True).values_list('name', flat=True)
+            
+            # Sort by year (extract year digits and sort numerically)
+            def extract_year(batch_name):
+                try:
+                    year_digits = ''.join(filter(str.isdigit, batch_name))[:2]
+                    return int(year_digits) if year_digits else 0
+                except:
+                    return 0
+            
+            sorted_batches = sorted(active_batches, key=extract_year, reverse=True)
+            print(f"    📊 DYNAMIC: Found {len(sorted_batches)} active batches: {sorted_batches}")
+            return sorted_batches
+            
+        except Exception as e:
+            print(f"    ⚠️ DYNAMIC: Error getting active batches: {e}")
+            # Fallback to hardcoded list if database access fails
+            return ['24SW', '23SW', '22SW', '21SW']
+    
+    def _get_second_year_batch(self) -> Optional[str]:
+        """
+        DYNAMIC: Determine which batch is the 2nd year batch based on all active batches.
+        Returns the batch name (e.g., '23SW') that should be treated as 2nd year.
+        """
+        active_batches = self._get_all_active_batches()
+        
+        if len(active_batches) < 2:
+            print(f"    ⚠️ DYNAMIC: Not enough batches to determine 2nd year (found {len(active_batches)})")
+            return None
+        
+        # 2nd year batch is the second-highest year number (second most junior)
+        # For ['24SW', '23SW', '22SW', '21SW'] -> 2nd year = '23SW'
+        second_year_batch = active_batches[1] if len(active_batches) > 1 else active_batches[0]
+        
+        print(f"    🎯 DYNAMIC: 2nd year batch determined as: {second_year_batch}")
+        print(f"    📊 DYNAMIC: Batch hierarchy: {active_batches}")
+        
+        return second_year_batch
+    
     def is_second_year(self, class_group: str) -> bool:
-        """Check if class group belongs to 2nd year (for academic building allocation)."""
-        year = self.get_year_from_class_group(class_group)
-        from datetime import datetime
-        current_year = datetime.now().year
-
-        # 2nd year students are those who started 2 years ago
-        # For 2025: 2nd year = 23XX batches (started in 2023)
-        return year == (current_year - 2)
+        """
+        DYNAMIC: Check if class group belongs to 2nd year batch (for academic building allocation).
+        This method dynamically determines which batch is 2nd year based on all active batches.
+        """
+        if not class_group:
+            return False
+            
+        # Get the batch name from class group (e.g., '21SW-III' -> '21SW')
+        batch_name = self.get_batch_from_class_group(class_group)
+        if not batch_name:
+            return False
+        
+        # Get the dynamically determined 2nd year batch
+        second_year_batch = self._get_second_year_batch()
+        if not second_year_batch:
+            return False
+        
+        # Check if this class group belongs to the 2nd year batch
+        is_second = batch_name == second_year_batch
+        
+        if is_second:
+            print(f"    🎯 DYNAMIC: {class_group} identified as 2nd year batch ({batch_name}) - will use Academic building")
+        else:
+            print(f"    📚 DYNAMIC: {class_group} identified as non-2nd year batch ({batch_name}) - will use Main building")
+        
+        return is_second
 
     def _is_senior_batch(self, class_group: str) -> bool:
         """Check if class group belongs to a senior batch (for lab allocation priority)."""
@@ -492,18 +556,22 @@ class RoomAllocator:
                 print(f"    ✅ Allocated Main building room: {allocated_room.name}")
                 return allocated_room
 
-        # PHASE 2: Try other building rooms if preferred not available
+        # PHASE 2: STRICT RULES - No cross-building allocation
         if is_second_year:
-            print(f"    🔄 Academic building full - trying Main building rooms")
-            allocated_room = self._try_building_rooms(self.main_building_rooms, day, period, entries)
+            print(f"    🚫 STRICT RULE: 2nd year batch cannot use Main building rooms")
+            print(f"    🔄 Trying labs as fallback since Academic building is full")
+            # 2nd year batches MUST use academic building only
+            allocated_room = self._try_building_rooms(self.labs, day, period, entries)
             if allocated_room:
-                print(f"    ✅ Allocated Main building room: {allocated_room.name}")
+                print(f"    ✅ Allocated lab as fallback for 2nd year: {allocated_room.name}")
                 return allocated_room
         else:
-            print(f"    🔄 Main building full - trying Academic building rooms")
-            allocated_room = self._try_building_rooms(self.academic_building_rooms, day, period, entries)
+            print(f"    🚫 STRICT RULE: Non-2nd year batches cannot use Academic building rooms")
+            print(f"    🔄 Trying labs as fallback since Main building is full")
+            # Non-2nd year batches MUST use main building only
+            allocated_room = self._try_building_rooms(self.labs, day, period, entries)
             if allocated_room:
-                print(f"    ✅ Allocated Academic building room: {allocated_room.name}")
+                print(f"    ✅ Allocated lab as fallback for non-2nd year: {allocated_room.name}")
                 return allocated_room
 
         # PHASE 3: Fallback to labs if all regular rooms are occupied
@@ -537,14 +605,25 @@ class RoomAllocator:
 
     def _force_room_allocation(self, day: str, period: int, class_group: str,
                               subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
-        """Force room allocation by resolving conflicts intelligently."""
+        """Force room allocation by resolving conflicts intelligently while respecting strict building rules."""
         all_entries = self._get_all_relevant_entries(entries)
+
+        # Determine building preference based on year - RESPECT STRICT BUILDING RULES
+        is_second_year = self.is_second_year(class_group)
+        
+        # STRICT: Only use appropriate building rooms + labs as fallback
+        if is_second_year:
+            # 2nd year: Academic building rooms + labs only
+            preferred_rooms = self.academic_building_rooms + self.labs
+            print(f"    🚫 STRICT RULE: 2nd year batch {class_group} - only Academic building + labs allowed")
+        else:
+            # Non-2nd year: Main building rooms + labs only
+            preferred_rooms = self.main_building_rooms + self.labs
+            print(f"    🚫 STRICT RULE: Non-2nd year batch {class_group} - only Main building + labs allowed")
 
         # Try to find a room with the least conflicts
         room_conflicts = {}
-        all_rooms = self.regular_rooms + self.labs
-
-        for room in all_rooms:
+        for room in preferred_rooms:
             conflicts = [
                 entry for entry in all_entries
                 if (entry.classroom and entry.classroom.id == room.id and
@@ -565,25 +644,34 @@ class RoomAllocator:
                     print(f"    🔄 Moved conflicting entry to free up {room.name}")
                     return room
 
-        # If all else fails, use the first available room
-        if all_rooms:
-            print(f"    ⚠️ Using first available room as last resort")
-            return all_rooms[0]
+        # If all else fails, use the first available room from preferred rooms
+        if preferred_rooms:
+            print(f"    ⚠️ Using first available room from preferred building as last resort")
+            return preferred_rooms[0]
 
         return None
 
     def _try_move_entry_to_different_room(self, entry: TimetableEntry,
                                          all_entries: List[TimetableEntry]) -> bool:
-        """Try to move an entry to a different room to resolve conflicts."""
+        """Try to move an entry to a different room to resolve conflicts while respecting building rules."""
         if not entry.classroom:
             return False
 
-        # Find alternative rooms
+        # Find alternative rooms based on building rules
         alternative_rooms = []
         if entry.subject and entry.subject.is_practical:
             alternative_rooms = self.labs
         else:
-            alternative_rooms = self.regular_rooms
+            # For theory classes, respect strict building rules
+            is_second_year = self.is_second_year(entry.class_group)
+            if is_second_year:
+                # 2nd year: Academic building rooms only
+                alternative_rooms = self.academic_building_rooms
+                print(f"    🚫 STRICT RULE: Moving 2nd year batch {entry.class_group} - only Academic building rooms allowed")
+            else:
+                # Non-2nd year: Main building rooms only
+                alternative_rooms = self.main_building_rooms
+                print(f"    🚫 STRICT RULE: Moving non-2nd year batch {entry.class_group} - only Main building rooms allowed")
 
         for room in alternative_rooms:
             if room.id == entry.classroom.id:
@@ -2965,3 +3053,272 @@ class RoomAllocator:
             pass
         
         return 0
+
+    def validate_strict_building_rules(self, entries: List[TimetableEntry]) -> List[Dict]:
+        """Validate that strict building rules are being followed."""
+        violations = []
+        
+        # Get the current 2nd year batch for validation
+        second_year_batch = self._get_second_year_batch()
+        print(f"    🔍 VALIDATION: Checking building rules for 2nd year batch: {second_year_batch}")
+        
+        for entry in entries:
+            if not entry.is_practical and entry.classroom:  # Only check theory classes
+                class_group = entry.class_group
+                batch_name = self.get_batch_from_class_group(class_group)
+                is_second_year = self.is_second_year(class_group)
+                room_building = entry.classroom.building.lower()
+                
+                print(f"    🔍 VALIDATION: {class_group} (batch: {batch_name}) -> {entry.classroom.name} ({entry.classroom.building}) - 2nd year: {is_second_year}")
+                
+                if is_second_year:
+                    # 2nd year batches MUST be in academic building
+                    if "academic" not in room_building:
+                        violations.append({
+                            'type': '2nd Year Wrong Building',
+                            'entry_id': getattr(entry, 'id', 'Unknown'),
+                            'class_group': class_group,
+                            'batch': batch_name,
+                            'room': entry.classroom.name,
+                            'building': entry.classroom.building,
+                            'description': f'2nd year batch {class_group} ({batch_name}) assigned to non-academic building room {entry.classroom.name} ({entry.classroom.building})'
+                        })
+                        print(f"    ❌ VIOLATION: 2nd year batch {class_group} in wrong building!")
+                else:
+                    # Non-2nd year batches MUST be in main building
+                    if "main" not in room_building and "academic" in room_building:
+                        violations.append({
+                            'type': 'Non-2nd Year Wrong Building',
+                            'entry_id': getattr(entry, 'id', 'Unknown'),
+                            'class_group': class_group,
+                            'batch': batch_name,
+                            'room': entry.classroom.name,
+                            'building': entry.classroom.building,
+                            'description': f'Non-2nd year batch {class_group} ({batch_name}) assigned to academic building room {entry.classroom.name} ({entry.classroom.building})'
+                        })
+                        print(f"    ❌ VIOLATION: Non-2nd year batch {class_group} in academic building!")
+        
+        if violations:
+            print(f"    ❌ VALIDATION: Found {len(violations)} building rule violations")
+        else:
+            print(f"    ✅ VALIDATION: All building rules are being followed correctly")
+        
+        return violations
+    
+    def get_building_allocation_summary(self, entries: List[TimetableEntry]) -> Dict:
+        """
+        Get a summary of how batches are currently allocated to buildings.
+        Useful for debugging and understanding the current allocation.
+        """
+        summary = {
+            'second_year_batch': self._get_second_year_batch(),
+            'active_batches': self._get_all_active_batches(),
+            'building_allocation': {},
+            'violations': []
+        }
+        
+        # Group entries by batch and building
+        batch_building_usage = defaultdict(lambda: defaultdict(list))
+        
+        for entry in entries:
+            if entry.classroom:
+                batch_name = self.get_batch_from_class_group(entry.class_group)
+                if batch_name:
+                    building = entry.classroom.building
+                    batch_building_usage[batch_name][building].append({
+                        'class_group': entry.class_group,
+                        'room': entry.classroom.name,
+                        'subject': entry.subject.code if entry.subject else 'Unknown',
+                        'is_practical': entry.subject.is_practical if entry.subject else False,
+                        'day': entry.day,
+                        'period': entry.period
+                    })
+        
+        summary['building_allocation'] = dict(batch_building_usage)
+        
+        # Check for violations
+        for batch_name, buildings in batch_building_usage.items():
+            is_second_year = batch_name == summary['second_year_batch']
+            
+            for building, entries_list in buildings.items():
+                # Only check theory classes for building violations
+                theory_entries = [e for e in entries_list if not e['is_practical']]
+                
+                if theory_entries:
+                    if is_second_year and "academic" not in building.lower():
+                        summary['violations'].append({
+                            'type': '2nd Year Wrong Building',
+                            'batch': batch_name,
+                            'building': building,
+                            'entries': theory_entries,
+                            'description': f'2nd year batch {batch_name} has theory classes in {building} instead of Academic Building'
+                        })
+                    elif not is_second_year and "academic" in building.lower():
+                        summary['violations'].append({
+                            'type': 'Non-2nd Year Wrong Building',
+                            'batch': batch_name,
+                            'building': building,
+                            'entries': theory_entries,
+                            'description': f'Non-2nd year batch {batch_name} has theory classes in Academic Building instead of Main Building'
+                        })
+        
+        return summary
+
+    def enforce_building_rules(self, entries: List[TimetableEntry]) -> List[TimetableEntry]:
+        """
+        ENFORCE: Automatically move classes to correct buildings to fix building rule violations.
+        This ensures that:
+        - 2nd year batches use Academic Building rooms for theory classes
+        - Non-2nd year batches use Main Building rooms for theory classes
+        """
+        print("🏗️ ENFORCING BUILDING RULES")
+        print("=" * 40)
+        
+        # Get current allocation summary
+        summary = self.get_building_allocation_summary(entries)
+        second_year_batch = summary['second_year_batch']
+        
+        if not second_year_batch:
+            print("    ⚠️ Cannot enforce building rules - no 2nd year batch identified")
+            return entries
+        
+        print(f"    🎯 2nd year batch: {second_year_batch}")
+        print(f"    📊 Active batches: {summary['active_batches']}")
+        
+        moves_made = 0
+        current_entries = list(entries)
+        
+        # Process each batch and fix building violations
+        for batch_name, buildings in summary['building_allocation'].items():
+            is_second_year = batch_name == second_year_batch
+            
+            for building, entries_list in buildings.items():
+                # Only process theory classes for building rules
+                theory_entries = [e for e in entries_list if not e['is_practical']]
+                
+                for entry_info in theory_entries:
+                    # Find the actual entry object
+                    entry = next((e for e in current_entries if 
+                                e.class_group == entry_info['class_group'] and
+                                e.day == entry_info['day'] and 
+                                e.period == entry_info['period']), None)
+                    
+                    if not entry:
+                        continue
+                    
+                    # Check if this entry is in the wrong building
+                    current_building = entry.classroom.building.lower()
+                    needs_move = False
+                    target_building = None
+                    
+                    if is_second_year and "academic" not in current_building:
+                        # 2nd year batch should be in Academic Building
+                        needs_move = True
+                        target_building = "Academic Building"
+                        print(f"    🔄 Moving 2nd year batch {entry.class_group} from {entry.classroom.name} to Academic Building")
+                        
+                    elif not is_second_year and "academic" in current_building:
+                        # Non-2nd year batch should be in Main Building
+                        needs_move = True
+                        target_building = "Main Building"
+                        print(f"    🔄 Moving non-2nd year batch {entry.class_group} from {entry.classroom.name} to Main Building")
+                    
+                    if needs_move:
+                        # Find an available room in the target building
+                        target_room = self._find_available_room_in_building(
+                            entry.day, entry.period, target_building, current_entries
+                        )
+                        
+                        if target_room:
+                            old_room = entry.classroom.name
+                            entry.classroom = target_room
+                            print(f"    ✅ Moved {entry.class_group} from {old_room} to {target_room.name}")
+                            moves_made += 1
+                        else:
+                            print(f"    ❌ Could not find available room in {target_building} for {entry.class_group}")
+        
+        print(f"    ✅ Building rules enforcement completed: {moves_made} moves made")
+        return current_entries
+    
+    def _find_available_room_in_building(self, day: str, period: int, target_building: str, 
+                                       entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Find an available room in the specified building for the given time slot."""
+        all_entries = self._get_all_relevant_entries(entries)
+        
+        # Get rooms in the target building
+        if "academic" in target_building.lower():
+            candidate_rooms = self.academic_building_rooms
+        elif "main" in target_building.lower():
+            candidate_rooms = self.main_building_rooms
+        else:
+            # Fallback to all regular rooms
+            candidate_rooms = self.regular_rooms
+        
+        # Find available rooms
+        for room in candidate_rooms:
+            conflicts = [
+                entry for entry in all_entries
+                if (entry.classroom and entry.classroom.id == room.id and
+                    entry.day == day and entry.period == period)
+            ]
+            
+            if not conflicts:
+                return room
+        
+        # If no free rooms, try to find a room with conflicts that can be resolved
+        for room in candidate_rooms:
+            if self._can_resolve_room_conflicts(room, day, period, all_entries):
+                return room
+        
+        return None
+    
+    def _can_resolve_room_conflicts(self, room: Classroom, day: str, period: int, 
+                                  all_entries: List[TimetableEntry]) -> bool:
+        """Check if conflicts in a room can be resolved by moving conflicting classes."""
+        conflicts = [
+            entry for entry in all_entries
+            if (entry.classroom and entry.classroom.id == room.id and
+                entry.day == day and entry.period == period)
+        ]
+        
+        if not conflicts:
+            return True
+        
+        # Try to move each conflicting entry
+        for conflict_entry in conflicts:
+            if not self._can_move_entry_to_alternative_room(conflict_entry, all_entries):
+                return False
+        
+        return True
+    
+    def _can_move_entry_to_alternative_room(self, entry: TimetableEntry, 
+                                          all_entries: List[TimetableEntry]) -> bool:
+        """Check if an entry can be moved to an alternative room."""
+        if not entry.subject:
+            return True
+        
+        # Find alternative rooms based on subject type
+        if entry.subject.is_practical:
+            alternative_rooms = [lab for lab in self.labs if lab.id != entry.classroom.id]
+        else:
+            # For theory, check building rules
+            batch_name = self.get_batch_from_class_group(entry.class_group)
+            is_second_year = batch_name == self._get_second_year_batch()
+            
+            if is_second_year:
+                alternative_rooms = [room for room in self.academic_building_rooms if room.id != entry.classroom.id]
+            else:
+                alternative_rooms = [room for room in self.main_building_rooms if room.id != entry.classroom.id]
+        
+        # Check if any alternative room is available
+        for room in alternative_rooms:
+            conflicts = [
+                e for e in all_entries
+                if (e.classroom and e.classroom.id == room.id and
+                    e.day == entry.day and e.period == entry.period)
+            ]
+            
+            if not conflicts:
+                return True
+        
+        return False
