@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Navbar from './Navbar';
 import api from "../utils/api";
+import { generateTimetablePDF } from "../utils/pdfGenerator";
 
 const Timetable = () => {
   const router = useRouter();
@@ -98,12 +99,21 @@ const Timetable = () => {
           <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
             {error}
           </div>
-          <div className="mt-8">
+                  <div className="mt-8 flex justify-between items-center">
             <button
               className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
               onClick={() => router.back()}
             >
               ← Back to Constraints
+            </button>
+            
+            {/* Download Button (disabled when no data) */}
+            <button
+              disabled={true}
+              className="px-6 py-3 bg-gray-600 text-gray-400 rounded-lg cursor-not-allowed"
+            >
+              <i className="fas fa-download mr-2"></i>
+              Download PDF (No Data)
             </button>
           </div>
         </div>
@@ -134,7 +144,7 @@ const Timetable = () => {
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                 regenerating
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-purple-600 hover:bg-purple-700 text-white hover:shadow-lg hover:shadow-purple-500/25'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white hover:shadow-lg hover:shadow-green-500/25'
               }`}
             >
               {regenerating ? (
@@ -238,12 +248,21 @@ const Timetable = () => {
           </div>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-8 flex justify-between items-center">
           <button
             className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
             onClick={() => router.back()}
           >
             ← Back to Constraints
+          </button>
+          
+          {/* Bottom Download Button */}
+          <button
+            onClick={() => generateTimetablePDF(timetableData, selectedClassGroup)}
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-green-500/25"
+          >
+            <i className="fas fa-download mr-2"></i>
+            Download Timetable PDF
           </button>
         </div>
       </div>

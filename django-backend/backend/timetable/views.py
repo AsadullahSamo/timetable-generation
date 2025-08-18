@@ -293,6 +293,7 @@ class FastTimetableView(APIView):
                     'day': entry.day,
                     'period': entry.period,
                     'subject': f"{entry.subject.name}{' (PR)' if entry.is_practical else ''}",
+                    'subject_code': entry.subject.code if entry.subject else '',  # Add subject code
                     'teacher': entry.teacher.name if entry.teacher else '',
                     'classroom': entry.classroom.name if entry.classroom else '',
                     'class_group': entry.class_group,
@@ -964,6 +965,7 @@ class LatestTimetableView(APIView):
                     'day': entry.day,
                     'period': entry.period,
                     'subject': f"{entry.subject.name}{' (PR)' if entry.is_practical else ''}",
+                    'subject_code': entry.subject.code if entry.subject else '',  # Add subject code
                     'teacher': entry.teacher.name if entry.teacher else '',
                     'classroom': entry.classroom.name if entry.classroom else '',
                     'class_group': entry.class_group,
