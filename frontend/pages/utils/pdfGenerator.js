@@ -313,19 +313,11 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       const tableData = [];
       
       // Add header row with days
-      const headerRow = ['Periods'];
+      const headerRow = ['Timing'];
       allSectionsData.days.forEach(day => {
         headerRow.push(day);
       });
       tableData.push(headerRow);
-      
-      // Add lab/room numbers row
-      const roomRow = ['Lab. No.'];
-      const defaultRooms = ['Lab. No. 01', 'Lab. No. 02', 'Lab. No. 03', 'Lab. No. 01', 'Lab. No. 02'];
-      allSectionsData.days.forEach((day, index) => {
-        roomRow.push(defaultRooms[index] || 'Lab. No. 01');
-      });
-      tableData.push(roomRow);
       
       // Add time slots and subjects
       allSectionsData.timeSlots.forEach((timeSlot, index) => {
@@ -381,11 +373,11 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       const remainingWidth = contentWidth - periodColumnWidth;
       const dayColumnWidth = Math.max(remainingWidth / numDays, 30);
       
-      // Generate the table
-      console.log(`  📊 Creating table for ${classGroup} with ${tableData.length} rows`);
-      autoTable(doc, {
-        head: [tableData[0], tableData[1]],
-        body: tableData.slice(2),
+             // Generate the table
+       console.log(`  📊 Creating table for ${classGroup} with ${tableData.length} rows`);
+       autoTable(doc, {
+         head: [tableData[0]],
+         body: tableData.slice(1),
         startY: currentY,
         margin: { left: margin, right: margin },
         tableWidth: contentWidth,
