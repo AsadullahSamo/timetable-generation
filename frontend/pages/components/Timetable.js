@@ -5,6 +5,7 @@ import api from "../utils/api";
 import { generateTimetablePDF } from "../utils/pdfGenerator";
 
 const Timetable = () => {
+  console.log("Timetable component rendering"); // Debug log
   const router = useRouter();
   const [timetableData, setTimetableData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,10 +24,22 @@ const Timetable = () => {
         }
 
         const { data } = await api.get(`/api/timetable/latest/?${params}`);
+        console.log("Raw API response:", data); // Debug log
+        
         if (!data || !data.entries || !Array.isArray(data.entries)) {
           throw new Error("Invalid timetable data received");
         }
+        
+        // Validate required fields
+        if (!data.days || !data.timeSlots) {
+          throw new Error("Missing required timetable structure (days or timeSlots)");
+        }
+        
         console.log("Received timetable data:", data); // Debug log
+        console.log("Days:", data.days); // Debug log
+        console.log("Time slots:", data.timeSlots); // Debug log
+        console.log("Entries count:", data.entries.length); // Debug log
+        
         setTimetableData(data);
         setError("");
       } catch (err) {
@@ -99,7 +112,7 @@ const Timetable = () => {
           <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
             {error}
           </div>
-                  <div className="mt-8 flex justify-between items-center">
+          <div className="mt-8 flex justify-between items-center">
             <button
               className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
               onClick={() => router.back()}
@@ -122,6 +135,28 @@ const Timetable = () => {
   }
 
   if (!timetableData) return null;
+
+  // Safety check for required properties
+  if (!timetableData.days || !timetableData.timeSlots || !timetableData.entries) {
+    console.error("Missing required timetable data:", timetableData);
+    return (
+      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
+        <Navbar number={8} />
+        <div className="flex-1 p-8 max-w-7xl">
+          <h1 className="text-3xl text-gray-50 mb-8">Generated Timetable</h1>
+          <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
+            Invalid timetable data structure. Please try refreshing the page.
+          </div>
+          <button
+            className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
+            onClick={() => router.back()}
+          >
+            ← Back to Constraints
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans" suppressHydrationWarning>
@@ -175,7 +210,7 @@ const Timetable = () => {
                 onChange={(e) => setSelectedClassGroup(e.target.value)}
                 className="bg-gray-700 border border-gray-600 text-gray-100 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                {[...new Set(timetableData.pagination.class_groups)]
+                {[...new Set(timetableData.pagination.class_groups || [])]
                   .sort((a, b) => {
                     // Sort sections properly (21SW-I, 21SW-II, 21SW-III, 22SW-I, etc.)
                     const [batchA, sectionA] = a.split('-');
@@ -196,18 +231,18 @@ const Timetable = () => {
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
           <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-[1px] bg-gray-700 min-w-[1000px]">
             <div className="bg-gray-800 p-4 text-center sticky left-0 z-10"></div>
-            {timetableData.days.map(day => (
+            {(timetableData.days || []).map(day => (
               <div key={day} className="bg-gray-800 p-4 text-center font-semibold border-b-2 border-purple-500">
                 {day}
               </div>
             ))}
 
-            {timetableData.timeSlots.map((timeSlot, index) => (
+            {(timetableData.timeSlots || []).map((timeSlot, index) => (
               <React.Fragment key={index}>
                 <div className="bg-gray-800 p-4 text-center sticky left-0 z-10">
                   {timeSlot}
                 </div>
-                {timetableData.days.map(day => {
+                {(timetableData.days || []).map(day => {
                   // Normalize day names for matching
                   const normalizeDay = (dayName) => {
                     if (typeof dayName === 'string') {
@@ -216,7 +251,7 @@ const Timetable = () => {
                     return dayName;
                   };
 
-                  const entry = timetableData.entries.find(
+                  const entry = (timetableData.entries || []).find(
                     e => normalizeDay(e.day) === normalizeDay(day) && e.period === (index + 1)
                   );
                   console.log(`Looking for entry: day=${day} (normalized: ${normalizeDay(day)}), period=${index + 1}, found:`, entry); // Debug log
@@ -229,7 +264,7 @@ const Timetable = () => {
                     >
                       {entry && (
                         <>
-                          <div className="font-medium text-purple-400">{entry.subject}</div>
+                          <div className="font-medium text-purple-400">{entry.subject_code || entry.subject}</div>
                           <div className="text-sm text-blue-400">{entry.teacher}</div>
                           <div className="text-xs text-emerald-400">{entry.classroom}</div>
                           <div className="text-xs text-gray-400">
@@ -258,7 +293,14 @@ const Timetable = () => {
           
           {/* Bottom Download Button */}
           <button
-            onClick={() => generateTimetablePDF(timetableData, selectedClassGroup)}
+            onClick={async () => {
+              try {
+                await generateTimetablePDF(timetableData, selectedClassGroup);
+              } catch (error) {
+                console.error('Failed to generate PDF:', error);
+                // You can add a user notification here if needed
+              }
+            }}
             className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-green-500/25"
           >
             <i className="fas fa-download mr-2"></i>

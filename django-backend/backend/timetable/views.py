@@ -299,7 +299,8 @@ class FastTimetableView(APIView):
                     'class_group': entry.class_group,
                     'start_time': entry.start_time.strftime("%H:%M:%S"),
                     'end_time': entry.end_time.strftime("%H:%M:%S"),
-                    'is_practical': entry.is_practical
+                    'is_practical': entry.is_practical,
+                    'credits': entry.subject.credits if entry.subject else 0
                 } for entry in entries]
             }
             
@@ -970,7 +971,9 @@ class LatestTimetableView(APIView):
                     'classroom': entry.classroom.name if entry.classroom else '',
                     'class_group': entry.class_group,
                     'start_time': entry.start_time.strftime("%H:%M:%S"),
-                    'end_time': entry.end_time.strftime("%H:%M:%S")
+                    'end_time': entry.end_time.strftime("%H:%M:%S"),
+                    'is_practical': entry.is_practical,
+                    'credits': entry.subject.credits if entry.subject else 0
                 })
 
             # Calculate pagination info
