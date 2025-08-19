@@ -652,12 +652,20 @@ class TimetableView(APIView):
                 current_page = paginator.page(1)
             
             return Response({
-                'timetables': current_page.object_list,
+                'days': config.days,
+                'timeSlots': time_slots,
+                'entries': current_page.object_list,
+                'semester': config.semester,
+                'academic_year': config.academic_year,
                 'pagination': {
                     'current_page': page,
                     'total_pages': total_pages,
                     'page_size': page_size,
-                    'total_items': len(timetables)
+                    'total_class_groups': len(class_groups),
+                    'has_next': paginator.page(page).has_next(),
+                    'has_previous': paginator.page(page).has_previous(),
+                    'class_groups': class_groups,
+                    'current_class_groups': list(class_groups) if not request.query_params.get('class_group') else [request.query_params.get('class_group')]
                 }
             })
             
@@ -940,6 +948,24 @@ class LatestTimetableView(APIView):
             # Get unique class groups for pagination info
             all_class_groups = list(TimetableEntry.objects.values_list('class_group', flat=True).distinct())
             total_class_groups = len(all_class_groups)
+            
+            # Get batch information for better descriptions
+            batch_info = {}
+            try:
+                from .models import Batch
+                for class_group in all_class_groups:
+                    if '-' in class_group:
+                        batch_name = class_group.split('-')[0]
+                        batch_obj = Batch.objects.filter(name=batch_name).first()
+                        if batch_obj:
+                            batch_info[batch_name] = {
+                                'description': batch_obj.description,
+                                'semester_number': batch_obj.semester_number,
+                                'academic_year': batch_obj.academic_year
+                            }
+            except Exception as e:
+                print(f"Warning: Could not fetch batch info: {e}")
+                batch_info = {}
 
             # If no specific class group requested, paginate by class groups
             if not class_group_filter:
@@ -985,6 +1011,9 @@ class LatestTimetableView(APIView):
                 'days': config.days,
                 'timeSlots': time_slots,
                 'entries': formatted_entries,
+                'semester': config.semester,
+                'academic_year': config.academic_year,
+                'batch_info': batch_info,
                 'pagination': {
                     'current_page': page,
                     'total_pages': total_pages,

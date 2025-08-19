@@ -20,11 +20,16 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         }
       });
       
-      if (response.data && response.data.entries && Array.isArray(response.data.entries)) {
-        allSectionsData = response.data;
-        console.log('✅ Successfully fetched complete data for PDF');
-        console.log('Total entries found:', response.data.entries.length);
-        console.log('Available class groups from API:', response.data.pagination?.class_groups);
+             if (response.data && response.data.entries && Array.isArray(response.data.entries)) {
+         allSectionsData = response.data;
+         console.log('✅ Successfully fetched complete data for PDF');
+         console.log('Total entries found:', response.data.entries.length);
+         console.log('Available class groups from API:', response.data.pagination?.class_groups);
+         console.log('📚 Batch info from API:', {
+           semester: response.data.semester,
+           academic_year: response.data.academic_year,
+           batch_info: response.data.batch_info
+         });
         
         // Check if we got all sections or if pagination is still limiting us
         const totalClassGroups = response.data.pagination?.total_class_groups || 0;
@@ -248,20 +253,50 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         console.log(`📄 Added new page for section ${classGroup}`);
       }
       
-      // Class group header
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      const batchName = classGroup.split('-')[0] || classGroup;
-      const sectionName = classGroup.split('-')[1] || '';
-      const sectionText = sectionName ? `SECTION-${sectionName}` : '';
-      
-      // Get batch description
-      let batchDescription = 'Academic Year';
-      if (allSectionsData.semester) {
-        batchDescription = allSectionsData.semester;
-      } else if (allSectionsData.academic_year) {
-        batchDescription = `${allSectionsData.academic_year} Academic Year`;
-      }
+             // Class group header
+       doc.setFontSize(14);
+       doc.setFont('helvetica', 'bold');
+       const batchName = classGroup.split('-')[0] || classGroup;
+       const sectionName = classGroup.split('-')[1] || '';
+       const sectionText = sectionName ? `SECTION-${sectionName}` : '';
+       
+       // Get batch description from database - try batch-specific info first, then fallback to general
+       let batchDescription = '';
+       
+       // Try to get batch-specific description first
+       if (allSectionsData.batch_info && allSectionsData.batch_info[batchName]) {
+         const batchData = allSectionsData.batch_info[batchName];
+         if (batchData.description) {
+           batchDescription = batchData.description;
+         } else if (batchData.semester_number && batchData.academic_year) {
+           batchDescription = `${batchData.semester_number}th Semester ${batchData.academic_year}`;
+         } else if (batchData.academic_year) {
+           batchDescription = batchData.academic_year;
+         }
+       }
+       
+       // Fallback to general semester/academic year if no batch-specific info
+       if (!batchDescription) {
+         if (allSectionsData.semester && allSectionsData.academic_year) {
+           batchDescription = `${allSectionsData.semester} ${allSectionsData.academic_year}`;
+         } else if (allSectionsData.semester) {
+           batchDescription = allSectionsData.semester;
+         } else if (allSectionsData.academic_year) {
+           batchDescription = allSectionsData.academic_year;
+         } else {
+           // Final fallback to default if no data available
+           batchDescription = 'Academic Year';
+         }
+       }
+       
+       // Debug: Log what batch description data we received
+       console.log(`  📚 Batch description data for ${classGroup}:`, {
+         batch_name: batchName,
+         batch_info: allSectionsData.batch_info?.[batchName],
+         semester: allSectionsData.semester,
+         academic_year: allSectionsData.academic_year,
+         final_description: batchDescription
+       });
       
       doc.text(`TIMETABLE OF ${batchName}-BATCH ${sectionText} (${batchDescription})`, pageWidth / 2, currentY, { align: 'center' });
       currentY += 10;
