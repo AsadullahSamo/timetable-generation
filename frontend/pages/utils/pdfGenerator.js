@@ -205,12 +205,28 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
     const contentWidth = pageWidth - (2 * margin);
     
     // Header
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MEHRAN UNIVERSITY OF ENGINEERING AND TECHNOLOGY, JAMSHORO', pageWidth / 2, 30, { align: 'center' });
-    
     doc.setFontSize(16);
-    doc.text('DEPARTMENT OF SOFTWARE ENGINEERING', pageWidth / 2, 40, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    
+    // Split long university name into multiple lines if needed
+    const universityName = 'MEHRAN UNIVERSITY OF ENGINEERING AND TECHNOLOGY, JAMSHORO';
+    const deptName = 'DEPARTMENT OF SOFTWARE ENGINEERING';
+    
+    // Check if text fits within content width, if not, reduce font size
+    let fontSize = 16;
+    let textWidth = doc.getTextWidth(universityName);
+    
+    while (textWidth > contentWidth && fontSize > 10) {
+      fontSize--;
+      doc.setFontSize(fontSize);
+      textWidth = doc.getTextWidth(universityName);
+    }
+    
+    doc.text(universityName, pageWidth / 2, 30, { align: 'center' });
+    
+    // Reset font size for department name
+    doc.setFontSize(14);
+    doc.text(deptName, pageWidth / 2, 40, { align: 'center' });
     
     let currentY = 60;
     let processedCount = 0;
@@ -521,7 +537,9 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       currentY = doc.lastAutoTable.finalY + 20;
       
       // Add additional information
-      if (currentY > pageHeight - 60) {
+      // Calculate space needed for remaining content: Class advisor (15mm) + Signature (30mm) = 45mm
+      const spaceNeeded = 45;
+      if (currentY > pageHeight - spaceNeeded) {
         doc.addPage();
         currentY = 30;
       }
