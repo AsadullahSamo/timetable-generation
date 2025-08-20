@@ -12,6 +12,7 @@ const Timetable = () => {
   const [error, setError] = useState("");
   const [selectedClassGroup, setSelectedClassGroup] = useState("");
   const [regenerating, setRegenerating] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
 
   useEffect(() => {
     const fetchTimetable = async () => {
@@ -295,16 +296,33 @@ const Timetable = () => {
           <button
             onClick={async () => {
               try {
+                setDownloadingPDF(true);
                 await generateTimetablePDF(timetableData, selectedClassGroup);
               } catch (error) {
                 console.error('Failed to generate PDF:', error);
                 // You can add a user notification here if needed
+              } finally {
+                setDownloadingPDF(false);
               }
             }}
-            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-green-500/25"
+            disabled={downloadingPDF}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              downloadingPDF 
+                ? 'bg-gray-500 cursor-not-allowed' 
+                : 'bg-green-600 hover:bg-green-700 hover:shadow-lg hover:shadow-green-500/25'
+            } text-white`}
           >
-            <i className="fas fa-download mr-2"></i>
-            Download Timetable PDF
+            {downloadingPDF ? (
+              <>
+                <i className="fas fa-spinner fa-spin mr-2"></i>
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-download mr-2"></i>
+                Download Timetable PDF
+              </>
+            )}
           </button>
         </div>
       </div>

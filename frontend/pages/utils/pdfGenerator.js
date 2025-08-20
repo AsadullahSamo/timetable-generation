@@ -592,8 +592,25 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
     
     console.log(`✅ All ${processedCount} sections successfully included in PDF`);
     
-    // Save the PDF
-    const fileName = `timetable_${processedCount}_sections_${new Date().toISOString().split('T')[0]}.pdf`;
+    // Save the PDF with dynamic academic year and date
+    const today = new Date();
+    const dateString = today.toLocaleDateString('en-GB').split('/').join('-');
+    
+    // Get academic year from batch data
+    let academicYear = 'Unknown';
+    if (allSectionsData.batch_info && Object.keys(allSectionsData.batch_info).length > 0) {
+      // Get the first batch's academic year as representative
+      const firstBatchKey = Object.keys(allSectionsData.batch_info)[0];
+      const firstBatch = allSectionsData.batch_info[firstBatchKey];
+      if (firstBatch && firstBatch.academic_year) {
+        academicYear = firstBatch.academic_year;
+      }
+    } else if (allSectionsData.academic_year) {
+      // Fallback to general academic year
+      academicYear = allSectionsData.academic_year;
+    }
+    
+    const fileName = `timetable_${academicYear}_${dateString}.pdf`;
     console.log(`💾 Saving PDF as: ${fileName}`);
     doc.save(fileName);
     
