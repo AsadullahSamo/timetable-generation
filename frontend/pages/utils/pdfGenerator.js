@@ -445,30 +445,87 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       const teacherData = [];
       const subjectGroups = {};
       
-      // Group entries by subject
+      console.log(`  🔍 Processing ${classGroupEntries.length} entries for subject grouping...`);
+      
+      // Show sample entries to understand the data structure
+      const sampleEntries = classGroupEntries.slice(0, 5).map(e => ({
+        subject_code: e.subject_code,
+        subject: e.subject,
+        is_practical: e.is_practical,
+        teacher: e.teacher,
+        day: e.day,
+        period: e.period
+      }));
+      console.log(`  📋 Sample entries:`, sampleEntries);
+      
+      // Group entries by CLEANED subject name to avoid duplicates
+      // The backend might create separate entries with different subject codes for theory/practical
+      // but we want to group them by their actual subject name
+      
       classGroupEntries.forEach(entry => {
+        const subjectCode = entry.subject_code || entry.subject || '';
         const subjectName = entry.subject || '';
-        const cleanSubjectName = subjectName.replace(' (PR)', '').trim();
         
+        // Clean the subject name for display (remove PR suffix if present)
+        const cleanSubjectName = subjectName.replace(' (PR)', '').replace('(PR)', '').trim();
+        
+        // Use the CLEANED subject name as the primary key for grouping
+        // This ensures theory and practical versions of the same subject are grouped together
         if (!subjectGroups[cleanSubjectName]) {
           subjectGroups[cleanSubjectName] = {
             theory: null,
             practical: null,
-            subjectName: cleanSubjectName
+            subjectName: cleanSubjectName,
+            subjectCode: subjectCode, // Keep track of the first subject code we see
+            allSubjectCodes: new Set([subjectCode]) // Track all subject codes for this subject
           };
+        } else {
+          // Add this subject code to the set of codes for this subject
+          subjectGroups[cleanSubjectName].allSubjectCodes.add(subjectCode);
         }
         
-        if (entry.is_practical) {
+        // Only update if we don't already have this type of entry
+        // This ensures we get exactly ONE theory and ONE practical entry per subject
+        if (entry.is_practical && !subjectGroups[cleanSubjectName].practical) {
           subjectGroups[cleanSubjectName].practical = entry;
-        } else {
+          console.log(`    ✅ Added practical entry for "${cleanSubjectName}" (code: ${subjectCode})`);
+        } else if (!entry.is_practical && !subjectGroups[cleanSubjectName].theory) {
           subjectGroups[cleanSubjectName].theory = entry;
+          console.log(`    ✅ Added theory entry for "${cleanSubjectName}" (code: ${subjectCode})`);
+        } else {
+          console.log(`    ⚠️  Skipping ${entry.is_practical ? 'practical' : 'theory'} entry for "${cleanSubjectName}" (code: ${subjectCode}) - already exists`);
         }
       });
       
+      // Log the final subject groups for debugging
+      console.log(`  📊 Final subject groups created:`, Object.keys(subjectGroups).map(name => ({
+        name,
+        subjectCodes: Array.from(subjectGroups[name].allSubjectCodes),
+        hasTheory: !!subjectGroups[name].theory,
+        hasPractical: !!subjectGroups[name].practical
+      })));
+      
       // Convert grouped data to table format
+      const processedSubjectNames = new Set(); // Ensure no duplicate subject names in final output
+      
       Object.values(subjectGroups).forEach((group, index) => {
         const theoryEntry = group.theory;
         const practicalEntry = group.practical;
+        
+        // Final validation: ensure no duplicate subject names
+        if (processedSubjectNames.has(group.subjectName)) {
+          console.log(`  ❌ CRITICAL: Duplicate subject name found: ${group.subjectName}`);
+          return; // Skip this duplicate
+        }
+        
+        processedSubjectNames.add(group.subjectName);
+        
+        // Log the subject codes that were grouped together
+        console.log(`  🔗 Grouped subject codes for "${group.subjectName}":`, Array.from(group.allSubjectCodes));
+        
+                 // Debug logging to identify any remaining duplicates
+         console.log(`  📚 Processing subject: "${group.subjectName}"`);
+         console.log(`     Theory: ${theoryEntry ? 'Yes' : 'No'}, Practical: ${practicalEntry ? 'Yes' : 'No'}`);
         
         // Determine credit hours
         let creditHours = '';
@@ -487,11 +544,11 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         if (theoryEntry && practicalEntry) {
           const theoryTeacher = theoryEntry.teacher || '--';
           const practicalTeacher = practicalEntry.teacher || '--';
-          teacherNames = `${theoryTeacher} (Th)/${practicalTeacher}`;
+          teacherNames = `${theoryTeacher} (Th)/ ${practicalTeacher} (Pr)`;
         } else if (theoryEntry) {
           teacherNames = theoryEntry.teacher || '--';
         } else if (practicalEntry) {
-          teacherNames = practicalEntry.teacher || '--';
+          teacherNames = `${practicalEntry.teacher || '--'} (Pr)`;
         }
         
         teacherData.push([
@@ -504,6 +561,17 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       
       // Add teachers table
       console.log(`  👥 Creating teachers table for ${classGroup} with ${teacherData.length} subjects`);
+      console.log(`  📊 Subject grouping summary: ${Object.keys(subjectGroups).length} unique subjects found`);
+      console.log(`  ✅ Deduplication: ${classGroupEntries.length} entries → ${Object.keys(subjectGroups).length} unique subjects`);
+      
+      // Log final subject list for verification
+      console.log(`  📋 Final subjects in table:`, teacherData.map(row => row[1]));
+      console.log(`  🔍 Final table data:`, teacherData.map((row, idx) => ({
+        index: idx + 1,
+        subject: row[1],
+        credits: row[2],
+        teacher: row[3]
+      })));
       autoTable(doc, {
         head: [['S.', 'SUBJECT NAME', 'C.H', 'TEACHER']],
         body: teacherData,
