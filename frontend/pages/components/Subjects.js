@@ -132,8 +132,8 @@ const SubjectConfig = () => {
     
     if (!formData.code.trim()) {
       errors.code = "Subject code is required";
-    } else if (!/^[A-Z0-9]+$/i.test(formData.code)) {
-      errors.code = "Subject code should only contain letters and numbers (no spaces or special characters)";
+    } else if (!/^[A-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(formData.code)) {
+      errors.code = "Subject code should only contain letters, numbers, and special characters (no spaces)";
     } else {
       // Check for duplicate subject codes (allow max 2 - theory and practical)
       const existingSubjectsWithSameCode = subjects.filter(subject => 
@@ -408,7 +408,7 @@ const SubjectConfig = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Subject Code</label>
-                  <p className="text-xs text-secondary/70">Letters and numbers only. Can be used twice (theory + practical)</p>
+                  <p className="text-xs text-secondary/70">Letters, numbers, and special characters. Can be used twice (theory + practical)</p>
                   <div className="relative">
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
@@ -449,6 +449,7 @@ const SubjectConfig = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Credits</label>
+                  <p className="text-xs text-secondary/70">Number of credit hours (1-10)</p>
                   <div className="relative">
                     <Award className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
