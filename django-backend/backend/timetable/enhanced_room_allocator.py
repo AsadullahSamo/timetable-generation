@@ -131,7 +131,7 @@ class EnhancedRoomAllocator:
         return available_rooms
     
     def get_available_labs_for_time(self, day: str, period: int, duration: int = 1,
-                                   entries: List[TimetableEntry] = None) -> List[Classroom]:
+                                   entries: List[TimetableEntry] = None, section: str = None) -> List[Classroom]:
         """Get labs available for the specified time slot."""
         all_available = self.get_available_rooms_for_time(day, period, duration, entries, section)
         return [room for room in all_available if room.is_lab]
@@ -140,9 +140,10 @@ class EnhancedRoomAllocator:
                                    subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
         Allocate lab for practical session (3 consecutive blocks).
-        Enforces same-lab rule for practical subjects.
+        ENFORCES: If both theory and practical classes are scheduled for a day, 
+        all practical classes must be in same lab (all 3 consecutive blocks).
         """
-        # Check if we already have a lab assigned for this section-subject combination
+        # First priority: Check if we already have a lab assigned for this section-subject combination
         assignment_key = (section, subject.code)
         if assignment_key in self.practical_lab_assignments:
             assigned_lab = self.practical_lab_assignments[assignment_key]
@@ -151,7 +152,30 @@ class EnhancedRoomAllocator:
             if self._is_lab_available_for_duration(assigned_lab, day, start_period, 3, entries):
                 return assigned_lab
         
-        # Find available labs for the 3-block duration
+        # Second priority: ENFORCEMENT - Check if this section has any theory classes on this day
+        section_day_entries = [e for e in entries if e.class_group == section and e.day == day]
+        has_theory = any(not e.is_practical for e in section_day_entries)
+        
+        # ENFORCEMENT: If theory classes exist on this day, MUST use the same lab as other practical classes
+        if has_theory:
+            practical_entries = [e for e in section_day_entries if e.is_practical and e.classroom]
+            if practical_entries:
+                # ENFORCE: Use the same lab as existing practical classes
+                existing_lab = practical_entries[0].classroom
+                if existing_lab.is_lab and self._is_lab_available_for_duration(existing_lab, day, start_period, 3, entries):
+                    # Record the assignment for same-lab rule
+                    self.practical_lab_assignments[assignment_key] = existing_lab
+                    print(f"    🔒 ENFORCING: {section} practical class on {day} P{start_period} assigned to same lab: {existing_lab.name}")
+                    return existing_lab
+                else:
+                    # ENFORCEMENT: If existing lab is not available, try to free it up
+                    print(f"    🔒 ENFORCING: Trying to free up lab {existing_lab.name} for {section} practical consistency on {day}")
+                    if self._force_lab_availability_for_section(existing_lab, day, start_period, 3, entries, section):
+                        self.practical_lab_assignments[assignment_key] = existing_lab
+                        print(f"    ✅ ENFORCED: {section} practical class on {day} P{start_period} assigned to same lab: {existing_lab.name}")
+                        return existing_lab
+        
+        # Third priority: Find available labs for the 3-block duration
         available_labs = self.get_available_labs_for_time(day, start_period, 3, entries)
         
         if not available_labs:
@@ -165,6 +189,7 @@ class EnhancedRoomAllocator:
             # Record the assignment for same-lab rule
             self.practical_lab_assignments[assignment_key] = selected_lab
             
+            print(f"    🔬 Assigned: {section} practical class on {day} P{start_period} to {selected_lab.name}")
             return selected_lab
         
         return None
@@ -173,17 +198,43 @@ class EnhancedRoomAllocator:
                                 subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
         Allocate room for theory class with section-specific preferences.
-        Maintains consistent room assignment per section per day.
+        ENFORCES: If only theory classes are scheduled for the entire day, 
+        all classes for a section should be assigned in same room.
         """
-        # Check if section already has a room assigned for this day
+        # First priority: Check if section already has a room assigned for this day
         if section in self.section_room_assignments and day in self.section_room_assignments[section]:
             assigned_room = self.section_room_assignments[section][day]
-            
-            # Check if the assigned room is available
             if self._is_room_available(assigned_room, day, period, entries):
                 return assigned_room
         
-        # Get preferred rooms for this section
+        # Second priority: Check if this section has any practical classes on this day
+        section_day_entries = [e for e in entries if e.class_group == section and e.day == day]
+        has_practical = any(e.is_practical for e in section_day_entries)
+        
+        # ENFORCEMENT: If no practical classes on this day, MUST use the same room as other theory classes
+        if not has_practical:
+            theory_entries = [e for e in section_day_entries if not e.is_practical and e.classroom]
+            if theory_entries:
+                # ENFORCE: Use the same room as existing theory classes
+                existing_room = theory_entries[0].classroom
+                if self._is_room_available(existing_room, day, period, entries):
+                    # Record the assignment for consistent daily assignment
+                    if section not in self.section_room_assignments:
+                        self.section_room_assignments[section] = {}
+                    self.section_room_assignments[section][day] = existing_room
+                    print(f"    🔒 ENFORCING: {section} theory class on {day} P{period} assigned to same room: {existing_room.name}")
+                    return existing_room
+                else:
+                    # ENFORCEMENT: If existing room is not available, try to free it up
+                    print(f"    🔒 ENFORCING: Trying to free up room {existing_room.name} for {section} theory consistency on {day}")
+                    if self._force_room_availability(existing_room, day, period, entries):
+                        if section not in self.section_room_assignments:
+                            self.section_room_assignments[section] = {}
+                        self.section_room_assignments[section][day] = existing_room
+                        print(f"    ✅ ENFORCED: {section} theory class on {day} P{period} assigned to same room: {existing_room.name}")
+                        return existing_room
+        
+        # Third priority: Get preferred rooms for this section
         preferred_rooms = self.get_preferred_rooms_for_section(section)
         
         # Find available rooms from preferred list
@@ -204,6 +255,7 @@ class EnhancedRoomAllocator:
                 self.section_room_assignments[section] = {}
             self.section_room_assignments[section][day] = selected_room
             
+            print(f"    🏠 Assigned: {section} theory class on {day} P{period} to {selected_room.name}")
             return selected_room
         
         return None
@@ -236,6 +288,40 @@ class EnhancedRoomAllocator:
                 available_labs.append(lab)
         
         return available_labs
+    
+    def _force_lab_availability_for_section(self, lab: Classroom, day: str, start_period: int,
+                                           duration: int, entries: List[TimetableEntry], section: str) -> bool:
+        """Try to free up a specific lab for a section's practical classes."""
+        # Find all practical entries for this lab on this day
+        practical_entries_for_lab = [
+            e for e in entries if e.classroom and e.classroom.id == lab.id and e.day == day
+        ]
+        
+        # If no practical entries for this lab on this day, nothing to clear
+        if not practical_entries_for_lab:
+            return False
+
+        # Find the earliest practical entry for this lab on this day
+        earliest_practical_entry = min(practical_entries_for_lab, key=lambda x: x.period)
+        
+        # Find the earliest conflicting entry for this lab on this day
+        conflicting_entries = [
+            e for e in entries if e.classroom and e.classroom.id == lab.id and e.day == day
+        ]
+        earliest_conflicting_entry = min(conflicting_entries, key=lambda x: x.period)
+        
+        # If the earliest conflicting entry is before the earliest practical entry,
+        # it means the lab is already free for the practicals.
+        if earliest_conflicting_entry.period < earliest_practical_entry.period:
+            return False
+
+        # Move the earliest conflicting entry to an alternative room
+        if self._can_move_entry_to_alternative_room(earliest_conflicting_entry, entries):
+            # Update the entry's classroom to None or a default value
+            earliest_conflicting_entry.classroom = None
+            print(f"    ✅ ENFORCED: Moved conflicting entry {earliest_conflicting_entry.id} from lab {lab.name} on {day} P{earliest_conflicting_entry.period} to an alternative room.")
+            return True
+        return False
     
     def _can_clear_lab_for_duration(self, lab: Classroom, day: str, start_period: int,
                                    duration: int, entries: List[TimetableEntry]) -> bool:
@@ -336,7 +422,7 @@ class EnhancedRoomAllocator:
                     })
         
         # Check same-lab rule for practicals
-        practical_groups = defaultdict(lambda: defaultdict(list))
+        practical_groups = defaultdict(list)
         for entry in entries:
             if entry.is_practical:
                 key = (entry.class_group, entry.subject.code, entry.day)
@@ -384,6 +470,80 @@ class EnhancedRoomAllocator:
                             'description': f'Non-2nd year batch {section} assigned to academic building room {entry.classroom.name} ({entry.classroom.building})'
                         })
         
+        # NEW: Check enhanced room consistency constraint
+        enhanced_violations = self.validate_enhanced_room_consistency(entries)
+        violations.extend(enhanced_violations)
+        
+        return violations
+    
+    def validate_enhanced_room_consistency(self, entries: List[TimetableEntry]) -> List[Dict]:
+        """
+        Validate the enhanced room consistency constraint:
+        - If only theory classes are scheduled for the entire day, all classes for a section should be assigned in same room
+        - If both theory and practical classes are scheduled for a day, all practical classes must be in same lab (all 3 consecutive blocks) 
+          and then if theory classes are scheduled in a room, all must be in same room
+        """
+        violations = []
+        
+        # Group entries by class group and day
+        class_day_entries = defaultdict(lambda: defaultdict(list))
+        for entry in entries:
+            class_day_entries[entry.class_group][entry.day].append(entry)
+        
+        for class_group, days in class_day_entries.items():
+            for day, day_entries in days.items():
+                if len(day_entries) > 1:
+                    # Separate theory and practical classes
+                    theory_entries = [e for e in day_entries if not e.is_practical]
+                    practical_entries = [e for e in day_entries if e.is_practical]
+                    
+                    # Check theory class room consistency
+                    if len(theory_entries) > 1:
+                        theory_rooms = set(e.classroom.name for e in theory_entries if e.classroom)
+                        if len(theory_rooms) > 1:
+                            violations.append({
+                                'type': 'Enhanced Theory Room Consistency Violation',
+                                'class_group': class_group,
+                                'day': day,
+                                'theory_rooms': list(theory_rooms),
+                                'theory_count': len(theory_entries),
+                                'description': f"{class_group} uses multiple rooms for theory classes on {day}: {theory_rooms} (should use same room)"
+                            })
+                    
+                    # Check practical class lab consistency
+                    if len(practical_entries) > 1:
+                        practical_labs = set(e.classroom.name for e in practical_entries if e.classroom)
+                        if len(practical_labs) > 1:
+                            violations.append({
+                                'type': 'Enhanced Practical Lab Consistency Violation',
+                                'class_group': class_group,
+                                'day': day,
+                                'practical_labs': list(practical_labs),
+                                'practical_count': len(practical_entries),
+                                'description': f"{class_group} uses multiple labs for practical classes on {day}: {practical_labs} (should use same lab)"
+                            })
+                        
+                        # Check if practical classes are consecutive (3 blocks)
+                        practical_periods = sorted([e.period for e in practical_entries])
+                        if len(practical_periods) >= 3:
+                            # Check if we have 3 consecutive periods
+                            consecutive_blocks = 0
+                            for i in range(len(practical_periods) - 1):
+                                if practical_periods[i+1] == practical_periods[i] + 1:
+                                    consecutive_blocks += 1
+                                else:
+                                    consecutive_blocks = 0
+                            
+                            if consecutive_blocks < 2:  # Need at least 2 consecutive transitions for 3 blocks
+                                violations.append({
+                                    'type': 'Enhanced Practical Non-Consecutive Blocks',
+                                    'class_group': class_group,
+                                    'day': day,
+                                    'practical_periods': practical_periods,
+                                    'consecutive_blocks': consecutive_blocks + 1,
+                                    'description': f"{class_group} practical classes on {day} are not in 3 consecutive blocks: {practical_periods}"
+                                })
+        
         return violations
     
     def get_allocation_report(self) -> Dict:
@@ -397,3 +557,30 @@ class EnhancedRoomAllocator:
             'practical_assignments': len(self.practical_lab_assignments),
             'room_usage': dict(self.room_usage)
         } 
+
+    def _force_room_availability(self, room: Classroom, day: str, period: int,
+                                entries: List[TimetableEntry]) -> bool:
+        """Try to free up a specific room for theory class consistency."""
+        # Find all entries for this room on this day
+        room_entries = [
+            e for e in entries if e.classroom and e.classroom.id == room.id and e.day == day
+        ]
+        
+        # If no entries for this room on this day, nothing to clear
+        if not room_entries:
+            return False
+        
+        # Find the earliest entry for this room on this day
+        earliest_entry = min(room_entries, key=lambda x: x.period)
+        
+        # If the earliest entry is before the requested period, it means the room is already free.
+        if earliest_entry.period < period:
+            return False
+        
+        # Move the earliest entry to an alternative room
+        if self._can_move_entry_to_alternative_room(earliest_entry, entries):
+            # Update the entry's classroom to None or a default value
+            earliest_entry.classroom = None
+            print(f"    ✅ ENFORCED: Moved conflicting entry {earliest_entry.id} from room {room.name} on {day} P{earliest_entry.period} to an alternative room.")
+            return True
+        return False 

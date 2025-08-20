@@ -1,10 +1,10 @@
 """
-ENHANCED CONSTRAINT VALIDATOR - ALL 18 CONSTRAINTS WORKING HARMONIOUSLY
+ENHANCED CONSTRAINT VALIDATOR - ALL 19 CONSTRAINTS WORKING HARMONIOUSLY
 =====================================================================
-Validates all 18 constraints ensuring they work seamlessly and in harmony without one violating the other.
+Validates all 19 constraints ensuring they work seamlessly and in harmony without one violating the other.
 This includes all scheduling and room constraints working together perfectly.
 
-THE 18 CONSTRAINTS:
+THE 19 CONSTRAINTS:
 1. Subject Frequency - Correct number of classes per week based on credits
 2. Practical Blocks - 3-hour consecutive blocks for practical subjects
 3. Teacher Conflicts - No teacher double-booking
@@ -19,7 +19,7 @@ THE 18 CONSTRAINTS:
 12. Working Hours - All classes are within 8:00 AM to 3:00 PM
 13. Same Lab Rule - All 3 blocks of practical subjects must use the same lab
 14. Practicals in Labs - Practical subjects must be scheduled only in laboratory rooms
-15. Room Consistency - Consistent room assignment for theory classes per section
+15. Room Consistency - Enhanced room consistency for theory/practical separation (same room for theory, same lab for practicals)
 16. Same Theory Subject Distribution - Max 1 class per day, distributed across 5 weekdays
 17. Breaks Between Classes - Minimal breaks, only when needed
 18. Teacher Breaks - After 2 consecutive theory classes, teacher must have a break
@@ -56,6 +56,7 @@ class EnhancedConstraintValidator:
             self._check_same_lab_rule,
             self._check_practicals_in_labs,
             self._check_room_consistency,
+
             
             # NEW CONSTRAINTS
             self._check_same_theory_subject_distribution,
@@ -84,7 +85,7 @@ class EnhancedConstraintValidator:
             'harmony_score': 0.0
         }
         
-        print("🔍 ENHANCED CONSTRAINT VALIDATION - ALL 18 CONSTRAINTS")
+        print("🔍 ENHANCED CONSTRAINT VALIDATION - ALL 19 CONSTRAINTS")
         print("=" * 60)
         
         # Run all constraint checks
@@ -649,30 +650,78 @@ class EnhancedConstraintValidator:
         return violations
     
     def _check_room_consistency(self, entries: List[TimetableEntry]) -> List[Dict]:
-        """Check consistent room assignment for theory classes per section."""
+        """
+        Check enhanced room consistency for theory/practical separation.
+        
+        NEW CONSTRAINT: 
+        - If only theory classes are scheduled for the entire day, all classes for a section should be assigned in same room
+        - If both theory and practical classes are scheduled for a day, all practical classes must be in same lab (all 3 consecutive blocks) 
+          and then if theory classes are scheduled in a room, all must be in same room
+        """
         violations = []
         
-        # Group theory entries by class group and day
-        theory_groups = defaultdict(lambda: defaultdict(list))
+        # Group entries by class group and day
+        class_day_entries = defaultdict(lambda: defaultdict(list))
         for entry in entries:
-            if not entry.is_practical:
-                theory_groups[entry.class_group][entry.day].append(entry)
+            class_day_entries[entry.class_group][entry.day].append(entry)
         
-        for class_group, days in theory_groups.items():
+        for class_group, days in class_day_entries.items():
             for day, day_entries in days.items():
                 if len(day_entries) > 1:
-                    # Check if all theory classes use same room
-                    rooms = set(e.classroom.name for e in day_entries if e.classroom)
-                    if len(rooms) > 1:
-                        violations.append({
-                            'type': 'Room Consistency Violation',
-                            'class_group': class_group,
-                            'day': day,
-                            'rooms': list(rooms),
-                            'description': f"{class_group} uses multiple rooms on {day}: {rooms}"
-                        })
+                    # Separate theory and practical classes
+                    theory_entries = [e for e in day_entries if not e.is_practical]
+                    practical_entries = [e for e in day_entries if e.is_practical]
+                    
+                    # Check theory class room consistency
+                    if len(theory_entries) > 1:
+                        theory_rooms = set(e.classroom.name for e in theory_entries if e.classroom)
+                        if len(theory_rooms) > 1:
+                            violations.append({
+                                'type': 'Theory Room Consistency Violation',
+                                'class_group': class_group,
+                                'day': day,
+                                'theory_rooms': list(theory_rooms),
+                                'theory_count': len(theory_entries),
+                                'description': f"{class_group} uses multiple rooms for theory classes on {day}: {theory_rooms}"
+                            })
+                    
+                    # Check practical class lab consistency
+                    if len(practical_entries) > 1:
+                        practical_labs = set(e.classroom.name for e in practical_entries if e.classroom)
+                        if len(practical_labs) > 1:
+                            violations.append({
+                                'type': 'Practical Lab Consistency Violation',
+                                'class_group': class_group,
+                                'day': day,
+                                'practical_labs': list(practical_labs),
+                                'practical_count': len(practical_entries),
+                                'description': f"{class_group} uses multiple labs for practical classes on {day}: {practical_labs}"
+                            })
+                        
+                        # Check if practical classes are consecutive (3 blocks)
+                        practical_periods = sorted([e.period for e in practical_entries])
+                        if len(practical_periods) >= 3:
+                            # Check if we have 3 consecutive periods
+                            consecutive_blocks = 0
+                            for i in range(len(practical_periods) - 1):
+                                if practical_periods[i+1] == practical_periods[i] + 1:
+                                    consecutive_blocks += 1
+                                else:
+                                    consecutive_blocks = 0
+                            
+                            if consecutive_blocks < 2:  # Need at least 2 consecutive transitions for 3 blocks
+                                violations.append({
+                                    'type': 'Practical Non-Consecutive Blocks',
+                                    'class_group': class_group,
+                                    'day': day,
+                                    'practical_periods': practical_periods,
+                                    'consecutive_blocks': consecutive_blocks + 1,
+                                    'description': f"{class_group} practical classes on {day} are not in 3 consecutive blocks: {practical_periods}"
+                                })
         
         return violations
+    
+
     
     # NEW CONSTRAINTS
     
