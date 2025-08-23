@@ -132,9 +132,9 @@ const Classrooms = () => {
         <title>Classrooms - MUET Timetable System</title>
       </Head>
 
-      <div className="flex h-screen bg-background text-primary font-sans overflow-hidden">
+      <div className="flex min-h-screen bg-background text-primary font-sans">
         <Navbar number={4} />
-        <div className="flex-1 p-8 max-w-7xl overflow-y-auto">
+        <div className="flex-1 p-8 max-w-7xl">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">Classrooms</h1>
