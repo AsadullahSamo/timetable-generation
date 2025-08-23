@@ -176,7 +176,7 @@ const Classrooms = () => {
                 setFormData({ name: "", capacity: "", building: "" });
                 setError(null);
               }}
-              className="flex items-center gap-2 px-6 py-3 bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-xl transition-all"
+              className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300"
             >
               <Plus className="h-4 w-4" />
               Add Classroom
@@ -320,7 +320,7 @@ const Classrooms = () => {
               </button>
             </Link>
             <Link href="/components/TeacherAssignments">
-              <button className="flex items-center gap-2 px-6 py-3 bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-xl transition-all">
+              <button className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300">
                 Next: Teacher Assignments
                 <ArrowLeft className="h-4 w-4 rotate-180" />
               </button>

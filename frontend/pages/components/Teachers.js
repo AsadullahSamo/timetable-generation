@@ -528,7 +528,7 @@ const TeachersConfig = () => {
               href="/components/Classrooms"
               className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300"
             >
-              Next
+              Next: Classrooms
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
