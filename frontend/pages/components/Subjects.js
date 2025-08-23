@@ -132,8 +132,8 @@ const SubjectConfig = () => {
     
     if (!formData.code.trim()) {
       errors.code = "Subject code is required";
-    } else if (!/^[A-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(formData.code)) {
-      errors.code = "Subject code should only contain letters, numbers, and special characters (no spaces)";
+    } else if (!/^[A-Z0-9\s!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(formData.code)) {
+      errors.code = "Subject code should only contain letters, numbers, spaces, and special characters";
     } else {
       // Check for duplicate subject codes (allow max 2 - theory and practical)
       const existingSubjectsWithSameCode = subjects.filter(subject => 
