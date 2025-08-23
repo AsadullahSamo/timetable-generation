@@ -13,7 +13,7 @@
 13. No Duplicate Theory Per Day - No section can have multiple theory classes of the same subject on the same day (integrated directly into scheduling algorithm for prevention during generation)
 14. Same Lab Rule - All 3 blocks of practical subjects must use the same lab
 15. Practicals in Labs - Practical subjects must be scheduled only in labs
-16. Appropriate Distribution - Lessons are spread across all 5 days
+16. Appropriate Distribution - Classes are spread across all 5 days
 17. Room Consistency - Consistent room assignment for theory classes per section
 18. Section Conflicts - Prevents multiple simultaneous classes for same section
 19. Teacher Unavailability - Teachers cannot be scheduled during their unavailable periods (HARD CONSTRAINT)
