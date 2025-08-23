@@ -8,6 +8,7 @@ Populates the database with all necessary data including:
 - Subjects (assigned to batches)
 - Classrooms
 - Teacher-Subject-Section assignments
+- Configuration data
 - All data except timetable entries
 
 Usage: python populate_data.py
@@ -27,7 +28,8 @@ if parent_dir not in sys.path:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from timetable.models import Teacher, Subject, Classroom, Batch, TeacherSubjectAssignment
+from timetable.models import Teacher, Subject, Classroom, Batch, TeacherSubjectAssignment, ScheduleConfig
+from datetime import time
 
 def populate_teachers():
     """Create all teachers"""
@@ -148,6 +150,7 @@ def populate_subjects():
         ('SQE2', 'Software Quality Engineering (PR)', 1, True),
         ('CC', 'Cloud Computing', 3, False),
         ('CC2', 'Cloud Computing (PR)', 1, True),
+        ('THESIS', 'Thesis', 3, False), 
     ]
     
     # 22SW - 6th Semester (3rd Year)
@@ -245,6 +248,40 @@ def populate_classrooms():
 
     print(f'Total classrooms: {Classroom.objects.count()}')
 
+def populate_configuration():
+    """Create configuration data"""
+    print('\n=== CREATING CONFIGURATION ===')
+    
+    config_data = {
+        'name': 'Software Engineering Department',
+        'days': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        'periods': ['1', '2', '3', '4', '5', '6', '7'],
+        'start_time': time(8, 0),  # 08:00 AM
+        'lesson_duration': 60,  # 60 minutes
+        'constraints': {},
+        'class_groups': ['21SW', '22SW', '23SW', '24SW'],
+        'semester': 'Fall 2024',
+        'academic_year': '2024-2025'
+    }
+    
+    config, created = ScheduleConfig.objects.get_or_create(
+        name=config_data['name'],
+        defaults=config_data
+    )
+    
+    if created:
+        print(f'   ✅ Created: {config.name}')
+        print(f'      • Department: Software Engineering')
+        print(f'      • Number of Periods: {len(config.periods)}')
+        print(f'      • Starting Time: {config.start_time.strftime("%I:%M %p")}')
+        print(f'      • Lesson Duration: {config.lesson_duration} minutes')
+        print(f'      • Days: {", ".join(config.days)}')
+        print(f'      • Batches: {", ".join(config.class_groups)}')
+    else:
+        print(f'   ⚪ Exists: {config.name}')
+    
+    print(f'Total configurations: {ScheduleConfig.objects.count()}')
+
 def populate_teacher_assignments():
     """Create teacher-subject-section assignments"""
     print('\n=== CREATING TEACHER ASSIGNMENTS ===')
@@ -253,7 +290,7 @@ def populate_teacher_assignments():
     assignments_data = [
         # 21SW assignments
         ('Dr. Sania Bhatti', 'SM', '21SW', ['I', 'II']),
-        ('Mr.Umar Farooq', 'SM', '21SW', ['III']),
+        ('Mr. Umar Farooq', 'SM', '21SW', ['III']),
         ('Mr. Aqib Ali', 'SQE', '21SW', ['I', 'II', 'III']),
         ('Mr. Aqib Ali', 'SQE2', '21SW', ['I', 'II', 'III']),
         ('Dr. Rabeea Jaffari', 'CC', '21SW', ['I', 'II', 'III']),
@@ -264,7 +301,7 @@ def populate_teacher_assignments():
         ('Ms. Shazma Memon', 'TSW', '22SW', ['I', 'II']),
         ('Mr. Sarwar Ali', 'TSW', '22SW', ['III']),
         ('Ms. Shafya Qadeer', 'DS', '22SW', ['I', 'II', 'III']),
-        ('Dr.Areej Fatemah', 'DSA2', '22SW', ['I', 'II', 'III']),
+        ('Dr. Areej Fatemah', 'DSA2', '22SW', ['I', 'II', 'III']),  # Fixed typo
         ('Ms. Aisha Esani', 'DSA3', '22SW', ['I', 'II', 'III']),
         ('Ms. Mariam Memon', 'MAD', '22SW', ['I', 'II', 'III']),
         ('Mr. Umar Farooq', 'MAD2', '22SW', ['I', 'II', 'III']),
@@ -333,6 +370,7 @@ def main():
     populate_batches()
     populate_subjects()
     populate_classrooms()
+    populate_configuration()
     populate_teacher_assignments()
     
     print('\n' + '=' * 50)
@@ -342,6 +380,7 @@ def main():
     print(f'   Batches: {Batch.objects.count()}')
     print(f'   Subjects: {Subject.objects.count()}')
     print(f'   Classrooms: {Classroom.objects.count()}')
+    print(f'   Configurations: {ScheduleConfig.objects.count()}')
     print(f'   Teacher Assignments: {TeacherSubjectAssignment.objects.count()}')
     print('\n🎯 Database is ready for timetable generation!')
 
