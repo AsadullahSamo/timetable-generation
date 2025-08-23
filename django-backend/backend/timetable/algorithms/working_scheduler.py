@@ -23,7 +23,7 @@ class WorkingTimetableScheduler:
         self.days = config.days
         self.periods = [int(p) for p in config.periods]  # Convert to integers
         self.start_time = config.start_time
-        self.lesson_duration = config.lesson_duration
+        self.class_duration = config.class_duration
         self.class_groups = config.class_groups
 
         # Load data
@@ -351,8 +351,8 @@ class WorkingTimetableScheduler:
         start_hour = self.start_time.hour
         start_minute = self.start_time.minute
 
-        # Each period is lesson_duration minutes
-        total_minutes = (period - 1) * self.lesson_duration
+        # Each period is class_duration minutes
+        total_minutes = (period - 1) * self.class_duration
         hours_to_add = total_minutes // 60
         minutes_to_add = total_minutes % 60
 
@@ -365,7 +365,7 @@ class WorkingTimetableScheduler:
         """Get end time for a period."""
         start = self._get_period_start_time(period)
         end_hour = start.hour
-        end_minute = start.minute + self.lesson_duration
+        end_minute = start.minute + self.class_duration
 
         # Handle minute overflow properly
         while end_minute >= 60:

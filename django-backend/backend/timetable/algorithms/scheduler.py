@@ -25,7 +25,7 @@ class TimetableScheduler:
         try:
             self._initialize_availability()
             self._create_time_slots()
-            self._schedule_lessons()
+            self._schedule_classes()
             return self._format_timetable()
         except Exception as e:
             print(f"Scheduling error: {str(e)}")
@@ -56,14 +56,14 @@ class TimetableScheduler:
         current_time = datetime.combine(datetime.today(), self.config.start_time)
         
         for _ in range(len(self.periods)):
-            end_time = current_time + timedelta(minutes=self.config.lesson_duration)
+            end_time = current_time + timedelta(minutes=self.config.class_duration)
             self.time_slots.append({
                 'start': current_time.time(),
                 'end': end_time.time()
             })
             current_time = end_time
 
-    def _schedule_lessons(self):
+    def _schedule_classes(self):
         """Core scheduling algorithm"""
         # First schedule practical subjects
         for class_group in self.class_groups:
@@ -220,8 +220,8 @@ class TimetableScheduler:
 
     def _check_teacher_constraints(self, teacher, day, slot_idx):
         """Check all teacher-related constraints"""
-        # Check max lessons per day
-        if self._get_teacher_daily_lessons(teacher, day) >= teacher.max_lessons_per_day:
+        # Check max classes per day
+        if self._get_teacher_daily_classes(teacher, day) >= teacher.max_classes_per_day:
             return False
             
         # Check consecutive classes
@@ -244,8 +244,8 @@ class TimetableScheduler:
                 return next_slot not in self.teacher_availability[day][teacher.id]
         return True
 
-    def _get_teacher_daily_lessons(self, teacher, day):
-        """Get number of lessons a teacher has on a specific day"""
+    def _get_teacher_daily_classes(self, teacher, day):
+        """Get number of classes a teacher has on a specific day"""
         return len(self.teacher_availability[day][teacher.id])
 
     def _meets_constraints(self, subject, day, class_group):

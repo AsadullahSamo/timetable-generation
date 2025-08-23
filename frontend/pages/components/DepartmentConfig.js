@@ -11,7 +11,7 @@ const DepartmentConfig = () => {
   const [numPeriods, setNumPeriods] = useState(0);
   const [startTime, setStartTime] = useState("08:00");
   const [days] = useState(["Mon", "Tue", "Wed", "Thu", "Fri"]);
-  const [lessonDuration, setLessonDuration] = useState(60);
+      const [classDuration, setClassDuration] = useState(60);
   const [periods, setPeriods] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -120,8 +120,8 @@ const DepartmentConfig = () => {
       setError("Number of periods must be at least 1.");
       return false;
     }
-    if (lessonDuration < 30) {
-      setError("Lesson duration should be at least 30 minutes.");
+            if (classDuration < 30) {
+              setError("Class duration should be at least 30 minutes.");
       return false;
     }
     return true;
@@ -132,7 +132,7 @@ const DepartmentConfig = () => {
       return;
     }
 
-    if (!numPeriods || !startTime || !lessonDuration) {
+            if (!numPeriods || !startTime || !classDuration) {
       setError("Please fill all required fields before generating periods.");
       return;
     }
@@ -145,7 +145,7 @@ const DepartmentConfig = () => {
       let dayTime = startTime;
       for (let i = 0; i < numPeriods; i++) {
         newPeriods[day].push(formatTime(dayTime));
-        dayTime = incrementTime(dayTime, lessonDuration);
+        dayTime = incrementTime(dayTime, classDuration);
       }
     });
 
@@ -158,7 +158,7 @@ const DepartmentConfig = () => {
     const lastNonBreakPeriod = [...periods[day]].reverse().find(period => period !== "Break");
     if (!lastNonBreakPeriod) {
       // If no non-break period found, use the start time
-      const newTime = incrementTime(startTime, lessonDuration);
+              const newTime = incrementTime(startTime, classDuration);
       setPeriods(prev => ({
         ...prev,
         [day]: [...prev[day], formatTime(newTime)]
@@ -172,7 +172,7 @@ const DepartmentConfig = () => {
     if (period === "PM" && hours !== 12) hours += 12;
     if (period === "AM" && hours === 12) hours = 0;
 
-    const newTime = incrementTime(`${hours}:${minutes}`, lessonDuration);
+            const newTime = incrementTime(`${hours}:${minutes}`, classDuration);
 
     setPeriods(prev => ({
       ...prev,
@@ -203,7 +203,7 @@ const DepartmentConfig = () => {
         days,
         periods: Array.from({length: numPeriods}, (_, i) => (i + 1).toString()),
         start_time: formattedStartTime,
-        lesson_duration: lessonDuration,
+        class_duration: classDuration,
         constraints: {},
         semester: "Fall 2024",
         academic_year: "2024-2025"
@@ -338,11 +338,11 @@ const DepartmentConfig = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-secondary">Lesson Duration (minutes)</label>
+                <label className="text-sm font-medium text-secondary">Class Duration (minutes)</label>
                 <input
                   type="number"
-                  value={lessonDuration}
-                  onChange={(e) => setLessonDuration(Number(e.target.value))}
+                                      value={classDuration}
+                                      onChange={(e) => setClassDuration(Number(e.target.value))}
                   className="w-full pl-4 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
                   min="1"
                   required
@@ -355,7 +355,7 @@ const DepartmentConfig = () => {
                   type="button"
                   onClick={generatePeriods}
                   className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading || !numPeriods || !startTime || !lessonDuration}
+                  disabled={loading || !numPeriods || !startTime || !classDuration}
                 >
                   {loading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />

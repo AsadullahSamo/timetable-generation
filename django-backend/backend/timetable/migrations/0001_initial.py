@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
                 ('days', models.JSONField(default=['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])),
                 ('periods', models.JSONField()),
                 ('start_time', models.TimeField()),
-                ('lesson_duration', models.PositiveIntegerField()),
+                ('class_duration', models.PositiveIntegerField()),
                 ('constraints', models.JSONField(default=dict)),
             ],
         ),

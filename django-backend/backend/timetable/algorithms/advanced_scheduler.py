@@ -60,7 +60,7 @@ class AdvancedTimetableScheduler:
         self.days = config.days
         self.periods = config.periods
         self.start_time = config.start_time
-        self.lesson_duration = config.lesson_duration
+        self.class_duration = config.class_duration
         self.class_groups = config.class_groups
         self.constraints = config.constraints
         
@@ -133,7 +133,7 @@ class AdvancedTimetableScheduler:
         for day in self.days:
             day_start_time = datetime.combine(datetime.today(), self.start_time)
             for period in range(len(self.periods)):
-                end_time = day_start_time + timedelta(minutes=self.lesson_duration)
+                end_time = day_start_time + timedelta(minutes=self.class_duration)
                 slots.append(TimeSlot(
                     day=day,
                     period=period + 1,
@@ -632,7 +632,7 @@ class AdvancedTimetableScheduler:
                 
                 teacher_daily_workload[teacher.id][day] += 1
                 
-                if teacher_daily_workload[teacher.id][day] > teacher.max_lessons_per_day:
+                if teacher_daily_workload[teacher.id][day] > teacher.max_classes_per_day:
                     penalty += 5.0
                     violations.append(f"Teacher {teacher.name} exceeds daily limit")
         

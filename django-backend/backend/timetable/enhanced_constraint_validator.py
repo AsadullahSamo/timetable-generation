@@ -353,10 +353,10 @@ class EnhancedConstraintValidator:
                 if config:
                     # Calculate actual time for this period
                     start_time = config.start_time
-                    lesson_duration = timedelta(minutes=config.lesson_duration)
+                    class_duration = timedelta(minutes=config.class_duration)
                     
                     # Calculate actual start time for this period
-                    total_minutes = (entry.period - 1) * (config.lesson_duration + 15)  # 15 min break
+                    total_minutes = (entry.period - 1) * (config.class_duration + 15)  # 15 min break
                     actual_start_time = (
                         timedelta(hours=start_time.hour, minutes=start_time.minute) +
                         timedelta(minutes=total_minutes)
@@ -561,10 +561,10 @@ class EnhancedConstraintValidator:
         for entry in entries:
             # Calculate actual time for this period
             start_time = config.start_time
-            lesson_duration = timedelta(minutes=config.lesson_duration)
+            class_duration = timedelta(minutes=config.class_duration)
             
             # Calculate actual start time for this period
-            total_minutes = (entry.period - 1) * (config.lesson_duration + 15)  # 15 min break
+            total_minutes = (entry.period - 1) * (config.class_duration + 15)  # 15 min break
             actual_start_time = (
                 timedelta(hours=start_time.hour, minutes=start_time.minute) +
                 timedelta(minutes=total_minutes)
@@ -579,7 +579,7 @@ class EnhancedConstraintValidator:
             # Calculate end time
             end_time_obj = (
                 timedelta(hours=start_time_obj.hour, minutes=start_time_obj.minute) +
-                lesson_duration
+                class_duration
             )
             end_total_seconds = int(end_time_obj.total_seconds())
             end_hours = end_total_seconds // 3600

@@ -56,7 +56,7 @@ class ConstraintManager:
                 id="teacher_workload",
                 name="Teacher Workload",
                 category=ConstraintCategory.WORKLOAD,
-                description="Teachers cannot exceed their maximum daily lesson limit",
+                description="Teachers cannot exceed their maximum daily class limit",
                 parameters={"type": "daily_limit"},
                 weight=9.0,
                 is_hard=True
@@ -279,12 +279,12 @@ class ConstraintManager:
     def _validate_workload_constraint(self, constraint: ConstraintDefinition) -> bool:
         """Validate workload-related constraints"""
         if constraint.parameters.get('type') == 'daily_limit':
-            # Check if teachers have max_lessons_per_day
+            # Check if teachers have max_classes_per_day
             teachers = Teacher.objects.all()
             for teacher in teachers:
-                if not hasattr(teacher, 'max_lessons_per_day') or teacher.max_lessons_per_day <= 0:
+                if not hasattr(teacher, 'max_classes_per_day') or teacher.max_classes_per_day <= 0:
                     self.validation_errors.append(
-                        f"Invalid max_lessons_per_day for teacher {teacher.name}"
+                        f"Invalid max_classes_per_day for teacher {teacher.name}"
                     )
                     return False
         return True

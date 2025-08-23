@@ -364,8 +364,8 @@ def generate_timetable_report():
         
         # Get teacher workload distribution
         teacher_workload = TimetableEntry.objects.values('teacher__name').annotate(
-            lesson_count=Count('id')
-        ).order_by('-lesson_count')
+            class_count=Count('id')
+        ).order_by('-class_count')
         
         # Get classroom usage distribution
         classroom_usage = TimetableEntry.objects.values('classroom__name').annotate(

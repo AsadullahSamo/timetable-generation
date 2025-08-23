@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                 ('days', models.JSONField(default=list)),
                 ('periods', models.PositiveIntegerField()),
                 ('start_time', models.TimeField()),
-                ('lesson_duration', models.PositiveIntegerField()),
+                ('class_duration', models.PositiveIntegerField()),
                 ('generated_periods', models.JSONField(default=dict)),
             ],
         ),

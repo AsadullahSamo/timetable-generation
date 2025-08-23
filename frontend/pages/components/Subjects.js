@@ -368,7 +368,7 @@ const SubjectConfig = () => {
                   </button>
                   {showTooltip === "form" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Enter subject details like name, code, and credits. Subject names can include letters, numbers, spaces, and special characters. Subject codes can be used twice (for theory and practical versions) but not more than twice.
+                      Enter subject details like name, code, and credits. Subject names can include letters, numbers, spaces, and special characters. Subject codes.
                     </div>
                   )}
                 </div>
@@ -408,7 +408,7 @@ const SubjectConfig = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Subject Code</label>
-                  <p className="text-xs text-secondary/70">Letters, numbers, and special characters. Can be used twice (theory + practical)</p>
+                  <p className="text-xs text-secondary/70">Letters, numbers, and special characters.</p>
                   <div className="relative">
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input

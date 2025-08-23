@@ -55,7 +55,7 @@ class TeacherSerializer(serializers.ModelSerializer):
             'email',
             'subject_names',
             'assignments',
-            'max_lessons_per_day',
+            'max_classes_per_day',
             'unavailable_periods'
         ]
 

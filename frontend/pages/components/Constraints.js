@@ -15,8 +15,10 @@ import {
   Loader2,
   CheckCircle2,
   Users,
-  GraduationCap
+  GraduationCap,
+  XCircle
 } from 'lucide-react';
+
 
 // Add global error handler for unhandled promise rejections
 if (typeof window !== 'undefined') {
@@ -111,10 +113,10 @@ const Constraints = () => {
     },
     { 
       id: 10, 
-      name: 'Lessons Grouped by Building', 
+      name: 'Classes Grouped by Building', 
       importance: 'Less Important', 
-      active: true, 
-      description: 'Group lessons in the same building together',
+      database: true, 
+      description: 'Group classes in the same building together',
       category: 'general'
     },
     { 
@@ -122,7 +124,7 @@ const Constraints = () => {
       name: 'Uniform Distribution', 
       importance: 'Very Important', 
       active: true, 
-      description: 'Spread lessons evenly across the week',
+              description: 'Spread classes evenly across the week',
       category: 'general'
     },
     { 
@@ -130,31 +132,31 @@ const Constraints = () => {
       name: 'Minimize Gaps', 
       importance: 'Important', 
       active: true, 
-      description: 'Reduce gaps between teacher lessons',
+              description: 'Reduce gaps between teacher classes',
       category: 'general'
     },
     { 
       id: 13, 
-      name: 'Early Important Lessons', 
+      name: 'Early Important Classes', 
       importance: 'Very Important', 
       active: true, 
-      description: 'Schedule important lessons earlier in the day',
+      description: 'Schedule important classes earlier in the day',
       category: 'general'
     },
     { 
       id: 14, 
-      name: 'Consecutive Identical Lessons', 
+      name: 'Consecutive Identical Classes', 
       importance: 'Important', 
       active: true, 
-      description: 'Allow same subject lessons in consecutive periods',
+      description: 'Allow same subject classes in consecutive periods',
       category: 'general'
     },
     { 
       id: 15, 
-      name: 'No 3 Identical Lessons', 
+      name: 'No 3 Identical Classes', 
       importance: 'Very Important', 
       active: true, 
-      description: 'Limit same subject to 2 lessons per day',
+      description: 'Limit same subject to 2 classes per day',
       category: 'general'
     },
     { 
@@ -162,7 +164,7 @@ const Constraints = () => {
       name: 'Appropriate Distribution', 
       importance: 'Important', 
       active: true, 
-      description: 'Ensure lessons are spread across appropriate days',
+              description: 'Ensure classes are spread across appropriate days',
       category: 'general'
     }
   ]);

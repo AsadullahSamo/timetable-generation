@@ -62,11 +62,11 @@ class IntelligentConstraintResolver:
 
         # Calculate start and end times based on period and config
         start_time = config.start_time
-        lesson_duration = timedelta(minutes=config.lesson_duration)
+        class_duration = timedelta(minutes=config.class_duration)
         break_duration = timedelta(minutes=15)  # Default 15 minute break
 
         # Calculate the actual start time for this period
-        total_minutes = (period - 1) * (config.lesson_duration + 15)  # 15 min break between periods
+        total_minutes = (period - 1) * (config.class_duration + 15)  # 15 min break between periods
         actual_start_time = (
             timedelta(hours=start_time.hour, minutes=start_time.minute) +
             timedelta(minutes=total_minutes)
@@ -81,7 +81,7 @@ class IntelligentConstraintResolver:
         # Calculate end time
         end_time_obj = (
             timedelta(hours=start_time_obj.hour, minutes=start_time_obj.minute) +
-            lesson_duration
+            class_duration
         )
         end_total_seconds = int(end_time_obj.total_seconds())
         end_hours = end_total_seconds // 3600

@@ -158,8 +158,8 @@ def populate_subjects():
         ('SPM', 'Software Project Management', 3, False),
         ('TSW', 'Technical & Scientific Writing', 2, False),
         ('DS', 'Discrete Structures', 3, False),
-        ('DSA2', 'Data Science & Analytics', 3, False),
-        ('DSA3', 'Data Science & Analytics (PR)', 1, True),
+        ('DS&A', 'Data Science & Analytics', 3, False),
+        ('DS&A2', 'Data Science & Analytics (PR)', 1, True),
         ('MAD', 'Mobile Application Development', 3, False),
         ('MAD2', 'Mobile Application Development (PR)', 1, True),
     ]
@@ -179,7 +179,7 @@ def populate_subjects():
         ('DBS', 'Database Systems', 3, False),
         ('DBS2', 'Database Systems (PR)', 1, True),
         ('DSA', 'Data Structures & Algorithm', 3, False),
-        ('DSA4', 'Data Structures & Algorithm (PR)', 1, True),
+        ('DSA2', 'Data Structures & Algorithm (PR)', 1, True),
         ('SRE', 'Software Requirement Engineering', 3, False),
         ('OR', 'Operations Research', 3, False),
         ('SEM', 'Software Economics & Management', 3, False),
@@ -257,7 +257,7 @@ def populate_configuration():
         'days': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
         'periods': ['1', '2', '3', '4', '5', '6', '7'],
         'start_time': time(8, 0),  # 08:00 AM
-        'lesson_duration': 60,  # 60 minutes
+        'class_duration': 60,  # 60 minutes
         'constraints': {},
         'class_groups': ['21SW', '22SW', '23SW', '24SW'],
         'semester': 'Fall 2024',
@@ -274,7 +274,7 @@ def populate_configuration():
         print(f'      • Department: Software Engineering')
         print(f'      • Number of Periods: {len(config.periods)}')
         print(f'      • Starting Time: {config.start_time.strftime("%I:%M %p")}')
-        print(f'      • Lesson Duration: {config.lesson_duration} minutes')
+        print(f'      • Class Duration: {config.class_duration} minutes')
         print(f'      • Days: {", ".join(config.days)}')
         print(f'      • Batches: {", ".join(config.class_groups)}')
     else:
@@ -301,8 +301,8 @@ def populate_teacher_assignments():
         ('Ms. Shazma Memon', 'TSW', '22SW', ['I', 'II']),
         ('Mr. Sarwar Ali', 'TSW', '22SW', ['III']),
         ('Ms. Shafya Qadeer', 'DS', '22SW', ['I', 'II', 'III']),
-        ('Dr. Areej Fatemah', 'DSA2', '22SW', ['I', 'II', 'III']),  # Fixed typo
-        ('Ms. Aisha Esani', 'DSA3', '22SW', ['I', 'II', 'III']),
+        ('Dr. Areej Fatemah', 'DS&A', '22SW', ['I', 'II', 'III']),  # Fixed typo
+        ('Ms. Aisha Esani', 'DS&A2', '22SW', ['I', 'II', 'III']),
         ('Ms. Mariam Memon', 'MAD', '22SW', ['I', 'II', 'III']),
         ('Mr. Umar Farooq', 'MAD2', '22SW', ['I', 'II', 'III']),
         
@@ -321,7 +321,7 @@ def populate_teacher_assignments():
         ('Ms. Hina Ali', 'DBS2', '24SW', ['I', 'II', 'III']),
         ('Dr. Mohsin Memon', 'DSA', '24SW', ['I', 'II']),
         ('Mr. Mansoor', 'DSA', '24SW', ['III']),
-        ('Mr. Naveen Kumar', 'DSA4', '24SW', ['I', 'II', 'III']),
+        ('Mr. Naveen Kumar', 'DSA2', '24SW', ['I', 'II', 'III']),
         ('Ms.Memona Sami', 'SRE', '24SW', ['I', 'II', 'III']),
         ('Ms. Amirta Dewani', 'OR', '24SW', ['I', 'II', 'III']),
         ('Mr. Junaid Ahmed', 'SEM', '24SW', ['I', 'II', 'III']),

@@ -39,7 +39,7 @@ class FinalUniversalScheduler:
             self.start_time = datetime.strptime(config.start_time, '%H:%M:%S').time()
         else:
             self.start_time = config.start_time
-        self.lesson_duration = config.lesson_duration
+        self.class_duration = config.class_duration
         # Get class groups from Batch model instead of config
         self.class_groups = [batch.name for batch in Batch.objects.all()]
 
@@ -1233,7 +1233,7 @@ class FinalUniversalScheduler:
 
     def _calculate_start_time(self, period: int) -> dt_time:
         """Calculate start time for period."""
-        minutes_from_start = (period - 1) * self.lesson_duration
+        minutes_from_start = (period - 1) * self.class_duration
         hours = minutes_from_start // 60
         minutes = minutes_from_start % 60
 
@@ -1256,7 +1256,7 @@ class FinalUniversalScheduler:
         """Calculate end time for period."""
         start = self._calculate_start_time(period)
         end_hour = start.hour
-        end_minute = start.minute + self.lesson_duration
+        end_minute = start.minute + self.class_duration
 
         # Handle minute overflow
         while end_minute >= 60:
@@ -3568,14 +3568,14 @@ class FinalUniversalScheduler:
                 config_start_time = datetime.strptime(config_start_time, '%H:%M:%S').time()
             
             # Calculate which period this time falls into
-            lesson_duration = self.config.lesson_duration
+            class_duration = self.config.class_duration
             
             # Calculate minutes since start of day
             start_minutes = config_start_time.hour * 60 + config_start_time.minute
             time_minutes = time_obj.hour * 60 + time_obj.minute
             
             # Calculate period number (1-based)
-            period = ((time_minutes - start_minutes) // lesson_duration) + 1
+            period = ((time_minutes - start_minutes) // class_duration) + 1
             
             # Ensure period is within valid range
             if 1 <= period <= len(self.config.periods):

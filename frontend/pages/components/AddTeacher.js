@@ -28,7 +28,7 @@ const AddTeacher = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-  const [maxLessons, setMaxLessons] = useState(4);
+      const [maxClasses, setMaxClasses] = useState(4);
   // Internal availability state: { day: { periodIndex: mode } }
   const [availabilityState, setAvailabilityState] = useState({});
   const [timetableConfig, setTimetableConfig] = useState(null);
@@ -45,7 +45,7 @@ const AddTeacher = () => {
 
   // Helper function to generate time slots from config
   const generateTimeSlots = (config) => {
-    if (!config || !config.start_time || !config.lesson_duration || !config.periods) {
+            if (!config || !config.start_time || !config.class_duration || !config.periods) {
       return {};
     }
 
@@ -64,8 +64,8 @@ const AddTeacher = () => {
         });
         timeSlots[day].push(timeString);
         
-        // Add lesson duration
-        currentTime.setMinutes(currentTime.getMinutes() + config.lesson_duration);
+        // Add class duration
+        currentTime.setMinutes(currentTime.getMinutes() + config.class_duration);
       }
     });
     
@@ -108,7 +108,7 @@ const AddTeacher = () => {
         const { data } = await api.get(`/api/timetable/teachers/${id}/`);
         setName(data.name);
         setEmail(data.email);
-        setMaxLessons(data.max_lessons_per_day);
+        setMaxClasses(data.max_classes_per_day);
         // Convert availability data to internal state
         const newState = {};
         if (data.unavailable_periods) {
@@ -150,9 +150,9 @@ const AddTeacher = () => {
       errors.email = "Please enter a valid email address";
     }
     
-    if (maxLessons < 1) {
-      errors.maxLessons = "Must be at least 1 lesson per day";
-    }
+            if (maxClasses < 1) {
+            errors.maxClasses = "Must be at least 1 class per day";
+        }
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -175,7 +175,7 @@ const AddTeacher = () => {
       const teacherData = {
         name,
         email,
-        max_lessons_per_day: maxLessons,
+                    max_classes_per_day: maxClasses,
         unavailable_periods: availability
       };
 
@@ -401,7 +401,7 @@ const AddTeacher = () => {
                   </button>
                   {showTooltip === "basic" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Enter teacher's name, email, and maximum number of lessons they can teach per day.
+                      Enter teacher's name, email, and maximum number of classes they can teach per day.
                     </div>
                   )}
                 </div>
@@ -452,26 +452,26 @@ const AddTeacher = () => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Max Lessons per Day*</label>
+                                          <label className="text-sm font-medium text-secondary">Max Classes per Day*</label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
                       type="number"
-                      value={maxLessons}
-                      onChange={(e) => {
-                        setMaxLessons(Math.max(1, parseInt(e.target.value) || 1));
-                        if (formErrors.maxLessons) {
-                          setFormErrors({...formErrors, maxLessons: undefined});
-                        }
-                      }}
+                      value={maxClasses}
+                                              onChange={(e) => {
+                          setMaxClasses(Math.max(1, parseInt(e.target.value) || 1));
+                          if (formErrors.maxClasses) {
+                            setFormErrors({...formErrors, maxClasses: undefined});
+                          }
+                        }}
                       min="1"
-                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.maxLessons ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                                              className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.maxClasses ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
                       required
                     />
                   </div>
-                  {formErrors.maxLessons && (
-                    <p className="text-red-500 text-xs mt-1">{formErrors.maxLessons}</p>
-                  )}
+                                        {formErrors.maxClasses && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.maxClasses}</p>
+                      )}
                 </div>
               </div>
             </div>

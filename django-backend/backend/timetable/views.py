@@ -594,7 +594,7 @@ class TimetableView(APIView):
                 current_time = config.start_time
                 for i in range(len(config.periods)):
                     end_time = (datetime.combine(datetime.today(), current_time) + 
-                              timedelta(minutes=config.lesson_duration)).time()
+                              timedelta(minutes=config.class_duration)).time()
                     slot = {
                         'period': i + 1,
                         'display': f"{i+1}{'st' if i==0 else 'nd' if i==1 else 'rd' if i==2 else 'th'} [{current_time.strftime('%I:%M')} to {end_time.strftime('%I:%M')}]"
@@ -981,7 +981,7 @@ class LatestTimetableView(APIView):
             current_time = config.start_time
             for i in range(len(config.periods)):
                 end_time = (datetime.combine(datetime.today(), current_time) +
-                          timedelta(minutes=config.lesson_duration)).time()
+                          timedelta(minutes=config.class_duration)).time()
                 time_slots.append(f"{current_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}")
                 current_time = end_time
 

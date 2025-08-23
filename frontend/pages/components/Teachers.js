@@ -51,14 +51,14 @@ const TeachersConfig = () => {
   const stats = {
     totalTeachers: teachers.length,
     totalSubjects: [...new Set(teachers.flatMap(t => t.subject_names || []))].length,
-    avgLessonsPerDay: teachers.length 
-      ? (teachers.reduce((acc, t) => acc + t.max_lessons_per_day, 0) / teachers.length).toFixed(1) 
-      : 0
+            avgClassesPerDay: teachers.length
+            ? (teachers.reduce((acc, t) => acc + t.max_classes_per_day, 0) / teachers.length).toFixed(1)
+            : 0
   };
 
   // Helper function to generate time slots from config
   const generateTimeSlots = (config) => {
-    if (!config || !config.start_time || !config.lesson_duration || !config.periods) {
+            if (!config || !config.start_time || !config.class_duration || !config.periods) {
       return {};
     }
 
@@ -77,8 +77,8 @@ const TeachersConfig = () => {
         });
         timeSlots[day].push(timeString);
         
-        // Add lesson duration
-        currentTime.setMinutes(currentTime.getMinutes() + config.lesson_duration);
+        // Add class duration
+        currentTime.setMinutes(currentTime.getMinutes() + config.class_duration);
       }
     });
     
@@ -222,9 +222,9 @@ const TeachersConfig = () => {
             <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
               <div className="flex items-center gap-3 mb-2">
                 <BarChart3 className="h-5 w-5 text-accent-cyan" />
-                <h3 className="text-sm font-medium text-secondary">Avg. Lessons/Day</h3>
+                <h3 className="text-sm font-medium text-secondary">Avg. Classes/Day</h3>
               </div>
-              <p className="text-2xl font-bold text-primary">{stats.avgLessonsPerDay}</p>
+              <p className="text-2xl font-bold text-primary">{stats.avgClassesPerDay}</p>
             </div>
           </div>
 
@@ -410,7 +410,7 @@ const TeachersConfig = () => {
                             <td className="px-4 py-3 border border-border text-center">
                               <span className="flex items-center justify-center gap-1">
                                 <Clock className="h-4 w-4 text-secondary/70" />
-                                {teacher.max_lessons_per_day}
+                                {teacher.max_classes_per_day}
                               </span>
                             </td>
                             <td className="px-4 py-3 border border-border">

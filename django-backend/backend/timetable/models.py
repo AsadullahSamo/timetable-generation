@@ -53,7 +53,7 @@ class ScheduleConfig(models.Model):
     days = models.JSONField(default=list)
     periods = models.JSONField(default=list)
     start_time = models.TimeField()
-    lesson_duration = models.PositiveIntegerField()
+    class_duration = models.PositiveIntegerField()
     constraints = models.JSONField(default=dict)
     class_groups = models.JSONField(default=list)
     semester = models.CharField(max_length=50, default="Fall 2024")
@@ -90,7 +90,7 @@ class Config(models.Model):
     days = models.JSONField(default=list)
     periods = models.PositiveIntegerField()
     start_time = models.TimeField()
-    lesson_duration = models.PositiveIntegerField()
+    class_duration = models.PositiveIntegerField()
     generated_periods = models.JSONField(default=dict)
 
     def __str__(self):
@@ -100,8 +100,8 @@ class ClassGroup(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
     latest_start_time = models.TimeField()
-    min_lessons = models.PositiveIntegerField()
-    max_lessons = models.PositiveIntegerField()
+    min_classes = models.PositiveIntegerField()
+    max_classes = models.PositiveIntegerField()
     class_groups = models.JSONField()
 
     def __str__(self):
@@ -178,7 +178,7 @@ class Teacher(models.Model):
     name = models.CharField(max_length=255, default="")
     email = models.EmailField(unique=True, default="")
     # Note: subjects relationship now handled through TeacherSubjectAssignment
-    max_lessons_per_day = models.PositiveIntegerField(default=4)
+    max_classes_per_day = models.PositiveIntegerField(default=4)
     unavailable_periods = models.JSONField(default=dict, blank=True)
 
     def __str__(self):

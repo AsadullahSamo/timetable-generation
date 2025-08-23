@@ -249,13 +249,13 @@ class CrossSemesterConflictDetector:
     
     def _get_period_start_time(self, period: int) -> str:
         """Calculate start time for a given period."""
-        if not self.current_config.start_time or not self.current_config.lesson_duration:
+        if not self.current_config.start_time or not self.current_config.class_duration:
             return "Unknown"
         
         start_minutes = (
             self.current_config.start_time.hour * 60 + 
             self.current_config.start_time.minute + 
-            (period - 1) * self.current_config.lesson_duration
+            (period - 1) * self.current_config.class_duration
         )
         
         hours = start_minutes // 60
@@ -264,13 +264,13 @@ class CrossSemesterConflictDetector:
     
     def _get_period_end_time(self, period: int) -> str:
         """Calculate end time for a given period."""
-        if not self.current_config.start_time or not self.current_config.lesson_duration:
+        if not self.current_config.start_time or not self.current_config.class_duration:
             return "Unknown"
         
         start_minutes = (
             self.current_config.start_time.hour * 60 + 
             self.current_config.start_time.minute + 
-            period * self.current_config.lesson_duration
+            period * self.current_config.class_duration
         )
         
         hours = start_minutes // 60
