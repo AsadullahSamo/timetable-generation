@@ -6,7 +6,7 @@ Wipes out ALL data from the database including:
 - Teachers
 - Subjects
 - Classrooms
-- Batches (except the default ones)
+- ALL Batches
 - Teacher Assignments
 - Timetable Entries
 - All other data
@@ -43,11 +43,11 @@ def cleanup_all_data():
     print('  - All Teachers')
     print('  - All Subjects')
     print('  - All Classrooms')
+    print('  - ALL Batches')
     print('  - All Teacher Assignments')
     print('  - All Timetable Entries')
     print('  - All Configurations')
     print('  - All Class Groups')
-    print('  - Custom Batches (keeping default 21SW, 22SW, 23SW, 24SW)')
     
     # Ask for confirmation
     confirm = input('\nAre you sure you want to proceed? Type "DELETE ALL" to confirm: ')
@@ -69,7 +69,7 @@ def cleanup_all_data():
         'Schedule Configs': ScheduleConfig.objects.count(),
         'Configs': Config.objects.count(),
         'Class Groups': ClassGroup.objects.count(),
-        'Custom Batches': Batch.objects.exclude(name__in=['21SW', '22SW', '23SW', '24SW']).count(),
+        'Batches': Batch.objects.count(),
     }
     
     print('📊 Data before cleanup:')
@@ -78,7 +78,7 @@ def cleanup_all_data():
     
     print('\n🗑️  Deleting data...')
     
-    # Delete in reverse dependency order
+    # Delete in reverse dependency order to handle foreign key relationships
     print('   🗑️  Deleting Timetable Entries...')
     TimetableEntry.objects.all().delete()
     
@@ -103,8 +103,8 @@ def cleanup_all_data():
     print('   🗑️  Deleting Class Groups...')
     ClassGroup.objects.all().delete()
     
-    print('   🗑️  Deleting Custom Batches (keeping default ones)...')
-    Batch.objects.exclude(name__in=['21SW', '22SW', '23SW', '24SW']).delete()
+    print('   🗑️  Deleting ALL Batches...')
+    Batch.objects.all().delete()
     
     # Count after deletion
     counts_after = {
@@ -116,7 +116,7 @@ def cleanup_all_data():
         'Schedule Configs': ScheduleConfig.objects.count(),
         'Configs': Config.objects.count(),
         'Class Groups': ClassGroup.objects.count(),
-        'Remaining Batches': Batch.objects.count(),
+        'Batches': Batch.objects.count(),
     }
     
     print('\n📊 Data after cleanup:')
@@ -125,14 +125,7 @@ def cleanup_all_data():
     
     print('\n' + '=' * 50)
     print('✅ COMPLETE DATABASE CLEANUP FINISHED!')
-    print('🎯 Database is now empty and ready for fresh data population.')
-    
-    # Show remaining batches
-    remaining_batches = Batch.objects.all()
-    if remaining_batches.exists():
-        print(f'\n📋 Remaining batches:')
-        for batch in remaining_batches:
-            print(f'   - {batch.name}: {batch.description}')
+    print('🎯 Database is now completely empty and ready for fresh data population.')
 
 def main():
     """Main function"""

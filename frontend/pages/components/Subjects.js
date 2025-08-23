@@ -545,8 +545,11 @@ const SubjectConfig = () => {
             ) : (
               <div className="overflow-x-auto">
                 {filteredSubjects.length === 0 ? (
-                  <div className="text-center py-8 text-secondary">
-                    {searchQuery ? "No subjects found matching your search" : "No subjects added yet"}
+                  <div className="text-center py-12">
+                    <BookOpen className="h-12 w-12 text-secondary/50 mx-auto mb-4" />
+                    <p className="text-secondary">
+                      {searchQuery ? "No subjects found matching your search" : "No subjects added yet"}
+                    </p>
                   </div>
                 ) : (
                   <table className="w-full border-collapse">
