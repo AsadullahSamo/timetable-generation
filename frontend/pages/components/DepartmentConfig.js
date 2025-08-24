@@ -21,6 +21,7 @@ const DepartmentConfig = () => {
   const [subjects, setSubjects] = useState([]);
   const [batches, setBatches] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
+  const [updatingSubject, setUpdatingSubject] = useState(null);
 
   // New states for existing configurations
   const [existingConfigs, setExistingConfigs] = useState([]);
@@ -143,6 +144,7 @@ const DepartmentConfig = () => {
 
   const toggleSubjectForBatch = async (batchName, subjectId) => {
     try {
+      setUpdatingSubject(subjectId);
       const subject = subjects.find(s => s.id === subjectId);
       const newBatch = subject.batch === batchName ? '' : batchName;
 
@@ -155,12 +157,15 @@ const DepartmentConfig = () => {
         s.id === subjectId ? { ...s, batch: newBatch } : s
       ));
 
-      setSuccess(`Subject ${newBatch ? 'assigned to' : 'removed from'} ${batchName}`);
+      const action = newBatch ? 'assigned to' : 'removed from';
+      setSuccess(`Subject "${subject.code}" ${action} batch "${batchName}" successfully!`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('Error updating subject batch:', error);
-      setError('Failed to update subject assignment');
+      setError('Failed to update subject assignment. Please try again.');
       setTimeout(() => setError(''), 3000);
+    } finally {
+      setUpdatingSubject(null);
     }
   };
 
@@ -309,18 +314,34 @@ const DepartmentConfig = () => {
         </div>
 
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <p className="text-red-500 text-sm font-medium">{error}</p>
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <p className="text-red-500 text-sm font-medium">{error}</p>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-600 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
         {success && (
-          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6 flex items-center gap-2">
-            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-              <div className="w-2 h-2 bg-white rounded-full"></div>
+          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                <div className="w-2 h-2 bg-white rounded-full"></div>
+              </div>
+              <p className="text-green-500 text-sm font-medium">{success}</p>
             </div>
-            <p className="text-green-500 text-sm font-medium">{success}</p>
+            <button
+              onClick={() => setSuccess('')}
+              className="text-green-500 hover:text-green-600 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -684,10 +705,15 @@ const DepartmentConfig = () => {
                                         e.stopPropagation();
                                         toggleSubjectForBatch(batch.name, subject.id);
                                       }}
-                                      className="opacity-0 group-hover:opacity-100 text-accent-cyan hover:text-red-500 transition-all text-lg leading-none"
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-accent-cyan hover:text-red-500 hover:bg-red-500/10 rounded transition-all disabled:opacity-50"
                                       title="Remove from batch"
+                                      disabled={updatingSubject === subject.id}
                                     >
-                                      ×
+                                      {updatingSubject === subject.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-3 w-3" />
+                                      )}
                                     </button>
                                   </div>
                                 </div>
@@ -707,24 +733,38 @@ const DepartmentConfig = () => {
                           <span className="w-2 h-2 bg-secondary/50 rounded-full"></span>
                           Available Subjects ({subjects.filter(subject => !subject.batch || subject.batch === '').length})
                         </h4>
+                        <p className="text-xs text-secondary/70 mb-3 italic">
+                          Click on any subject below to assign it to this batch. Subjects with a spinning icon are currently being processed.
+                        </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {subjects
                             .filter(subject => !subject.batch || subject.batch === '')
                             .map((subject) => (
                               <div
                                 key={subject.id}
-                                onClick={() => toggleSubjectForBatch(batch.name, subject.id)}
-                                className="p-3 rounded-lg bg-surface/50 border border-border text-secondary hover:border-accent-cyan/30 hover:text-primary cursor-pointer transition-all hover:bg-surface/70"
+                                onClick={() => updatingSubject !== subject.id && toggleSubjectForBatch(batch.name, subject.id)}
+                                className={`p-3 rounded-lg border transition-all group ${
+                                  updatingSubject === subject.id
+                                    ? 'bg-accent-cyan/20 border-accent-cyan/50 cursor-not-allowed'
+                                    : 'bg-surface/50 border-border text-secondary hover:border-accent-cyan/30 hover:text-primary cursor-pointer hover:bg-surface/70'
+                                }`}
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex-1">
                                     <div className="font-medium text-sm">{subject.code}</div>
                                     <div className="text-xs opacity-75 truncate">{subject.name}</div>
                                   </div>
-                                  <div className="text-xs whitespace-nowrap ml-2">
-                                    {subject.credits} cr
-                                    {subject.is_practical && (
-                                      <span className="ml-1 text-accent-pink font-medium">Lab</span>
+                                  <div className="flex items-center gap-2 ml-2">
+                                    <span className="text-xs whitespace-nowrap">
+                                      {subject.credits} cr
+                                      {subject.is_practical && (
+                                        <span className="ml-1 text-accent-pink font-medium">Lab</span>
+                                      )}
+                                    </span>
+                                    {updatingSubject === subject.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin text-accent-cyan" />
+                                    ) : (
+                                      <Plus className="h-3 w-3 opacity-0 group-hover:opacity-100 text-accent-cyan transition-opacity" />
                                     )}
                                   </div>
                                 </div>
