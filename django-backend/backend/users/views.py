@@ -2,11 +2,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.permissions import AllowAny
 from .models import User
 from django.contrib.auth.hashers import make_password
 from django.utils.crypto import get_random_string
 from .serializers import CustomTokenObtainPairSerializer, UserRegistrationSerializer
 import json
+from django.db import models
 
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -16,6 +18,31 @@ class RegisterView(APIView):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            
+            # Automatically assign user to department if specified
+            department_id = request.data.get('department')
+            if department_id:
+                try:
+                    from timetable.models import Department, UserDepartment
+                    department = Department.objects.get(id=department_id)
+                    
+                    # Check if this is the first user in the department
+                    existing_users = UserDepartment.objects.filter(department=department, is_active=True).count()
+                    
+                    # First user becomes ADMIN, others become TEACHER
+                    role = 'ADMIN' if existing_users == 0 else 'TEACHER'
+                    
+                    # Create user-department relationship
+                    UserDepartment.objects.create(
+                        user=user,
+                        department=department,
+                        role=role
+                    )
+                except Department.DoesNotExist:
+                    pass  # Department doesn't exist, skip assignment
+                except Exception as e:
+                    print(f"Error assigning user to department: {e}")
+            
             return Response({
                 'message': 'User created successfully',
                 'user': {
@@ -99,7 +126,7 @@ class ResetPasswordView(APIView):
                 
                 # Return user info for debugging
                 return Response({
-                    'message': 'Password reset successfully',
+                    'message': 'Password reset successful',
                     'password_verified': password_verified,
                     'user_info': {
                         'username': user.username,
@@ -113,3 +140,92 @@ class ResetPasswordView(APIView):
                 
         except User.DoesNotExist:
             return Response({'error': 'User with this email does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class UsersListView(APIView):
+    """View to list users for shared access functionality"""
+    
+    def get(self, request):
+        try:
+            # Get current user's department
+            from timetable.models import UserDepartment
+            current_user_dept = None
+            
+            try:
+                user_dept = UserDepartment.objects.get(user=request.user, is_active=True)
+                current_user_dept = user_dept.department
+            except UserDepartment.DoesNotExist:
+                pass
+            
+            # Get all users (excluding current user)
+            users = User.objects.exclude(id=request.user.id).filter(is_active=True)
+            
+            # Filter by department if user has one
+            if current_user_dept:
+                # Get users in the same department or users who have shared access to this department
+                from timetable.models import SharedAccess
+                shared_users = SharedAccess.objects.filter(
+                    department=current_user_dept,
+                    shared_with__is_active=True
+                ).values_list('shared_with_id', flat=True)
+                
+                # Include users in same department and users with shared access
+                users = users.filter(
+                    models.Q(userdepartment__department=current_user_dept) |
+                    models.Q(id__in=shared_users)
+                ).distinct()
+            
+            user_list = []
+            for user in users:
+                user_data = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name or '',
+                    'last_name': user.last_name or '',
+                    'full_name': f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+                }
+                user_list.append(user_data)
+            
+            return Response(user_list, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to fetch users: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PublicDepartmentsView(APIView):
+    """Public endpoint to list departments for signup"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        try:
+            from timetable.models import Department
+            # Only return departments that actually exist and are active
+            departments = Department.objects.filter(
+                is_active=True
+            ).exclude(
+                name__isnull=True
+            ).exclude(
+                name__exact=''
+            ).order_by('name')
+            
+            department_list = []
+            for dept in departments:
+                dept_data = {
+                    'id': dept.id,
+                    'name': dept.name,
+                    'code': dept.code,
+                    'description': dept.description or ''
+                }
+                department_list.append(dept_data)
+            
+            return Response(department_list, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to fetch departments: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

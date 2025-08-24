@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment, Department, UserDepartment, SharedAccess
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import ScheduleConfig, TimetableEntry
@@ -30,7 +30,10 @@ from .serializers import (
     ConfigSerializer,
     ClassGroupSerializer,
     BatchSerializer,
-    TeacherSubjectAssignmentSerializer
+    TeacherSubjectAssignmentSerializer,
+    DepartmentSerializer,
+    UserDepartmentSerializer,
+    SharedAccessSerializer
 )
 
 from .tasks import (
@@ -4419,4 +4422,325 @@ class ConstraintResolverView(APIView):
                     return True
 
         return False
+
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing departments"""
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter departments based on user's access"""
+        user = self.request.user
+        if user.is_superuser:
+            return Department.objects.all()
+        
+        # Get user's department
+        try:
+            user_dept = UserDepartment.objects.get(user=user, is_active=True)
+            return Department.objects.filter(id=user_dept.department.id)
+        except UserDepartment.DoesNotExist:
+            return Department.objects.none()
+
+
+class UserDepartmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing user-department relationships"""
+    queryset = UserDepartment.objects.all()
+    serializer_class = UserDepartmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter based on user's access"""
+        user = self.request.user
+        if user.is_superuser:
+            return UserDepartment.objects.all()
+        
+        # Get user's department
+        try:
+            user_dept = UserDepartment.objects.get(user=user, is_active=True)
+            return UserDepartment.objects.filter(department=user_dept.department)
+        except UserDepartment.DoesNotExist:
+            return UserDepartment.objects.none()
+
+
+class SharedAccessViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing shared access"""
+    queryset = SharedAccess.objects.all()
+    serializer_class = SharedAccessSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter based on user's access"""
+        user = self.request.user
+        if user.is_superuser:
+            return SharedAccess.objects.all()
+        
+        # Get user's department
+        try:
+            user_dept = UserDepartment.objects.get(user=user, is_active=True)
+            # Show shared access where user is owner or recipient
+            return SharedAccess.objects.filter(
+                models.Q(owner=user) | models.Q(shared_with=user),
+                department=user_dept.department
+            )
+        except UserDepartment.DoesNotExist:
+            return SharedAccess.objects.none()
+
+    def perform_create(self, serializer):
+        """Set the owner when creating shared access"""
+        # Prevent sharing with yourself
+        if serializer.validated_data.get('shared_with') == self.request.user:
+            raise PermissionError("You cannot share access with yourself.")
+        
+        serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        """Only allow updates by the owner"""
+        instance = self.get_object()
+        if instance.owner != self.request.user:
+            raise PermissionError("Only the owner can modify shared access")
+        serializer.save()
+
+
+# Mixin for data isolation
+class DepartmentDataMixin:
+    """Mixin to filter data based on user's department and shared access"""
+    
+    def get_user_department(self, user):
+        """Get the department for a user"""
+        try:
+            return UserDepartment.objects.get(user=user, is_active=True).department
+        except UserDepartment.DoesNotExist:
+            return None
+    
+    def get_accessible_departments(self, user):
+        """Get all departments a user can access (own + shared)"""
+        departments = set()
+        
+        # User's own department
+        own_dept = self.get_user_department(user)
+        if own_dept:
+            departments.add(own_dept.id)
+        
+        # Departments shared with user
+        shared_depts = SharedAccess.objects.filter(
+            shared_with=user,
+            is_active=True
+        ).values_list('department_id', flat=True)
+        departments.update(shared_depts)
+        
+        return list(departments)
+    
+    def filter_by_department_access(self, queryset, user):
+        """Filter queryset based on user's department access and shared access permissions"""
+        if user.is_superuser:
+            return queryset
+        
+        accessible_depts = self.get_accessible_departments(user)
+        if not accessible_depts:
+            return queryset.none()
+        
+        # Start with user's own department data
+        queryset = queryset.filter(department_id__in=accessible_depts)
+        
+        # For shared departments, apply additional filtering based on shared access settings
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            # User can see all data from their own department
+            pass
+        else:
+            # User only has shared access, apply shared access restrictions
+            shared_restrictions = []
+            for dept_id in accessible_depts:
+                try:
+                    shared_access = SharedAccess.objects.get(
+                        shared_with=user,
+                        department_id=dept_id,
+                        is_active=True
+                    )
+                    
+                    # Apply restrictions based on what's shared
+                    if not shared_access.share_subjects and self.model == Subject:
+                        shared_restrictions.append(~models.Q(department_id=dept_id))
+                    if not shared_access.share_teachers and self.model == Teacher:
+                        shared_restrictions.append(~models.Q(department_id=dept_id))
+                    if not shared_access.share_classrooms and self.model == Classroom:
+                        shared_restrictions.append(~models.Q(department_id=dept_id))
+                    if not shared_access.share_batches and self.model == Batch:
+                        shared_restrictions.append(~models.Q(department_id=dept_id))
+                    if not shared_access.share_constraints and self.model == ScheduleConfig:
+                        shared_restrictions.append(~models.Q(department_id=dept_id))
+                    if not shared_access.share_timetable and self.model == TimetableEntry:
+                        shared_restrictions.append(~models.Q(department_id=dept_id))
+                        
+                except SharedAccess.DoesNotExist:
+                    pass
+            
+            if shared_restrictions:
+                queryset = queryset.exclude(models.Q(*shared_restrictions, _connector=models.Q.OR))
+        
+        return queryset
+
+
+# Update existing ViewSets to use the mixin
+class SubjectViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter subjects based on user's department access"""
+        queryset = super().get_queryset()
+        return self.filter_by_department_access(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        """Set department and owner when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            serializer.save(department=user_dept, owner=user)
+        else:
+            serializer.save(owner=user)
+
+
+class TeacherViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = Teacher.objects.all()
+    serializer_class = TeacherSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter teachers based on user's department access"""
+        queryset = super().get_queryset()
+        return self.filter_by_department_access(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        """Set department and owner when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            serializer.save(department=user_dept, owner=user)
+        else:
+            serializer.save(owner=user)
+
+
+class ClassroomViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = Classroom.objects.all()
+    serializer_class = ClassroomSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter classrooms based on user's department access"""
+        queryset = super().get_queryset()
+        return self.filter_by_department_access(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        """Set department and owner when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            serializer.save(department=user_dept, owner=user)
+        else:
+            serializer.save(owner=user)
+
+
+class ScheduleConfigViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = ScheduleConfig.objects.all()
+    serializer_class = ScheduleConfigSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter configs based on user's department access"""
+        queryset = super().get_queryset()
+        return self.filter_by_department_access(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        """Set department and owner when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            serializer.save(department=user_dept, owner=user)
+        else:
+            serializer.save(owner=user)
+
+
+class BatchViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = Batch.objects.all()
+    serializer_class = BatchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter batches based on user's department access"""
+        queryset = super().get_queryset()
+        return self.filter_by_department_access(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        """Set department and owner when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            serializer.save(department=user_dept, owner=user)
+        else:
+            serializer.save(owner=user)
+
+
+class TimetableEntryViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = TimetableEntry.objects.all()
+    serializer_class = TimetableEntrySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter entries based on user's department access"""
+        queryset = super().get_queryset()
+        return self.filter_by_department_access(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        """Set department and owner when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        if user_dept:
+            serializer.save(department=user_dept, owner=user)
+        else:
+            serializer.save(owner=user)
+
+
+class TeacherSubjectAssignmentViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
+    queryset = TeacherSubjectAssignment.objects.all()
+    serializer_class = TeacherSubjectAssignmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter assignments based on user's department access"""
+        queryset = super().get_queryset()
+        # Filter by department through related models
+        accessible_depts = self.get_accessible_departments(self.request.user)
+        if not accessible_depts:
+            return queryset.none()
+        
+        return queryset.filter(
+            models.Q(teacher__department_id__in=accessible_depts) |
+            models.Q(subject__department_id__in=accessible_depts) |
+            models.Q(batch__department_id__in=accessible_depts)
+        )
+
+    def perform_create(self, serializer):
+        """Validate department consistency when creating"""
+        user = self.request.user
+        user_dept = self.get_user_department(user)
+        
+        # Check if all related objects belong to the same department
+        teacher = serializer.validated_data.get('teacher')
+        subject = serializer.validated_data.get('subject')
+        batch = serializer.validated_data.get('batch')
+        
+        if user_dept:
+            # Ensure all objects belong to user's department
+            if teacher and hasattr(teacher, 'department') and teacher.department != user_dept:
+                raise serializers.ValidationError("Teacher must belong to your department")
+            if subject and hasattr(subject, 'department') and subject.department != user_dept:
+                raise serializers.ValidationError("Subject must belong to your department")
+            if batch and hasattr(batch, 'department') and batch.department != user_dept:
+                raise serializers.ValidationError("Batch must belong to your department")
+        
+        serializer.save()
 

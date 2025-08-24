@@ -27,6 +27,15 @@ export default function Login() {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
+      // Fetch and store user information
+      try {
+        const userResponse = await api.get('/api/auth/profile/');
+        localStorage.setItem('user', JSON.stringify(userResponse.data));
+      } catch (userError) {
+        console.error('Error fetching user data:', userError);
+        // Continue anyway, user data might not be critical for all operations
+      }
+
       router.push('/components/DepartmentConfig');
     } catch (error) {
       if (error.response?.data?.detail) {

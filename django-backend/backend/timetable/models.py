@@ -7,6 +7,9 @@ class Classroom(models.Model):
     name = models.CharField(max_length=50)
     capacity = models.PositiveIntegerField()
     building = models.CharField(max_length=50)
+    # Add department and owner fields for data isolation
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, null=True, blank=True)
 
     # Room classification properties
     @property
@@ -59,6 +62,9 @@ class ScheduleConfig(models.Model):
     semester = models.CharField(max_length=50, default="Fall 2024")
     academic_year = models.CharField(max_length=20, default="2024-2025")
     created_at = models.DateTimeField(auto_now_add=True)
+    # Add department and owner fields for data isolation
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, null=True, blank=True)
 
     def save(self, *args, **kwargs):
         # Ensure periods is always stored as array of strings
@@ -110,11 +116,14 @@ class ClassGroup(models.Model):
 class Batch(models.Model):
     name = models.CharField(max_length=10, unique=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.")
     description = models.CharField(max_length=100, help_text="e.g., 8th Semester - Final Year")
-    semester_number = models.PositiveIntegerField(help_text="e.g., 8 for 8th semester")
+    semester_number = models.PositiveIntegerField(default=8, help_text="e.g., 8 for 8th semester")
     academic_year = models.CharField(max_length=20, default="2024-2025")
     total_sections = models.PositiveIntegerField(default=1, help_text="Number of sections in this batch (e.g., 3 for I, II, III)")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Add department and owner fields for data isolation
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         ordering = ['-semester_number']  # Final year first
@@ -146,6 +155,9 @@ class Subject(models.Model):
     credits = models.PositiveIntegerField()
     is_practical = models.BooleanField(default=False)
     batch = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.")
+    # Add department and owner fields for data isolation
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         # Allow up to 2 subjects with the same code (theory + practical)
@@ -180,6 +192,9 @@ class Teacher(models.Model):
     # Note: subjects relationship now handled through TeacherSubjectAssignment
     max_classes_per_day = models.PositiveIntegerField(default=4)
     unavailable_periods = models.JSONField(default=dict, blank=True)
+    # Add department and owner fields for data isolation
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -261,9 +276,89 @@ class TimetableEntry(models.Model):
     semester = models.CharField(max_length=50, default="Fall 2024")
     academic_year = models.CharField(max_length=20, default="2024-2025")
     created_at = models.DateTimeField(auto_now_add=True)
+    # Add department and owner fields for data isolation
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         ordering = ['day', 'period']
 
     def __str__(self):
         return f"{self.day} Period {self.period}: {self.subject} {'(PR)' if self.is_practical else ''} - {self.teacher} - {self.classroom}"
+
+
+class Department(models.Model):
+    """Model to represent different departments"""
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=10, unique=True, help_text="Short department code (e.g., SWE, CS, EE)")
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class UserDepartment(models.Model):
+    """Model to link users with departments"""
+    user = models.OneToOneField('users.User', on_delete=models.CASCADE)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+    role = models.CharField(max_length=20, choices=[
+        ('ADMIN', 'Administrator'),
+        ('TEACHER', 'Teacher'),
+        ('VIEWER', 'Viewer'),
+    ], default='TEACHER')
+    joined_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ['user', 'department']
+        ordering = ['department', 'role', 'user__username']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.department.name} ({self.role})"
+
+
+class SharedAccess(models.Model):
+    """Model to manage shared access between users"""
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='shared_by_me')
+    shared_with = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='shared_with_me')
+    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+    access_level = models.CharField(max_length=20, choices=[
+        ('VIEW', 'View Only'),
+        ('COMMENT', 'Comment'),
+        ('EDIT', 'Edit'),
+    ], default='VIEW')
+    shared_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True, help_text="Optional notes about this shared access")
+    
+    # New fields for comprehensive data sharing
+    share_subjects = models.BooleanField(default=True, help_text="Share subjects data")
+    share_teachers = models.BooleanField(default=True, help_text="Share teachers data")
+    share_classrooms = models.BooleanField(default=True, help_text="Share classrooms data")
+    share_batches = models.BooleanField(default=True, help_text="Share batches data")
+    share_constraints = models.BooleanField(default=True, help_text="Share constraints data")
+    share_timetable = models.BooleanField(default=True, help_text="Share generated timetable")
+
+    class Meta:
+        unique_together = ['owner', 'shared_with', 'department']
+        ordering = ['-shared_at']
+
+    def __str__(self):
+        return f"{self.owner.username} → {self.shared_with.username} ({self.department.name} - {self.access_level})"
+
+    def is_expired(self):
+        """Check if the shared access has expired"""
+        if not self.expires_at:
+            return False
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+
+    def is_valid(self):
+        """Check if the shared access is currently valid"""
+        return self.is_active and not self.is_expired()

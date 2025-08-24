@@ -10,7 +10,8 @@ import {
   Sliders,
   Calendar,
   LogOut,
-  GraduationCap
+  GraduationCap,
+  Share2
 } from 'lucide-react';
 
 const menuItems = [
@@ -21,7 +22,8 @@ const menuItems = [
   { name: "Teacher Assignments", icon: Users, path: "/components/TeacherAssignments" },
   { name: "Department Config", icon: Settings, path: "/components/DepartmentConfig" },
   { name: "Constraints", icon: Sliders, path: "/components/Constraints" },
-  { name: "Timetable", icon: Calendar, path: "/components/Timetable" }
+  { name: "Timetable", icon: Calendar, path: "/components/Timetable" },
+  { name: "Shared Access", icon: Share2, path: "/components/SharedAccess" }
 ];
 
 export default function Navbar() {
@@ -29,13 +31,19 @@ export default function Navbar() {
   const currentPath = router.pathname;
 
   const handleLogout = () => {
-    // Add logout logic here
+    // Clear authentication tokens
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    
+    // Redirect to login
     router.push('/components/Login');
   };
 
   return (
     <div className="w-[280px] bg-surface border-r border-border flex flex-col h-screen sticky top-0">
-      <div className="p-6 flex-1">
+      {/* Header Section - Fixed */}
+      <div className="p-6 flex-shrink-0">
         <div className="mb-8">
           <div className="relative h-12 w-12 mb-4">
             <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan to-accent-pink rounded-xl blur opacity-40"></div>
@@ -48,8 +56,11 @@ export default function Navbar() {
           </h1>
           <p className="text-secondary/90 text-sm font-medium">AI-Powered Scheduling</p>
         </div>
+      </div>
 
-        <nav className="space-y-2">
+      {/* Navigation Section - Scrollable */}
+      <div className="flex-1 overflow-y-auto px-6">
+        <nav className="space-y-2 pb-4">
           {menuItems.map((item, index) => {
             const Icon = item.icon;
             const isActive = currentPath === item.path;
@@ -76,8 +87,8 @@ export default function Navbar() {
         </nav>
       </div>
 
-      {/* Logout Button */}
-      <div className="p-4 border-t border-border">
+      {/* Logout Button - Fixed at Bottom */}
+      <div className="flex-shrink-0 p-4 border-t border-border bg-surface">
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-secondary hover:text-primary hover:bg-surface/60 transition-all duration-300"
