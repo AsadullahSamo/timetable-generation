@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Navbar from "./Navbar";
 import Link from "next/link";
 import api from "../utils/api";
-import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Coffee, Trash2, BookOpen, Users, Edit2, AlertCircle, X } from 'lucide-react';
+import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Trash2, BookOpen, Users, Edit2, AlertCircle, X } from 'lucide-react';
 
 const DepartmentConfig = () => {
   const router = useRouter();
@@ -135,13 +135,6 @@ const DepartmentConfig = () => {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   };
 
-  const addBreakPeriod = (day, index) => {
-    const newPeriods = { ...periods };
-    const breakTime = "Break";
-    newPeriods[day].splice(index + 1, 0, breakTime);
-    setPeriods(newPeriods);
-  };
-
   const removePeriod = (day, index) => {
     const newPeriods = { ...periods };
     newPeriods[day].splice(index, 1);
@@ -220,10 +213,10 @@ const DepartmentConfig = () => {
   };
 
   const addPeriod = (day) => {
-    // Find the last non-break period
-    const lastNonBreakPeriod = [...periods[day]].reverse().find(period => period !== "Break");
-    if (!lastNonBreakPeriod) {
-      // If no non-break period found, use the start time
+    // Find the last period and add a new one after it
+    const lastPeriod = periods[day][periods[day].length - 1];
+    if (!lastPeriod) {
+      // If no periods exist, use the start time
       const newTime = incrementTime(startTime, classDuration);
       setPeriods(prev => ({
         ...prev,
@@ -232,14 +225,9 @@ const DepartmentConfig = () => {
       return;
     }
 
-    const [time, period] = lastNonBreakPeriod.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
-
-    if (period === "PM" && hours !== 12) hours += 12;
-    if (period === "AM" && hours === 12) hours = 0;
-
-    const newTime = incrementTime(`${hours}:${minutes}`, classDuration);
-
+    // Parse the last period time and add class duration
+    const [time, period] = lastPeriod.split(" ");
+    const newTime = incrementTime(time, classDuration);
     setPeriods(prev => ({
       ...prev,
       [day]: [...prev[day], formatTime(newTime)]
@@ -506,7 +494,9 @@ const DepartmentConfig = () => {
                   </button>
                   {showTooltip === "periods" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Configure your daily schedule. You can add breaks between periods and customize the timing for each day.
+                      <p className="text-secondary text-sm">
+                        Configure your daily schedule. You can customize the timing for each day.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -582,16 +572,6 @@ const DepartmentConfig = () => {
                               <div className="flex items-center justify-between">
                                 <span>{time}</span>
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
-                                  {time !== "Break" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => addBreakPeriod(day, i)}
-                                      className="text-secondary hover:text-accent-cyan transition-colors"
-                                      title="Add break after this period"
-                                    >
-                                      <Coffee className="h-4 w-4" />
-                                    </button>
-                                  )}
                                   <button
                                     type="button"
                                     onClick={() => removePeriod(day, i)}
