@@ -45,7 +45,6 @@ const TeachersConfig = () => {
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [weekDays, setWeekDays] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
   const [timetableConfig, setTimetableConfig] = useState(null);
-  const [availabilityMode, setAvailabilityMode] = useState('mandatory');
   
   // Stats calculation
   const stats = {
@@ -284,17 +283,10 @@ const TeachersConfig = () => {
               </div>
               
               <div className="relative">
-                <button 
-                  onClick={() => setAvailabilityMode(availabilityMode === 'mandatory' ? 'preferable' : 'mandatory')}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl ${
-                    availabilityMode === 'mandatory' 
-                      ? 'bg-red-500/20 text-red-500 border border-red-500/30' 
-                      : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
-                  }`}
-                >
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/20 text-red-500 border border-red-500/30">
                   <CalendarClock className="h-4 w-4" />
-                  <span>{availabilityMode === 'mandatory' ? 'Unavailable' : 'Preferred'}</span>
-                </button>
+                  <span>Unavailable Times</span>
+                </div>
               </div>
             </div>
             
@@ -328,7 +320,6 @@ const TeachersConfig = () => {
                     <ul className="mt-2 list-disc list-inside">
                       <li>Click a row to see teacher details</li>
                       <li>Red cells indicate unavailable times</li>
-                      <li>Yellow cells indicate preferred times</li>
                     </ul>
                   </div>
                 )}
@@ -416,15 +407,13 @@ const TeachersConfig = () => {
                             <td className="px-4 py-3 border border-border">
                               <div className="flex items-center gap-1">
                                 {weekDays.map((day) => {
-                                  const { unavailable } = getAvailabilityStatus(teacher, day, availabilityMode);
+                                  const { unavailable } = getAvailabilityStatus(teacher, day, 'mandatory');
                                   return (
                                     <div
                                       key={day}
                                       className={`w-5 h-5 rounded-sm flex items-center justify-center text-xs ${
                                         unavailable
-                                          ? availabilityMode === 'mandatory'
-                                            ? 'bg-red-500/20 border border-red-500/30'
-                                            : 'bg-amber-500/20 border border-amber-500/30'
+                                          ? 'bg-red-500/20 border border-red-500/30'
                                           : 'bg-background/50 border border-border'
                                       }`}
                                       title={`${day} - ${unavailable ? 'Unavailable' : 'Available'}`}
@@ -466,12 +455,12 @@ const TeachersConfig = () => {
                                 <div className="space-y-4">
                                   <h3 className="font-medium flex items-center gap-2">
                                     <Calendar className="h-4 w-4 text-accent-cyan" />
-                                    {availabilityMode === 'mandatory' ? 'Unavailable Times' : 'Preferred Times'}
+                                    Unavailable Times
                                   </h3>
                                   
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                                     {weekDays.map((day) => {
-                                      const { unavailable, times } = getAvailabilityStatus(teacher, day, availabilityMode);
+                                      const { unavailable, times } = getAvailabilityStatus(teacher, day, 'mandatory');
                                       return (
                                         <div key={day} className="space-y-2">
                                           <h4 className="text-sm font-medium text-secondary">{day}</h4>
@@ -480,11 +469,7 @@ const TeachersConfig = () => {
                                               {times.map((time, idx) => (
                                                 <div 
                                                   key={idx} 
-                                                  className={`text-sm px-3 py-2 rounded-lg ${
-                                                    availabilityMode === 'mandatory'
-                                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                      : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                                  }`}
+                                                  className="text-sm px-3 py-2 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20"
                                                 >
                                                   {time}
                                                 </div>
@@ -492,10 +477,7 @@ const TeachersConfig = () => {
                                             </div>
                                           ) : (
                                             <div className="text-sm text-secondary italic">
-                                              {availabilityMode === 'mandatory'
-                                                ? 'Available all day'
-                                                : 'No preferred times'
-                                              }
+                                              Available all day
                                             </div>
                                           )}
                                         </div>

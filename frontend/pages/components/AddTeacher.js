@@ -39,8 +39,8 @@ const AddTeacher = () => {
   const [error, setError] = useState("");
   const [showTooltip, setShowTooltip] = useState("");
   
-  // Active mode selector: "preferable" or "mandatory"
-  const [activeMode, setActiveMode] = useState("preferable");
+  // Active mode selector: only "mandatory" (unavailable times)
+  const [activeMode, setActiveMode] = useState("mandatory");
   const [formErrors, setFormErrors] = useState({});
 
   // Helper function to generate time slots from config
@@ -112,19 +112,17 @@ const AddTeacher = () => {
         // Convert availability data to internal state
         const newState = {};
         if (data.unavailable_periods) {
-          // Handle both mandatory and preferable slots
+          // Handle only mandatory (unavailable) slots
           const timeSlots = generateTimeSlots(timetableConfig);
-          for (const mode of ['mandatory', 'preferable']) {
-            const dayData = data.unavailable_periods[mode] || {};
-            for (const [day, times] of Object.entries(dayData)) {
-              if (!newState[day]) newState[day] = {};
-              times.forEach(time => {
-                const periodIndex = timeSlots[day]?.findIndex(p => p === time);
-                if (periodIndex !== -1 && periodIndex !== undefined) {
-                  newState[day][periodIndex] = mode;
-                }
-              });
-            }
+          const dayData = data.unavailable_periods['mandatory'] || {};
+          for (const [day, times] of Object.entries(dayData)) {
+            if (!newState[day]) newState[day] = {};
+            times.forEach(time => {
+              const periodIndex = timeSlots[day]?.findIndex(p => p === time);
+              if (periodIndex !== -1 && periodIndex !== undefined) {
+                newState[day][periodIndex] = 'mandatory';
+              }
+            });
           }
         }
         setAvailabilityState(newState);
@@ -175,8 +173,8 @@ const AddTeacher = () => {
       const teacherData = {
         name,
         email,
-                    max_classes_per_day: maxClasses,
-        unavailable_periods: availability
+        max_classes_per_day: maxClasses,
+        unavailable_periods: { mandatory: availability }
       };
 
       if (id) {
@@ -285,9 +283,9 @@ const AddTeacher = () => {
   };
 
   // Convert internal availabilityState into final JSON format:
-  // { mandatory: { day: [time, ...], ... }, preferable: { day: [time, ...], ... } }
+  // { mandatory: { day: [time, ...], ... } }
   const convertAvailability = () => {
-    const result = { mandatory: {}, preferable: {} };
+    const result = {};
     if (!timetableConfig) return result;
     
     const timeSlots = generateTimeSlots(timetableConfig);
@@ -299,10 +297,10 @@ const AddTeacher = () => {
         const dayPeriods = timeSlots[day] || [];
         const time = dayPeriods[periodIndex];
         if (time) {
-          if (!result[cellMode][day]) {
-            result[cellMode][day] = [];
+          if (!result[day]) {
+            result[day] = [];
           }
-          result[cellMode][day].push(time);
+          result[day].push(time);
         }
       }
     }
@@ -320,10 +318,6 @@ const AddTeacher = () => {
     
     if (mode === "mandatory") {
       return "bg-red-500/20 border border-red-500/30 text-red-500";
-    }
-    
-    if (mode === "preferable") {
-      return "bg-amber-500/20 border border-amber-500/30 text-amber-500";
     }
     
     return "bg-background/80 border border-border";
@@ -495,11 +489,10 @@ const AddTeacher = () => {
                   </button>
                   {showTooltip === "availability" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      <p>Define when the teacher is unavailable or has preferred teaching times:</p>
+                      <p>Define when the teacher is unavailable:</p>
                       <ul className="mt-2 list-disc list-inside space-y-1">
                         <li>Click a time slot to mark it</li>
                         <li><span className="text-red-500">Red</span>: Unavailable times</li>
-                        <li><span className="text-amber-500">Yellow</span>: Preferred times</li>
                       </ul>
                     </div>
                   )}
@@ -510,26 +503,10 @@ const AddTeacher = () => {
                 <button
                   type="button"
                   onClick={() => setActiveMode("mandatory")}
-                  className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-colors ${
-                    activeMode === "mandatory"
-                      ? "bg-red-500/20 text-red-500 border border-red-500/30 font-medium"
-                      : "bg-background/80 text-secondary border border-border"
-                  }`}
+                  className="px-4 py-2 rounded-xl flex items-center gap-2 transition-colors bg-red-500/20 text-red-500 border border-red-500/30 font-medium"
                 >
                   <X className="h-4 w-4" />
                   Unavailable Times
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveMode("preferable")}
-                  className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-colors ${
-                    activeMode === "preferable"
-                      ? "bg-amber-500/20 text-amber-500 border border-amber-500/30 font-medium"
-                      : "bg-background/80 text-secondary border border-border"
-                  }`}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Preferred Times
                 </button>
               </div>
               
