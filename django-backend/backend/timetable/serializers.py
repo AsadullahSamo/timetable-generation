@@ -65,33 +65,27 @@ class TeacherSerializer(serializers.ModelSerializer):
         email = attrs.get('email')
         instance = getattr(self, 'instance', None)
         
-        if name and email:
-            # Check for existing teachers with same name or email
-            existing_teachers = Teacher.objects.filter(
-                models.Q(name=name) | models.Q(email=email)
-            )
-            
-            # If updating, exclude the current instance
+        # Check for existing teachers with same name
+        if name:
+            existing_teachers_by_name = Teacher.objects.filter(name=name)
             if instance:
-                existing_teachers = existing_teachers.exclude(id=instance.id)
+                existing_teachers_by_name = existing_teachers_by_name.exclude(id=instance.id)
             
-            if existing_teachers.exists():
-                # Check which field(s) are duplicates
-                name_exists = existing_teachers.filter(name=name).exists()
-                email_exists = existing_teachers.filter(email=email).exists()
-                
-                if name_exists and email_exists:
-                    raise serializers.ValidationError({
-                        'detail': 'A teacher with this name and email already exists.'
-                    })
-                elif name_exists:
-                    raise serializers.ValidationError({
-                        'detail': 'A teacher with this name already exists.'
-                    })
-                elif email_exists:
-                    raise serializers.ValidationError({
-                        'detail': 'A teacher with this email already exists.'
-                    })
+            if existing_teachers_by_name.exists():
+                raise serializers.ValidationError({
+                    'detail': 'A teacher with this name already exists.'
+                })
+        
+        # Check for existing teachers with same email (only if email is provided)
+        if email:
+            existing_teachers_by_email = Teacher.objects.filter(email=email)
+            if instance:
+                existing_teachers_by_email = existing_teachers_by_email.exclude(id=instance.id)
+            
+            if existing_teachers_by_email.exists():
+                raise serializers.ValidationError({
+                    'detail': 'A teacher with this email already exists.'
+                })
         
         return attrs
 

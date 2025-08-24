@@ -153,8 +153,7 @@ const TeachersConfig = () => {
   // Apply all filters
   const filteredTeachers = teachers.filter(teacher => {
     const matchesSearch = 
-      teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      teacher.email.toLowerCase().includes(searchQuery.toLowerCase());
+      teacher.name.toLowerCase().includes(searchQuery.toLowerCase());
       
     const matchesSubject = 
       !filterSubject || 
@@ -236,7 +235,7 @@ const TeachersConfig = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search teachers..."
+                  placeholder="Search by teacher name..."
                   className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
                 />
               </div>
@@ -347,9 +346,8 @@ const TeachersConfig = () => {
                     <thead>
                       <tr className="bg-background/95">
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Teacher Name</th>
-                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Email</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Subject Assignments</th>
-                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Max</th>
+                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Max Classes</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Availability</th>
                         <th className="px-4 py-3 text-center border border-border text-secondary font-medium">Actions</th>
                       </tr>
@@ -370,12 +368,6 @@ const TeachersConfig = () => {
                                 {activeTeacher === teacher.id && (
                                   <CheckCircle2 className="h-4 w-4 text-accent-cyan ml-auto" />
                                 )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 border border-border">
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4 text-secondary/70" />
-                                <span className="text-secondary">{teacher.email}</span>
                               </div>
                             </td>
                             <td className="px-4 py-3 border border-border">
@@ -451,7 +443,7 @@ const TeachersConfig = () => {
                           </tr>
                           {activeTeacher === teacher.id && (
                             <tr className="bg-background/30">
-                              <td colSpan={6} className="px-4 py-4 border border-border">
+                              <td colSpan={5} className="px-4 py-4 border border-border">
                                 <div className="space-y-4">
                                   <h3 className="font-medium flex items-center gap-2">
                                     <Calendar className="h-4 w-4 text-accent-cyan" />

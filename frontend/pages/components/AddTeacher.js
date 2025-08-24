@@ -142,9 +142,8 @@ const AddTeacher = () => {
       errors.name = "Teacher name is required";
     }
     
-    if (!email.trim()) {
-      errors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
+    // Email is optional, but if provided, it must be valid
+    if (email.trim() && !/\S+@\S+\.\S+/.test(email)) {
       errors.email = "Please enter a valid email address";
     }
     
@@ -424,7 +423,7 @@ const AddTeacher = () => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Email*</label>
+                  <label className="text-sm font-medium text-secondary">Email (Optional)</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
@@ -437,8 +436,7 @@ const AddTeacher = () => {
                         }
                       }}
                       className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.email ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
-                      placeholder="email@example.com"
-                      required
+                      placeholder="email@example.com (optional)"
                     />
                   </div>
                   {formErrors.email && (

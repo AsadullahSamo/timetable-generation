@@ -8,6 +8,7 @@ import {
   GraduationCap,
   Plus,
   Edit2,
+  Clock,
   Trash2,
   Loader2,
   AlertCircle,
@@ -562,7 +563,6 @@ const TeacherAssignments = () => {
 
 
                         <div className="font-medium text-sm truncate">{teacher.name}</div>
-                        <div className="text-xs opacity-75 truncate">{teacher.email}</div>
 
                         {/* Detailed Assignment Info */}
                         <div className="text-xs mt-2 space-y-1">
