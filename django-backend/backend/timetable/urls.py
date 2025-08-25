@@ -12,6 +12,9 @@ from .views import (
     ClassRoomViewSet,  # Potential naming issue
     BatchViewSet,
     TeacherSubjectAssignmentViewSet,
+    DepartmentViewSet,
+    UserDepartmentViewSet,
+    SharedAccessViewSet,
     LatestTimetableView,
     AdvancedTimetableView,
     SimpleTimetableView,
@@ -50,6 +53,9 @@ router.register(r'timetables', TimetableViewSet, basename='timetable')
 router.register(r'configs', ConfigViewSet, basename='config')
 router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'teacher-assignments', TeacherSubjectAssignmentViewSet, basename='teacher-assignment')
+router.register(r'departments', DepartmentViewSet, basename='department')
+router.register(r'user-departments', UserDepartmentViewSet, basename='user-department')
+router.register(r'shared-access', SharedAccessViewSet, basename='shared-access')
 
 urlpatterns = [
     # Basic timetable operations
