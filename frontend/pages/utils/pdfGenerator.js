@@ -438,7 +438,7 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text('Subject and Teacher Details:', margin, currentY);
+      doc.text('Subject and Teacher Details', margin, currentY);
       currentY += 10;
       
       // Create teachers table
@@ -544,7 +544,13 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         if (theoryEntry && practicalEntry) {
           const theoryTeacher = theoryEntry.teacher || '--';
           const practicalTeacher = practicalEntry.teacher || '--';
-          teacherNames = `${theoryTeacher} (Th)/ ${practicalTeacher} (Pr)`;
+          
+          // Check if the same teacher is assigned to both theory and practical
+          if (theoryTeacher === practicalTeacher && theoryTeacher !== '--') {
+            teacherNames = `${theoryTeacher} (Th & Pr)`;
+          } else {
+            teacherNames = `${theoryTeacher} (Th)/ ${practicalTeacher} (Pr)`;
+          }
         } else if (theoryEntry) {
           teacherNames = theoryEntry.teacher || '--';
         } else if (practicalEntry) {
