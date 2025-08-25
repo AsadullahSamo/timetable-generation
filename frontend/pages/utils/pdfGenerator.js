@@ -148,51 +148,29 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
     console.log('Final sorted class groups to process:', allClassGroups);
     console.log('Total sections to include:', allClassGroups.length);
     
-    // Verify each class group has data
-    const classGroupsWithData = [];
-    const classGroupsWithoutData = [];
-    
+    // Group class groups by batch
+    const batchGroups = {};
     allClassGroups.forEach(classGroup => {
-      const entries = allSectionsData.entries.filter(entry => entry.class_group === classGroup);
-      if (entries.length > 0) {
-        classGroupsWithData.push(classGroup);
-        console.log(`✅ ${classGroup}: ${entries.length} entries`);
-        
-        // Debug: Show sample entries for this section
-        const sampleEntries = entries.slice(0, 3).map(e => ({
-          day: e.day,
-          period: e.period,
-          subject: e.subject,
-          subject_code: e.subject_code,
-          teacher: e.teacher
-        }));
-        console.log(`   Sample entries:`, sampleEntries);
-      } else {
-        classGroupsWithoutData.push(classGroup);
-        console.log(`⚠️  ${classGroup}: NO DATA`);
+      const [batchName, sectionName] = classGroup.split('-');
+      if (!batchGroups[batchName]) {
+        batchGroups[batchName] = [];
       }
+      batchGroups[batchName].push({
+        classGroup,
+        sectionName: sectionName || '',
+        entries: allSectionsData.entries.filter(entry => entry.class_group === classGroup)
+      });
     });
     
-    if (classGroupsWithoutData.length > 0) {
-      console.warn(`⚠️  ${classGroupsWithoutData.length} class groups have no data:`, classGroupsWithoutData);
-      console.warn('This might indicate a data issue or API filtering problem');
-    }
+    // Sort sections within each batch
+    Object.keys(batchGroups).forEach(batchName => {
+      batchGroups[batchName].sort((a, b) => a.sectionName.localeCompare(b.sectionName));
+    });
     
-    console.log(`📊 Summary: ${classGroupsWithData.length} sections with data, ${classGroupsWithoutData.length} without data`);
-    
-    // Additional verification: check if any sections from the original data are missing
-    if (timetableData && timetableData.entries) {
-      const originalClassGroups = [...new Set(timetableData.entries.map(entry => entry.class_group))];
-      const missingFromOriginal = originalClassGroups.filter(group => !allClassGroups.includes(group));
-      const extraInOriginal = allClassGroups.filter(group => !originalClassGroups.includes(group));
-      
-      if (missingFromOriginal.length > 0) {
-        console.warn(`⚠️  Sections in original data but missing from API:`, missingFromOriginal);
-      }
-      if (extraInOriginal.length > 0) {
-        console.log(`✅ Sections in API but not in original data:`, extraInOriginal);
-      }
-    }
+    console.log('Batch groups created:', Object.keys(batchGroups).map(batch => ({
+      batch,
+      sections: batchGroups[batch].map(s => s.classGroup)
+    })));
     
     // Create PDF document
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -229,57 +207,25 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
     doc.text(deptName, pageWidth / 2, 40, { align: 'center' });
     
     let currentY = 60;
-    let processedCount = 0;
-    const processedSections = new Set();
+    let processedBatches = 0;
     
-    // Process each class group that has data
-    for (let i = 0; i < classGroupsWithData.length; i++) {
-      const classGroup = classGroupsWithData[i];
+    // Process each batch
+    const batchNames = Object.keys(batchGroups).sort();
+    for (let batchIndex = 0; batchIndex < batchNames.length; batchIndex++) {
+      const batchName = batchNames[batchIndex];
+      const batchSections = batchGroups[batchName];
       
-      // Safety check: prevent duplicate processing
-      if (processedSections.has(classGroup)) {
-        console.log(`⚠️  Section ${classGroup} already processed, skipping...`);
-        continue;
-      }
+      console.log(`📝 Processing batch ${batchName} with ${batchSections.length} sections`);
       
-      // Filter entries for this class group
-      const classGroupEntries = allSectionsData.entries.filter(entry => entry.class_group === classGroup);
-      
-      if (classGroupEntries.length === 0) {
-        console.log(`⚠️  No entries found for ${classGroup}, skipping...`);
-        continue;
-      }
-      
-      // Additional safety check: ensure we have valid data
-      if (!classGroupEntries[0].day || !classGroupEntries[0].period) {
-        console.warn(`⚠️  Section ${classGroup} has invalid entry data, skipping...`);
-        continue;
-      }
-      
-      // Mark this section as processed
-      processedSections.add(classGroup);
-      processedCount++;
-      
-      console.log(`📝 Processing section ${classGroup} (${processedCount}/${classGroupsWithData.length}) with ${classGroupEntries.length} entries`);
-      
-      // Start each section on a new page (except the first one)
-      if (i > 0) {
+      // Start each batch on a new page (except the first one)
+      if (batchIndex > 0) {
         doc.addPage();
         currentY = 30;
-        console.log(`📄 Added new page for section ${classGroup}`);
+        console.log(`📄 Added new page for batch ${batchName}`);
       }
       
-             // Class group header
-       doc.setFontSize(14);
-       doc.setFont('helvetica', 'bold');
-       const batchName = classGroup.split('-')[0] || classGroup;
-       const sectionName = classGroup.split('-')[1] || '';
-       const sectionText = sectionName ? `SECTION-${sectionName}` : '';
-       
-       // Get batch description from database - try batch-specific info first, then fallback to general
+             // Get batch description from database
        let batchDescription = '';
-       
-       // Try to get batch-specific description first
        if (allSectionsData.batch_info && allSectionsData.batch_info[batchName]) {
          const batchData = allSectionsData.batch_info[batchName];
          if (batchData.description) {
@@ -300,138 +246,150 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
          } else if (allSectionsData.academic_year) {
            batchDescription = allSectionsData.academic_year;
          } else {
-           // Final fallback to default if no data available
            batchDescription = 'Academic Year';
          }
        }
-       
-       // Debug: Log what batch description data we received
-       console.log(`  📚 Batch description data for ${classGroup}:`, {
-         batch_name: batchName,
-         batch_info: allSectionsData.batch_info?.[batchName],
-         semester: allSectionsData.semester,
-         academic_year: allSectionsData.academic_year,
-         final_description: batchDescription
-       });
       
-      doc.text(`TIMETABLE OF ${batchName}-BATCH ${sectionText} (${batchDescription})`, pageWidth / 2, currentY, { align: 'center' });
-      currentY += 10;
-      
-      // Effective date
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      const today = new Date();
-      const dateString = today.toLocaleDateString('en-GB').split('/').join('-');
-      doc.text(`w.e.f ${dateString}`, pageWidth / 2, currentY, { align: 'center' });
-      currentY += 15;
-      
-      // Create timetable table
-      const tableData = [];
-      
-      // Add header row with days
-      const headerRow = ['Timing'];
-      allSectionsData.days.forEach(day => {
-        headerRow.push(day);
-      });
-      tableData.push(headerRow);
-      
-      // Add time slots and subjects
-      allSectionsData.timeSlots.forEach((timeSlot, index) => {
-        let formattedTimeSlot = timeSlot;
-        if (timeSlot.includes(' to ')) {
-          formattedTimeSlot = timeSlot.replace(' to ', ' - ');
-        }
-        formattedTimeSlot = formattedTimeSlot.replace(/\s+/g, ' ').trim();
+             // Process each section's timetable for this batch
+       for (let sectionIndex = 0; sectionIndex < batchSections.length; sectionIndex++) {
+         const section = batchSections[sectionIndex];
+         const classGroupEntries = section.entries;
+         
+         if (classGroupEntries.length === 0) {
+           console.log(`⚠️  No entries found for ${section.classGroup}, skipping...`);
+           continue;
+         }
+         
+         // Section header - full heading for each section
+         doc.setFontSize(14);
+         doc.setFont('helvetica', 'bold');
+         const sectionText = section.sectionName ? `SECTION-${section.sectionName}` : 'MAIN BATCH';
+         doc.text(`TIMETABLE OF ${batchName}-BATCH ${sectionText} (${batchDescription})`, pageWidth / 2, currentY, { align: 'center' });
+         currentY += 10;
+         
+         // Add w.e.f. text only for the first section of each batch
+         if (sectionIndex === 0) {
+           doc.setFontSize(12);
+           doc.setFont('helvetica', 'normal');
+           const today = new Date();
+           const dateString = today.toLocaleDateString('en-GB').split('/').join('-');
+           doc.text(`w.e.f ${dateString}`, pageWidth / 2, currentY, { align: 'center' });
+           currentY += 15;
+         }
         
-        const row = [formattedTimeSlot];
+        // Create timetable table for this section
+        const tableData = [];
         
+        // Add header row with days
+        const headerRow = ['Timing'];
         allSectionsData.days.forEach(day => {
-          // Find entry by day and period
-          let entry = classGroupEntries.find(e => 
-            e.day === day && e.period === (index + 1)
-          );
-          
-          // If not found, try normalized day names
-          if (!entry) {
-            const normalizeDay = (dayName) => {
-              if (typeof dayName === 'string') {
-                return dayName.toUpperCase().substring(0, 3);
-              }
-              return dayName;
-            };
-            
-            entry = classGroupEntries.find(e => 
-              normalizeDay(e.day) === normalizeDay(day) && e.period === (index + 1)
-            );
+          headerRow.push(day);
+        });
+        tableData.push(headerRow);
+        
+        // Add time slots and subjects
+        allSectionsData.timeSlots.forEach((timeSlot, index) => {
+          let formattedTimeSlot = timeSlot;
+          if (timeSlot.includes(' to ')) {
+            formattedTimeSlot = timeSlot.replace(' to ', ' - ');
           }
+          formattedTimeSlot = formattedTimeSlot.replace(/\s+/g, ' ').trim();
           
-          if (entry) {
-            let subjectCode = entry.subject_code || entry.subject;
-            let cellContent = subjectCode || '';
+          const row = [formattedTimeSlot];
+          
+          allSectionsData.days.forEach(day => {
+            // Find entry by day and period
+            let entry = classGroupEntries.find(e => 
+              e.day === day && e.period === (index + 1)
+            );
             
-            // Add room information if different from default
-            if (entry.classroom && !entry.classroom.includes('Lab. No.')) {
-              cellContent += ` [${entry.classroom}]`;
+            // If not found, try normalized day names
+            if (!entry) {
+              const normalizeDay = (dayName) => {
+                if (typeof dayName === 'string') {
+                  return dayName.toUpperCase().substring(0, 3);
+                }
+                return dayName;
+              };
+              
+              entry = classGroupEntries.find(e => 
+                normalizeDay(e.day) === normalizeDay(day) && e.period === (index + 1)
+              );
             }
             
-            row.push(cellContent);
-          } else {
-            row.push('');
+            if (entry) {
+              let subjectCode = entry.subject_code || entry.subject;
+              let cellContent = subjectCode || '';
+              
+              // Add room information if different from default
+              if (entry.classroom && !entry.classroom.includes('Lab. No.')) {
+                cellContent += ` [${entry.classroom}]`;
+              }
+              
+              row.push(cellContent);
+            } else {
+              row.push('');
+            }
+          });
+          
+          tableData.push(row);
+        });
+        
+        // Calculate column widths
+        const numDays = allSectionsData.days.length;
+        const periodColumnWidth = 35;
+        const remainingWidth = contentWidth - periodColumnWidth;
+        const dayColumnWidth = Math.max(remainingWidth / numDays, 30);
+        
+        // Generate the table for this section
+        console.log(`  📊 Creating table for ${section.classGroup} with ${tableData.length} rows`);
+        autoTable(doc, {
+          head: [tableData[0]],
+          body: tableData.slice(1),
+          startY: currentY,
+          margin: { left: margin, right: margin },
+          tableWidth: contentWidth,
+          styles: {
+            fontSize: 10,
+            cellPadding: 3,
+            lineWidth: 0.1,
+            lineColor: [100, 100, 100],
+            textColor: [50, 50, 50],
+            fillColor: [255, 255, 255],
+            overflow: 'linebreak',
+            halign: 'center',
+          },
+          headStyles: {
+            fillColor: [70, 70, 70],
+            textColor: [255, 255, 255],
+            fontSize: 11,
+            fontStyle: 'bold',
+            halign: 'center',
+          },
+          columnStyles: {
+            0: { cellWidth: periodColumnWidth, halign: 'center', cellPadding: 2, fontSize: 9 },
+            ...Array.from({ length: numDays }, (_, i) => i + 1).reduce((acc, colIndex) => {
+              acc[colIndex] = { cellWidth: dayColumnWidth, halign: 'center' };
+              return acc;
+            }, {})
+          },
+          didDrawPage: function (data) {
+            doc.setFontSize(10);
+            doc.text(`Page ${doc.internal.getNumberOfPages()}`, pageWidth - margin, pageHeight - 10);
           }
         });
         
-        tableData.push(row);
-      });
-      
-      // Calculate column widths
-      const numDays = allSectionsData.days.length;
-      const periodColumnWidth = 35;
-      const remainingWidth = contentWidth - periodColumnWidth;
-      const dayColumnWidth = Math.max(remainingWidth / numDays, 30);
-      
-             // Generate the table
-       console.log(`  📊 Creating table for ${classGroup} with ${tableData.length} rows`);
-       autoTable(doc, {
-         head: [tableData[0]],
-         body: tableData.slice(1),
-        startY: currentY,
-        margin: { left: margin, right: margin },
-        tableWidth: contentWidth,
-        styles: {
-          fontSize: 10,
-          cellPadding: 3,
-          lineWidth: 0.1,
-          lineColor: [100, 100, 100],
-          textColor: [50, 50, 50],
-          fillColor: [255, 255, 255],
-          overflow: 'linebreak',
-          halign: 'center',
-        },
-        headStyles: {
-          fillColor: [70, 70, 70],
-          textColor: [255, 255, 255],
-          fontSize: 11,
-          fontStyle: 'bold',
-          halign: 'center',
-        },
-        columnStyles: {
-          0: { cellWidth: periodColumnWidth, halign: 'center', cellPadding: 2, fontSize: 9 },
-          ...Array.from({ length: numDays }, (_, i) => i + 1).reduce((acc, colIndex) => {
-            acc[colIndex] = { cellWidth: dayColumnWidth, halign: 'center' };
-            return acc;
-          }, {})
-        },
-        didDrawPage: function (data) {
-          doc.setFontSize(10);
-          doc.text(`Page ${doc.internal.getNumberOfPages()}`, pageWidth - margin, pageHeight - 10);
+        console.log(`  ✅ Table created for ${section.classGroup}. Final Y: ${doc.lastAutoTable.finalY}`);
+        currentY = doc.lastAutoTable.finalY + 10;
+        
+        // Add some space between sections
+        if (sectionIndex < batchSections.length - 1) {
+          currentY += 5;
         }
-      });
+      }
       
-      console.log(`  ✅ Table created for ${classGroup}. Final Y: ${doc.lastAutoTable.finalY}`);
-      currentY = doc.lastAutoTable.finalY + 15;
-      
-      // Add teachers information
-      if (currentY > pageHeight - 80) {
+      // Add consolidated subject and teacher details for the entire batch
+      if (currentY > pageHeight - 100) {
         doc.addPage();
         currentY = 30;
       }
@@ -441,121 +399,125 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       doc.text('Subject and Teacher Details', margin, currentY);
       currentY += 10;
       
-      // Create teachers table
+      // Create consolidated teachers table for the entire batch
       const teacherData = [];
       const subjectGroups = {};
       
-      console.log(`  🔍 Processing ${classGroupEntries.length} entries for subject grouping...`);
+      console.log(`  🔍 Processing ${batchSections.length} sections for consolidated subject grouping...`);
       
-      // Show sample entries to understand the data structure
-      const sampleEntries = classGroupEntries.slice(0, 5).map(e => ({
-        subject_code: e.subject_code,
-        subject: e.subject,
-        is_practical: e.is_practical,
-        teacher: e.teacher,
-        day: e.day,
-        period: e.period
-      }));
-      console.log(`  📋 Sample entries:`, sampleEntries);
+      // Collect all entries from all sections in this batch
+      const allBatchEntries = batchSections.flatMap(section => section.entries);
       
-      // Group entries by CLEANED subject name to avoid duplicates
-      // The backend might create separate entries with different subject codes for theory/practical
-      // but we want to group them by their actual subject name
-      
-      classGroupEntries.forEach(entry => {
+      // Group entries by subject name across all sections
+      allBatchEntries.forEach(entry => {
         const subjectCode = entry.subject_code || entry.subject || '';
         const subjectName = entry.subject || '';
         
         // Clean the subject name for display (remove PR suffix if present)
         const cleanSubjectName = subjectName.replace(' (PR)', '').replace('(PR)', '').trim();
         
-        // Use the CLEANED subject name as the primary key for grouping
-        // This ensures theory and practical versions of the same subject are grouped together
         if (!subjectGroups[cleanSubjectName]) {
           subjectGroups[cleanSubjectName] = {
-            theory: null,
-            practical: null,
+            theory: [],
+            practical: [],
             subjectName: cleanSubjectName,
-            subjectCode: subjectCode, // Keep track of the first subject code we see
-            allSubjectCodes: new Set([subjectCode]) // Track all subject codes for this subject
+            subjectCode: subjectCode,
+            allSubjectCodes: new Set([subjectCode])
           };
         } else {
-          // Add this subject code to the set of codes for this subject
           subjectGroups[cleanSubjectName].allSubjectCodes.add(subjectCode);
         }
         
-        // Only update if we don't already have this type of entry
-        // This ensures we get exactly ONE theory and ONE practical entry per subject
-        if (entry.is_practical && !subjectGroups[cleanSubjectName].practical) {
-          subjectGroups[cleanSubjectName].practical = entry;
-          console.log(`    ✅ Added practical entry for "${cleanSubjectName}" (code: ${subjectCode})`);
-        } else if (!entry.is_practical && !subjectGroups[cleanSubjectName].theory) {
-          subjectGroups[cleanSubjectName].theory = entry;
-          console.log(`    ✅ Added theory entry for "${cleanSubjectName}" (code: ${subjectCode})`);
+        // Group by theory/practical and section
+        if (entry.is_practical) {
+          subjectGroups[cleanSubjectName].practical.push({
+            ...entry,
+            sectionName: entry.class_group.split('-')[1] || 'MAIN'
+          });
         } else {
-          console.log(`    ⚠️  Skipping ${entry.is_practical ? 'practical' : 'theory'} entry for "${cleanSubjectName}" (code: ${subjectCode}) - already exists`);
+          subjectGroups[cleanSubjectName].theory.push({
+            ...entry,
+            sectionName: entry.class_group.split('-')[1] || 'MAIN'
+          });
         }
       });
       
-      // Log the final subject groups for debugging
-      console.log(`  📊 Final subject groups created:`, Object.keys(subjectGroups).map(name => ({
-        name,
-        subjectCodes: Array.from(subjectGroups[name].allSubjectCodes),
-        hasTheory: !!subjectGroups[name].theory,
-        hasPractical: !!subjectGroups[name].practical
-      })));
-      
-      // Convert grouped data to table format
-      const processedSubjectNames = new Set(); // Ensure no duplicate subject names in final output
-      
+      // Convert grouped data to table format with smart teacher grouping
       Object.values(subjectGroups).forEach((group, index) => {
-        const theoryEntry = group.theory;
-        const practicalEntry = group.practical;
-        
-        // Final validation: ensure no duplicate subject names
-        if (processedSubjectNames.has(group.subjectName)) {
-          console.log(`  ❌ CRITICAL: Duplicate subject name found: ${group.subjectName}`);
-          return; // Skip this duplicate
-        }
-        
-        processedSubjectNames.add(group.subjectName);
-        
-        // Log the subject codes that were grouped together
-        console.log(`  🔗 Grouped subject codes for "${group.subjectName}":`, Array.from(group.allSubjectCodes));
-        
-                 // Debug logging to identify any remaining duplicates
-         console.log(`  📚 Processing subject: "${group.subjectName}"`);
-         console.log(`     Theory: ${theoryEntry ? 'Yes' : 'No'}, Practical: ${practicalEntry ? 'Yes' : 'No'}`);
+        const theoryEntries = group.theory;
+        const practicalEntries = group.practical;
         
         // Determine credit hours
         let creditHours = '';
-        if (theoryEntry && practicalEntry) {
-          const theoryCredits = theoryEntry.credits || 3;
+        if (theoryEntries.length > 0 && practicalEntries.length > 0) {
+          const theoryCredits = theoryEntries[0].credits || 3;
           creditHours = `${theoryCredits}+1`;
-        } else if (theoryEntry) {
-          const theoryCredits = theoryEntry.credits || 3;
+        } else if (theoryEntries.length > 0) {
+          const theoryCredits = theoryEntries[0].credits || 3;
           creditHours = `${theoryCredits}+0`;
-        } else if (practicalEntry) {
+        } else if (practicalEntries.length > 0) {
           creditHours = `0+1`;
         }
         
-        // Combine teacher names
-        let teacherNames = '';
-        if (theoryEntry && practicalEntry) {
-          const theoryTeacher = theoryEntry.teacher || '--';
-          const practicalTeacher = practicalEntry.teacher || '--';
-          
-          // Check if the same teacher is assigned to both theory and practical
-          if (theoryTeacher === practicalTeacher && theoryTeacher !== '--') {
-            teacherNames = `${theoryTeacher} (Th & Pr)`;
-          } else {
-            teacherNames = `${theoryTeacher} (Th)/ ${practicalTeacher} (Pr)`;
-          }
-        } else if (theoryEntry) {
-          teacherNames = theoryEntry.teacher || '--';
-        } else if (practicalEntry) {
-          teacherNames = `${practicalEntry.teacher || '--'} (Pr)`;
-        }
+                 // Smart teacher grouping logic
+         let teacherNames = '';
+         
+         if (theoryEntries.length > 0 && practicalEntries.length > 0) {
+           // Both theory and practical exist
+           const theoryTeachers = [...new Set(theoryEntries.map(e => e.teacher))].filter(t => t && t !== '--');
+           const practicalTeachers = [...new Set(practicalEntries.map(e => e.teacher))].filter(t => t && t !== '--');
+           
+           // Check if same teacher teaches both theory and practical across ALL sections
+           const allTheorySections = new Set(theoryEntries.map(e => e.sectionName));
+           const allPracticalSections = new Set(practicalEntries.map(e => e.sectionName));
+           const totalSections = new Set([...allTheorySections, ...allPracticalSections]);
+           
+           if (theoryTeachers.length === 1 && practicalTeachers.length === 1 && theoryTeachers[0] === practicalTeachers[0]) {
+             // Same teacher for both theory and practical across all sections
+             teacherNames = `${theoryTeachers[0]} (Th & Pr)`;
+           } else {
+             // Check if different teachers but each teacher teaches their type to ALL sections
+             const theoryCoversAllSections = allTheorySections.size === batchSections.length;
+             const practicalCoversAllSections = allPracticalSections.size === batchSections.length;
+             
+             if (theoryCoversAllSections && practicalCoversAllSections) {
+               // Each teacher type covers all sections - show as Teacher1 (Th) / Teacher2 (Pr)
+               const theoryTeacher = theoryTeachers[0];
+               const practicalTeacher = practicalTeachers[0];
+               teacherNames = `${theoryTeacher} (Th) / ${practicalTeacher} (Pr)`;
+             } else {
+               // Mixed assignments - show detailed breakdown
+               const theoryTeacherGroups = groupTeachersBySections(theoryEntries);
+               const practicalTeacherGroups = groupTeachersBySections(practicalEntries);
+               
+               const theoryPart = formatTeacherGroups(theoryTeacherGroups, 'Th');
+               const practicalPart = formatTeacherGroups(practicalTeacherGroups, 'Pr');
+               
+               teacherNames = [theoryPart, practicalPart].filter(Boolean).join(' / ');
+             }
+           }
+         } else if (theoryEntries.length > 0) {
+           // Only theory exists
+           const theoryTeacherGroups = groupTeachersBySections(theoryEntries);
+           teacherNames = formatTeacherGroups(theoryTeacherGroups, 'Th');
+         } else if (practicalEntries.length > 0) {
+           // Only practical exists
+           const practicalTeacherGroups = groupTeachersBySections(practicalEntries);
+           teacherNames = formatTeacherGroups(practicalTeacherGroups, 'Pr');
+         }
+         
+         // Check if same teacher teaches this subject to ALL sections (both theory and practical combined)
+         // BUT only if we haven't already set teacherNames to (Th & Pr) format
+         if (!teacherNames.includes('(Th & Pr)')) {
+           const allEntriesForSubject = [...theoryEntries, ...practicalEntries];
+           const allTeachersForSubject = [...new Set(allEntriesForSubject.map(e => e.teacher))].filter(t => t && t !== '--');
+           const allSectionsForSubject = new Set(allEntriesForSubject.map(e => e.sectionName));
+           
+           // If only one teacher teaches this subject to all sections, show just the teacher name
+           if (allTeachersForSubject.length === 1 && allSectionsForSubject.size === batchSections.length) {
+             teacherNames = allTeachersForSubject[0];
+           }
+         }
         
         teacherData.push([
           index + 1,
@@ -565,19 +527,9 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         ]);
       });
       
-      // Add teachers table
-      console.log(`  👥 Creating teachers table for ${classGroup} with ${teacherData.length} subjects`);
-      console.log(`  📊 Subject grouping summary: ${Object.keys(subjectGroups).length} unique subjects found`);
-      console.log(`  ✅ Deduplication: ${classGroupEntries.length} entries → ${Object.keys(subjectGroups).length} unique subjects`);
+      // Add consolidated teachers table
+      console.log(`  👥 Creating consolidated teachers table for batch ${batchName} with ${teacherData.length} subjects`);
       
-      // Log final subject list for verification
-      console.log(`  📋 Final subjects in table:`, teacherData.map(row => row[1]));
-      console.log(`  🔍 Final table data:`, teacherData.map((row, idx) => ({
-        index: idx + 1,
-        subject: row[1],
-        credits: row[2],
-        teacher: row[3]
-      })));
       autoTable(doc, {
         head: [['S.', 'SUBJECT NAME', 'C.H', 'TEACHER']],
         body: teacherData,
@@ -607,11 +559,10 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         }
       });
       
-      console.log(`  ✅ Teachers table created for ${classGroup}. Final Y: ${doc.lastAutoTable.finalY}`);
+      console.log(`  ✅ Consolidated teachers table created for batch ${batchName}. Final Y: ${doc.lastAutoTable.finalY}`);
       currentY = doc.lastAutoTable.finalY + 20;
       
       // Add additional information
-      // Calculate space needed for remaining content: Class advisor (15mm) + Signature (30mm) = 45mm
       const spaceNeeded = 45;
       if (currentY > pageHeight - spaceNeeded) {
         doc.addPage();
@@ -630,41 +581,22 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       
       currentY += 30;
       
-      console.log(`✅ Completed processing section ${classGroup}`);
+      processedBatches++;
+      console.log(`✅ Completed processing batch ${batchName}`);
     }
     
     // Final verification
     console.log(`\n📋 PDF Generation Summary:`);
-    console.log(`- Total sections available: ${allClassGroups.length}`);
-    console.log(`- Sections with data: ${classGroupsWithData.length}`);
-    console.log(`- Sections processed: ${processedCount}`);
+    console.log(`- Total batches available: ${Object.keys(batchGroups).length}`);
+    console.log(`- Batches processed: ${processedBatches}`);
     console.log(`- Total PDF pages: ${doc.internal.getNumberOfPages()}`);
-    console.log(`- Processed sections:`, Array.from(processedSections));
     
-    if (processedCount !== classGroupsWithData.length) {
-      console.warn(`⚠️  Mismatch: processed ${processedCount} but expected ${classGroupsWithData.length}`);
-      
-      // Find which sections were not processed
-      const unprocessedSections = classGroupsWithData.filter(group => !processedSections.has(group));
-      if (unprocessedSections.length > 0) {
-        console.error(`❌ Unprocessed sections:`, unprocessedSections);
-        throw new Error(`Failed to process ${unprocessedSections.length} sections: ${unprocessedSections.join(', ')}`);
-      }
+    if (processedBatches === 0) {
+      console.error(`❌ No batches with data found!`);
+      throw new Error('No timetable data available for any batches');
     }
     
-    if (classGroupsWithData.length === 0) {
-      console.error(`❌ No sections with data found!`);
-      throw new Error('No timetable data available for any sections');
-    }
-    
-    // Verify that all sections with data were included
-    const missingSections = classGroupsWithData.filter(group => !processedSections.has(group));
-    if (missingSections.length > 0) {
-      console.error(`❌ Critical error: ${missingSections.length} sections were not included in the PDF:`, missingSections);
-      throw new Error(`PDF generation incomplete: ${missingSections.length} sections missing`);
-    }
-    
-    console.log(`✅ All ${processedCount} sections successfully included in PDF`);
+    console.log(`✅ All ${processedBatches} batches successfully included in PDF`);
     
     // Save the PDF with dynamic academic year and date
     const today = new Date();
@@ -673,14 +605,12 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
     // Get academic year from batch data
     let academicYear = 'Unknown';
     if (allSectionsData.batch_info && Object.keys(allSectionsData.batch_info).length > 0) {
-      // Get the first batch's academic year as representative
       const firstBatchKey = Object.keys(allSectionsData.batch_info)[0];
       const firstBatch = allSectionsData.batch_info[firstBatchKey];
       if (firstBatch && firstBatch.academic_year) {
         academicYear = firstBatch.academic_year;
       }
     } else if (allSectionsData.academic_year) {
-      // Fallback to general academic year
       academicYear = allSectionsData.academic_year;
     }
     
@@ -695,3 +625,53 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
     throw error;
   }
 };
+
+// Helper function to group teachers by sections
+function groupTeachersBySections(entries) {
+  const teacherGroups = {};
+  
+  entries.forEach(entry => {
+    const teacher = entry.teacher || '--';
+    const sectionName = entry.sectionName || 'MAIN';
+    
+    if (!teacherGroups[teacher]) {
+      teacherGroups[teacher] = new Set();
+    }
+    teacherGroups[teacher].add(sectionName);
+  });
+  
+  return teacherGroups;
+}
+
+// Helper function to format teacher groups with proper section labeling
+function formatTeacherGroups(teacherGroups, type) {
+  const parts = [];
+  
+  Object.entries(teacherGroups).forEach(([teacher, sections]) => {
+    if (teacher === '--') return;
+    
+    const sectionList = Array.from(sections).sort();
+    
+    if (sectionList.length === 1) {
+      // Single section - show section name
+      const sectionLabel = getSectionLabel(sectionList[0]);
+      parts.push(`${teacher} (${sectionLabel})`);
+    } else {
+      // Multiple sections - show all section names
+      const sectionLabels = sectionList.map(section => getSectionLabel(section));
+      parts.push(`${teacher} (${sectionLabels.join('+')})`);
+    }
+  });
+  
+  return parts.join(' / ');
+}
+
+// Helper function to convert section names to proper labels
+function getSectionLabel(sectionName) {
+  if (sectionName === 'MAIN') return 'I';
+  if (sectionName === 'A') return 'I';
+  if (sectionName === 'B') return 'II';
+  if (sectionName === 'C') return 'III';
+  if (sectionName === 'D') return 'IV';
+  return sectionName;
+}
