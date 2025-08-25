@@ -147,9 +147,9 @@ def populate_subjects():
     subjects_21sw = [
         ('SM', 'Simulation and Modeling', 3, False),
         ('SQE', 'Software Quality Engineering', 3, False),
-        ('SQE2', 'Software Quality Engineering (PR)', 1, True),
+        ('SQE (PR)', 'Software Quality Engineering (PR)', 1, True),
         ('CC', 'Cloud Computing', 3, False),
-        ('CC2', 'Cloud Computing (PR)', 1, True),
+        ('CC (PR)', 'Cloud Computing (PR)', 1, True),
         ('THESIS', 'Thesis', 3, False), 
     ]
     
@@ -159,9 +159,9 @@ def populate_subjects():
         ('TSW', 'Technical & Scientific Writing', 2, False),
         ('DS', 'Discrete Structures', 3, False),
         ('DS&A', 'Data Science & Analytics', 3, False),
-        ('DS&A2', 'Data Science & Analytics (PR)', 1, True),
+        ('DS&A (PR)', 'Data Science & Analytics (PR)', 1, True),
         ('MAD', 'Mobile Application Development', 3, False),
-        ('MAD2', 'Mobile Application Development (PR)', 1, True),
+        ('MAD (PR)', 'Mobile Application Development (PR)', 1, True),
     ]
     
     # 23SW - 4th Semester (2nd Year)
@@ -169,17 +169,17 @@ def populate_subjects():
         ('ABIS', 'Agent based Intelligent Systems', 3, False),
         ('ISEC', 'Information Security', 3, False),
         ('HCI', 'Human Computer Interaction', 3, False),
-        ('SP', 'Statistics & Probability', 1, False),
+        ('SP', 'Statistics & Probability', 3, False),
         ('SCD', 'Software Construction & Development', 2, False),
-        ('SCD2', 'Software Construction & Development (PR)', 1, True),
+        ('SCD (PR)', 'Software Construction & Development (PR)', 1, True),
     ]
     
     # 24SW - 2nd Semester (1st Year)
     subjects_24sw = [
         ('DBS', 'Database Systems', 3, False),
-        ('DBS2', 'Database Systems (PR)', 1, True),
+        ('DBS (PR)', 'Database Systems (PR)', 1, True),
         ('DSA', 'Data Structures & Algorithm', 3, False),
-        ('DSA2', 'Data Structures & Algorithm (PR)', 1, True),
+        ('DSA (PR)', 'Data Structures & Algorithm (PR)', 1, True),
         ('SRE', 'Software Requirement Engineering', 3, False),
         ('OR', 'Operations Research', 3, False),
         ('SEM', 'Software Economics & Management', 3, False),
@@ -292,9 +292,9 @@ def populate_teacher_assignments():
         ('Dr. Sania Bhatti', 'SM', '21SW', ['I', 'II']),
         ('Mr. Umar Farooq', 'SM', '21SW', ['III']),
         ('Mr. Aqib Ali', 'SQE', '21SW', ['I', 'II', 'III']),
-        ('Mr. Aqib Ali', 'SQE2', '21SW', ['I', 'II', 'III']),
+        ('Mr. Aqib Ali', 'SQE (PR)', '21SW', ['I', 'II', 'III']),
         ('Dr. Rabeea Jaffari', 'CC', '21SW', ['I', 'II', 'III']),
-        ('Ms. Sana Faiz', 'CC2', '21SW', ['I', 'II', 'III']),
+        ('Ms. Sana Faiz', 'CC (PR)', '21SW', ['I', 'II', 'III']),
         
         # 22SW assignments
         ('Mr. Salahuddin Saddar', 'SPM', '22SW', ['I', 'II', 'III']),
@@ -302,9 +302,9 @@ def populate_teacher_assignments():
         ('Mr. Sarwar Ali', 'TSW', '22SW', ['III']),
         ('Ms. Shafya Qadeer', 'DS', '22SW', ['I', 'II', 'III']),
         ('Dr. Areej Fatemah', 'DS&A', '22SW', ['I', 'II', 'III']),  # Fixed typo
-        ('Ms. Aisha Esani', 'DS&A2', '22SW', ['I', 'II', 'III']),
+        ('Ms. Aisha Esani', 'DS&A (PR)', '22SW', ['I', 'II', 'III']),
         ('Ms. Mariam Memon', 'MAD', '22SW', ['I', 'II', 'III']),
-        ('Mr. Umar Farooq', 'MAD2', '22SW', ['I', 'II', 'III']),
+        ('Mr. Umar Farooq', 'MAD (PR)', '22SW', ['I', 'II', 'III']),
         
         # 23SW assignments
         ('Mr. Naveen Kumar', 'ABIS', '23SW', ['I', 'II', 'III']),
@@ -314,14 +314,14 @@ def populate_teacher_assignments():
         ('Mr. Arsalan', 'HCI', '23SW', ['III']),
         ('Mr. Mansoor Bhaagat', 'SP', '23SW', ['I', 'II', 'III']),
         ('Ms. Dua Agha', 'SCD', '23SW', ['I', 'II', 'III']),
-        ('Ms. Dua Agha', 'SCD2', '23SW', ['I', 'II', 'III']),
+        ('Ms. Dua Agha', 'SCD (PR)', '23SW', ['I', 'II', 'III']),
         
         # 24SW assignments
         ('Ms. Aleena', 'DBS', '24SW', ['I', 'II', 'III']),
-        ('Ms. Hina Ali', 'DBS2', '24SW', ['I', 'II', 'III']),
+        ('Ms. Hina Ali', 'DBS (PR)', '24SW', ['I', 'II', 'III']),
         ('Dr. Mohsin Memon', 'DSA', '24SW', ['I', 'II']),
         ('Mr. Mansoor', 'DSA', '24SW', ['III']),
-        ('Mr. Naveen Kumar', 'DSA2', '24SW', ['I', 'II', 'III']),
+        ('Mr. Naveen Kumar', 'DSA (PR)', '24SW', ['I', 'II', 'III']),
         ('Ms.Memona Sami', 'SRE', '24SW', ['I', 'II', 'III']),
         ('Ms. Amirta Dewani', 'OR', '24SW', ['I', 'II', 'III']),
         ('Mr. Junaid Ahmed', 'SEM', '24SW', ['I', 'II', 'III']),
