@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { Mail, Lock, User, Calendar, ArrowRight, Building2 } from 'lucide-react';
+import { Mail, Lock, User, Calendar, ArrowRight } from 'lucide-react';
 import api from '../utils/api';
 
 export default function Signup() {
@@ -13,32 +13,10 @@ export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [department, setDepartment] = useState('');
-  const [departments, setDepartments] = useState([]);
   const [errMsg, setErrMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Fetch departments on component mount
-  useEffect(() => {
-    fetchDepartments();
-  }, []);
-
-  const fetchDepartments = async () => {
-    try {
-      const response = await api.get('/api/auth/departments/');
-      console.log('Fetched departments:', response.data);
-      setDepartments(response.data);
-      // Set default department to first available one
-      if (response.data.length > 0) {
-        setDepartment(response.data[0].id);
-      } else {
-        console.warn('No departments available for signup');
-      }
-    } catch (error) {
-      console.error('Error fetching departments:', error);
-      // Don't show error to user as department is optional
-    }
-  };
+  useEffect(() => {}, []);
 
   const handleSignUp = async (e) => {
     e.preventDefault();
@@ -66,11 +44,6 @@ export default function Signup() {
         password_confirm: confirmPassword
       };
       
-      // Add department if selected
-      if (department) {
-        signupData.department = department;
-      }
-      
       const response = await api.post('/api/auth/register/', signupData);
 
       // Clear form on success
@@ -80,7 +53,6 @@ export default function Signup() {
       setEmail('');
       setPassword('');
       setConfirmPassword('');
-      setDepartment('');
       setErrMsg('');
 
       // Automatically redirect to login page
@@ -206,26 +178,7 @@ export default function Signup() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Department (Optional)</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building2 className="h-5 w-5 text-secondary" />
-                    </div>
-                    <select
-                      value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                    >
-                      <option value="">Select your department (optional)</option>
-                      {departments.map(dept => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name} ({dept.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Password</label>

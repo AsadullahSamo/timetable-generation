@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from users.models import User
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment, Department, UserDepartment, SharedAccess
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment, Department, UserDepartment
 # from users.serializers import UserSerializer
 from datetime import datetime
 import traceback
@@ -272,79 +272,6 @@ class UserDepartmentSerializer(serializers.ModelSerializer):
         return obj.user.username
 
 
-class SharedAccessSerializer(serializers.ModelSerializer):
-    owner_username = serializers.CharField(source='owner.username', read_only=True)
-    owner_email = serializers.CharField(source='owner.email', read_only=True)
-    shared_with_username = serializers.CharField(source='shared_with.username', read_only=True)
-    shared_with_email = serializers.CharField(source='shared_with.email', read_only=True)
-    department_name = serializers.CharField(source='department.name', read_only=True)
-    department_code = serializers.CharField(source='department.code', read_only=True)
-    is_expired = serializers.BooleanField(read_only=True)
-    is_valid = serializers.BooleanField(read_only=True)
-    
-    class Meta:
-        model = SharedAccess
-        fields = [
-            'id',
-            'owner_username',
-            'owner_email',
-            'shared_with',
-            'shared_with_username',
-            'shared_with_email',
-            'department',
-            'department_name',
-            'department_code',
-            'access_level',
-            'shared_at',
-            'expires_at',
-            'is_active',
-            'notes',
-            'share_subjects',
-            'share_teachers',
-            'share_classrooms',
-            'share_batches',
-            'share_constraints',
-            'share_timetable',
-            'is_expired',
-            'is_valid'
-        ]
-        read_only_fields = ['shared_at']
-    
-    def validate(self, attrs):
-        """Custom validation for shared access"""
-        shared_with = attrs.get('shared_with')
-        department = attrs.get('department')
-        
-        # Check if user already has access to this department
-        if shared_with and department:
-            existing_access = SharedAccess.objects.filter(
-                shared_with=shared_with,
-                department=department,
-                is_active=True
-            ).exclude(pk=getattr(self.instance, 'pk', None))
-            
-            if existing_access.exists():
-                # Get the actual user and department objects for the error message
-                from users.models import User
-                from .models import Department
-                try:
-                    user = User.objects.get(id=shared_with)
-                    dept = Department.objects.get(id=department)
-                    raise serializers.ValidationError(
-                        f"User {user.username} already has access to {dept.name} department."
-                    )
-                except (User.DoesNotExist, Department.DoesNotExist):
-                    raise serializers.ValidationError(
-                        "User already has access to this department."
-                    )
-        
-        return attrs
-    
-    def create(self, validated_data):
-        """Override create to handle the owner field properly"""
-        # The owner field will be set in the view's perform_create method
-        # We don't need to remove it here since it's read-only
-        return super().create(validated_data)
 
 class SubjectDetailsSerializer(serializers.ModelSerializer):
     teachers = serializers.SerializerMethodField()

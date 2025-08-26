@@ -14,7 +14,7 @@ from .views import (
     TeacherSubjectAssignmentViewSet,
     DepartmentViewSet,
     UserDepartmentViewSet,
-    SharedAccessViewSet,
+    # SharedAccessViewSet,
     LatestTimetableView,
     AdvancedTimetableView,
     SimpleTimetableView,
@@ -55,7 +55,7 @@ router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'teacher-assignments', TeacherSubjectAssignmentViewSet, basename='teacher-assignment')
 router.register(r'departments', DepartmentViewSet, basename='department')
 router.register(r'user-departments', UserDepartmentViewSet, basename='user-department')
-router.register(r'shared-access', SharedAccessViewSet, basename='shared-access')
+# router.register(r'shared-access', SharedAccessViewSet, basename='shared-access')
 
 urlpatterns = [
     # Basic timetable operations

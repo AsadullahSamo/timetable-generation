@@ -12,6 +12,9 @@ Key features:
 - Automatic gap filling to ensure compact scheduling (no gaps between classes)
 """
 
+import os
+import sys
+import django
 import random
 import time
 from typing import Dict, List, Tuple, Optional, Set
@@ -21,6 +24,21 @@ from django.utils import timezone
 from ..models import Subject, Teacher, Classroom, TimetableEntry, ScheduleConfig, TeacherSubjectAssignment, Batch
 from ..room_allocator import RoomAllocator
 from ..simple_gap_filler import SimpleGapFiller
+from ..enhanced_constraint_resolver import EnhancedConstraintResolver
+from ..duplicate_constraint_enforcer import duplicate_constraint_enforcer
+
+# Setup Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+django.setup()
+
+from timetable.models import (
+    TimetableEntry, Subject, Teacher, ScheduleConfig, 
+    Classroom, ClassGroup, Batch
+)
+from timetable.room_allocator import RoomAllocator
+from timetable.simple_gap_filler import SimpleGapFiller
+from timetable.enhanced_constraint_resolver import EnhancedConstraintResolver
+from timetable.duplicate_constraint_enforcer import duplicate_constraint_enforcer
 
 
 class FinalUniversalScheduler:
@@ -341,6 +359,15 @@ class FinalUniversalScheduler:
         # The Thesis Day constraint may have moved entries, causing under-scheduling
         print(f"     🔧 FINAL credit hour validation after Thesis Day constraint for {class_group}...")
         entries = self._validate_and_correct_credit_hour_compliance(entries, subjects, class_group)
+
+        # NEW: Final duplicate-theory elimination by redistribution into empty slots
+        print(f"     ♻️  Eliminating duplicate theory by redistribution for {class_group}...")
+        entries = self._eliminate_duplicate_theory_by_redistribution(entries, class_group)
+
+        # STRICT: Ensure Thesis is ONLY on Wednesday. Remove Thesis from other days and
+        # fill all Wednesday periods with Thesis, overriding other constraints.
+        print(f"     🎓 Enforcing STRICT Thesis-only Wednesday for {class_group}...")
+        entries = self._strict_thesis_wednesday_cleanup(entries, class_group)
 
         return entries
 
@@ -1077,11 +1104,10 @@ class FinalUniversalScheduler:
                     return True
             # For batches without Thesis, normal scheduling applies
 
-        # NEW CONSTRAINT: No Duplicate Theory Classes Per Day
-        # Check if this subject (if theory) already has a class scheduled on this day
-        # EXCEPTION: Thesis subjects are allowed multiple times on Wednesday for final year (existing constraint)
+        # ENHANCED CONSTRAINT: No Duplicate Theory Classes Per Day
+        # Use centralized constraint enforcer for robust checking
         if subject and not subject.is_practical:  # Only apply to theory subjects
-            # Check if this is a Thesis subject for final year
+            # Check if this is a Thesis subject for final year (existing constraint takes precedence)
             is_thesis_subject = ('thesis' in subject.name.lower() or 'thesis' in subject.code.lower())
             is_final_year = class_group.split('-')[0].startswith('21SW') if '-' in class_group else class_group.startswith('21SW')
             is_wednesday = day.lower().startswith('wed')
@@ -1090,23 +1116,12 @@ class FinalUniversalScheduler:
             if is_thesis_subject and is_final_year and is_wednesday:
                 pass  # Allow multiple Thesis classes on Wednesday for final year
             else:
-                # FIXED: Check against ALL entries, not just class_schedule
-                # First check class_schedule (current class group)
-                for (existing_day, existing_period), existing_entry in class_schedule.items():
-                    if (existing_entry.class_group == class_group and
-                        existing_entry.subject and existing_entry.subject.code == subject.code and
-                        existing_day == day and not existing_entry.is_practical):
-                        print(f"         🚫 No duplicate theory (local): {subject.code} already scheduled on {day} P{existing_period} for {class_group}")
-                        return False
-
-                # CRITICAL FIX: Also check against all previously scheduled entries
-                if all_entries:
-                    for existing_entry in all_entries:
-                        if (existing_entry.class_group == class_group and
-                            existing_entry.subject and existing_entry.subject.code == subject.code and
-                            existing_entry.day == day and not existing_entry.is_practical):
-                            print(f"         🚫 No duplicate theory (global): {subject.code} already scheduled on {day} P{existing_entry.period} for {class_group}")
-                            return False
+                # Use centralized constraint enforcer for robust duplicate theory checking
+                if not duplicate_constraint_enforcer.can_schedule_theory(
+                    all_entries, class_group, subject.code, day, period
+                ):
+                    print(f"         🚫 No duplicate theory (enforced): {subject.code} already scheduled on {day} for {class_group}")
+                    return False
 
         return True
 
@@ -3639,3 +3654,168 @@ class FinalUniversalScheduler:
         
         # Randomly select from available teachers instead of always picking the first one
         return random.choice(available_teachers)
+
+    def _eliminate_duplicate_theory_by_redistribution(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """Move duplicate theory classes to empty, valid slots per section.
+        Ensures: no duplicate theory per day, teacher/room availability, and existing constraints.
+        """
+        try:
+            # Build quick lookup schedule for this class_group
+            def build_schedule_map(local_entries: List[TimetableEntry]) -> dict:
+                schedule = {}
+                for e in local_entries:
+                    if e.class_group == class_group:
+                        schedule[(e.day, e.period)] = e
+                return schedule
+
+            updated_entries = list(entries)
+            moved_any = True
+            safety_counter = 0
+
+            while moved_any and safety_counter < 10:
+                safety_counter += 1
+                moved_any = False
+
+                # Check violations for only this class_group
+                from timetable.duplicate_constraint_enforcer import duplicate_constraint_enforcer
+                group_entries = [e for e in updated_entries if e.class_group == class_group and e.subject and not e.is_practical]
+                violations = duplicate_constraint_enforcer.check_constraint(group_entries)
+
+                # Filter to this class group only (defensive)
+                violations = [v for v in violations if v.get('class_group') == class_group]
+                if not violations:
+                    break
+
+                class_schedule = build_schedule_map(updated_entries)
+
+                for v in violations:
+                    day_with_dupe = v.get('day')
+                    subject_code = v.get('subject')
+                    duplicate_list = v.get('entries', [])
+                    # Keep one on original day; move the rest
+                    for entry_to_move in duplicate_list[1:]:
+                        subject = entry_to_move.subject
+
+                        # Candidate days: all except the duplicate day and days where this subject already exists
+                        used_days = set(e.day for e in group_entries if e.subject and e.subject.code == subject_code)
+                        candidate_days = [d for d in self.days if d not in used_days]
+
+                        moved = False
+                        for cand_day in candidate_days:
+                            if moved:
+                                break
+                            for cand_period in self.periods:
+                                if moved:
+                                    break
+                                # Fast skip if slot occupied for this section
+                                if (cand_day, cand_period) in class_schedule:
+                                    continue
+
+                                # Respect central can-schedule check
+                                if not self._can_schedule_single(class_schedule, cand_day, cand_period, class_group, subject, updated_entries):
+                                    continue
+
+                                # Teacher: prefer original teacher if available, else find another valid one
+                                chosen_teacher = None
+                                if entry_to_move.teacher and self._is_teacher_available(entry_to_move.teacher, cand_day, cand_period, 1):
+                                    chosen_teacher = entry_to_move.teacher
+                                else:
+                                    teachers = self._get_teachers_for_subject(subject, class_group)
+                                    chosen_teacher = self._find_available_teacher(teachers, cand_day, cand_period, 1)
+                                if not chosen_teacher:
+                                    continue
+
+                                # Classroom: find an available suitable classroom
+                                chosen_room = self._find_available_classroom(cand_day, cand_period, 1, class_group, subject)
+                                if not chosen_room:
+                                    continue
+
+                                # Apply move
+                                # Remove old slot from map and add new
+                                old_key = (entry_to_move.day, entry_to_move.period)
+                                if old_key in class_schedule and class_schedule[old_key] is entry_to_move:
+                                    del class_schedule[old_key]
+
+                                entry_to_move.day = cand_day
+                                entry_to_move.period = cand_period
+                                entry_to_move.teacher = chosen_teacher
+                                entry_to_move.classroom = chosen_room
+
+                                class_schedule[(cand_day, cand_period)] = entry_to_move
+                                moved = True
+                                moved_any = True
+                                print(f"       ↪️  Moved {subject.code} to {cand_day} P{cand_period} for {class_group}")
+                                break
+                # loop back to re-check
+            return updated_entries
+        except Exception as e:
+            print(f"       ⚠️ Duplicate-theory redistribution error for {class_group}: {e}")
+            return entries
+
+    def _strict_thesis_wednesday_cleanup(self, entries: List[TimetableEntry], class_group: str) -> List[TimetableEntry]:
+        """Ensure Thesis only appears on Wednesday and occupies all Wednesday periods.
+        - Remove/move Thesis from non-Wednesday days
+        - Fill all Wednesday periods with Thesis placeholders (no teacher/room required)
+        - Ignores other constraints by design
+        """
+        try:
+            # Quick helpers
+            def is_wed(day: str) -> bool:
+                return str(day).lower().startswith('wed')
+
+            # Detect thesis subject for this batch if present
+            thesis_subject: Optional[Subject] = None
+            for e in entries:
+                if e.class_group == class_group and e.subject:
+                    if 'thesis' in e.subject.code.lower() or 'thesis' in e.subject.name.lower():
+                        thesis_subject = e.subject
+                        break
+            # If none in entries, attempt to fetch one from DB
+            if thesis_subject is None:
+                try:
+                    from django.db.models import Q
+                    base_batch = class_group.split('-')[0] if '-' in class_group else class_group
+                    thesis_subject = Subject.objects.filter(
+                        Q(code__icontains='thesis') | Q(name__icontains='thesis'),
+                        batch=base_batch
+                    ).first()
+                except Exception:
+                    thesis_subject = None
+
+            # If still none, create a transient placeholder subject object (not saved)
+            if thesis_subject is None:
+                thesis_subject = Subject()
+                thesis_subject.code = 'Thesis'
+                thesis_subject.name = 'Thesis'
+                thesis_subject.credit_hours = 0
+
+            # Remove any Thesis scheduled on non-Wednesday days
+            pruned: List[TimetableEntry] = []
+            for e in entries:
+                if e.class_group == class_group and e.subject and (
+                    'thesis' in (e.subject.code or '').lower() or 'thesis' in (e.subject.name or '').lower()
+                ) and not is_wed(e.day):
+                    # Skip (drop) non-Wed thesis entries
+                    continue
+                pruned.append(e)
+
+            # Build quick occupancy map for this class group on Wednesday
+            occupied_periods = set()
+            for e in pruned:
+                if e.class_group == class_group and is_wed(e.day):
+                    occupied_periods.add(e.period)
+
+            # Fill all Wednesday periods with Thesis for this class group
+            for period in getattr(self, 'periods', []):
+                if period in occupied_periods:
+                    continue
+                thesis_entry = self._create_entry(
+                    thesis_subject, None, None,
+                    class_group, 'Wednesday', period, is_practical=False
+                )
+                pruned.append(thesis_entry)
+
+            return pruned
+        except Exception as e:
+            print(f"       ⚠️ Thesis-Wednesday cleanup error for {class_group}: {e}")
+            return entries

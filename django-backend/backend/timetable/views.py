@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment, Department, UserDepartment, SharedAccess
+from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment, Department, UserDepartment
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import ScheduleConfig, TimetableEntry
@@ -32,8 +32,7 @@ from .serializers import (
     BatchSerializer,
     TeacherSubjectAssignmentSerializer,
     DepartmentSerializer,
-    UserDepartmentSerializer,
-    SharedAccessSerializer
+    UserDepartmentSerializer
 )
 
 from .tasks import (
@@ -4464,43 +4463,7 @@ class UserDepartmentViewSet(viewsets.ModelViewSet):
             return UserDepartment.objects.none()
 
 
-class SharedAccessViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing shared access"""
-    queryset = SharedAccess.objects.all()
-    serializer_class = SharedAccessSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """Filter based on user's access"""
-        user = self.request.user
-        if user.is_superuser:
-            return SharedAccess.objects.all()
-        
-        # Get user's department
-        try:
-            user_dept = UserDepartment.objects.get(user=user, is_active=True)
-            # Show shared access where user is owner or recipient
-            return SharedAccess.objects.filter(
-                models.Q(owner=user) | models.Q(shared_with=user),
-                department=user_dept.department
-            )
-        except UserDepartment.DoesNotExist:
-            return SharedAccess.objects.none()
-
-    def perform_create(self, serializer):
-        """Set the owner when creating shared access"""
-        # Prevent sharing with yourself
-        if serializer.validated_data.get('shared_with') == self.request.user:
-            raise PermissionError("You cannot share access with yourself.")
-        
-        serializer.save(owner=self.request.user)
-
-    def perform_update(self, serializer):
-        """Only allow updates by the owner"""
-        instance = self.get_object()
-        if instance.owner != self.request.user:
-            raise PermissionError("Only the owner can modify shared access")
-        serializer.save()
+"""SharedAccess endpoints are disabled intentionally."""
 
 
 # Mixin for data isolation
@@ -4522,13 +4485,7 @@ class DepartmentDataMixin:
         own_dept = self.get_user_department(user)
         if own_dept:
             departments.add(own_dept.id)
-        
-        # Departments shared with user
-        shared_depts = SharedAccess.objects.filter(
-            shared_with=user,
-            is_active=True
-        ).values_list('department_id', flat=True)
-        departments.update(shared_depts)
+        # SharedAccess disabled: do not filter by shared access
         
         return list(departments)
     
@@ -4539,46 +4496,14 @@ class DepartmentDataMixin:
         
         accessible_depts = self.get_accessible_departments(user)
         if not accessible_depts:
-            return queryset.none()
+            # No department mapping: do not restrict data visibility
+            return queryset
         
         # Start with user's own department data
         queryset = queryset.filter(department_id__in=accessible_depts)
         
-        # For shared departments, apply additional filtering based on shared access settings
-        user_dept = self.get_user_department(user)
-        if user_dept:
-            # User can see all data from their own department
-            pass
-        else:
-            # User only has shared access, apply shared access restrictions
-            shared_restrictions = []
-            for dept_id in accessible_depts:
-                try:
-                    shared_access = SharedAccess.objects.get(
-                        shared_with=user,
-                        department_id=dept_id,
-                        is_active=True
-                    )
-                    
-                    # Apply restrictions based on what's shared
-                    if not shared_access.share_subjects and self.model == Subject:
-                        shared_restrictions.append(~models.Q(department_id=dept_id))
-                    if not shared_access.share_teachers and self.model == Teacher:
-                        shared_restrictions.append(~models.Q(department_id=dept_id))
-                    if not shared_access.share_classrooms and self.model == Classroom:
-                        shared_restrictions.append(~models.Q(department_id=dept_id))
-                    if not shared_access.share_batches and self.model == Batch:
-                        shared_restrictions.append(~models.Q(department_id=dept_id))
-                    if not shared_access.share_constraints and self.model == ScheduleConfig:
-                        shared_restrictions.append(~models.Q(department_id=dept_id))
-                    if not shared_access.share_timetable and self.model == TimetableEntry:
-                        shared_restrictions.append(~models.Q(department_id=dept_id))
-                        
-                except SharedAccess.DoesNotExist:
-                    pass
-            
-            if shared_restrictions:
-                queryset = queryset.exclude(models.Q(*shared_restrictions, _connector=models.Q.OR))
+        # Include user's own unassigned data too (in case some rows have no department)
+        queryset = queryset | self.model.objects.filter(owner=user, department__isnull=True)
         
         return queryset
 
@@ -4714,8 +4639,10 @@ class TeacherSubjectAssignmentViewSet(DepartmentDataMixin, viewsets.ModelViewSet
         queryset = super().get_queryset()
         # Filter by department through related models
         accessible_depts = self.get_accessible_departments(self.request.user)
+        # If the user has no department mapping, do not hide data
+        # Keep consistent with other viewsets behavior
         if not accessible_depts:
-            return queryset.none()
+            return queryset
         
         return queryset.filter(
             models.Q(teacher__department_id__in=accessible_depts) |

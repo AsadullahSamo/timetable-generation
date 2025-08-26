@@ -11,7 +11,7 @@ import {
   Calendar,
   LogOut,
   GraduationCap,
-  Share2
+  
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,8 +22,7 @@ const menuItems = [
   { name: "Teacher Assignments", icon: Users, path: "/components/TeacherAssignments" },
   { name: "Department Config", icon: Settings, path: "/components/DepartmentConfig" },
   { name: "Constraints", icon: Sliders, path: "/components/Constraints" },
-  { name: "Timetable", icon: Calendar, path: "/components/Timetable" },
-  { name: "Shared Access", icon: Share2, path: "/components/SharedAccess" }
+  { name: "Timetable", icon: Calendar, path: "/components/Timetable" }
 ];
 
 export default function Navbar() {

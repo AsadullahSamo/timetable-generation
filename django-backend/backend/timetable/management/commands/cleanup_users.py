@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import models
 from users.models import User
-from timetable.models import Subject, Teacher, Classroom, Batch, ScheduleConfig, TimetableEntry, Department, UserDepartment, SharedAccess
+from timetable.models import Subject, Teacher, Classroom, Batch, ScheduleConfig, TimetableEntry, Department, UserDepartment
 
 class Command(BaseCommand):
     help = 'Delete all users except the one that has data'
@@ -33,7 +33,7 @@ class Command(BaseCommand):
             (TimetableEntry, 'timetable entries'),
             (Department, 'departments'),
             (UserDepartment, 'user departments'),
-            (SharedAccess, 'shared access'),
+            # (SharedAccess, 'shared access'),
         ]
         
         for model, model_name in models_to_check:

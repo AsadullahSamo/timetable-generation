@@ -162,17 +162,9 @@ class UsersListView(APIView):
             
             # Filter by department if user has one
             if current_user_dept:
-                # Get users in the same department or users who have shared access to this department
-                from timetable.models import SharedAccess
-                shared_users = SharedAccess.objects.filter(
-                    department=current_user_dept,
-                    shared_with__is_active=True
-                ).values_list('shared_with_id', flat=True)
-                
-                # Include users in same department and users with shared access
+                # Include only users in the same department
                 users = users.filter(
-                    models.Q(userdepartment__department=current_user_dept) |
-                    models.Q(id__in=shared_users)
+                    models.Q(userdepartment__department=current_user_dept)
                 ).distinct()
             
             user_list = []

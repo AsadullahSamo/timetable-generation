@@ -6,6 +6,7 @@ Focuses specifically on filling gaps to prevent blank periods while avoiding con
 from typing import List, Dict, Set, Tuple, Optional
 from .models import TimetableEntry, Subject, Teacher, Classroom, TeacherSubjectAssignment
 from .constraint_validator import ConstraintValidator
+from .duplicate_constraint_enforcer import duplicate_constraint_enforcer
 
 
 class SimpleGapFiller:
@@ -212,10 +213,34 @@ class SimpleGapFiller:
                                entry: TimetableEntry, new_day: str, new_period: int) -> bool:
         """Check if a class can be moved to a new day/period without conflicts."""
         
+        # Never move Thesis off Wednesday, and never place non-Wed Thesis or non-Thesis onto Wednesday slots reserved for Thesis
+        subj_code = (entry.subject.code if entry.subject else "").lower()
+        subj_name = (entry.subject.name if entry.subject else "").lower()
+        is_thesis = ('thesis' in subj_code) or ('thesis' in subj_name)
+        if is_thesis and not new_day.lower().startswith('wed'):
+            return False
+        # If trying to put a non-thesis into Wednesday while this batch has Thesis reserved, disallow
+        if (not is_thesis) and new_day.lower().startswith('wed'):
+            # Detect if this class_group has Thesis reserved
+            has_thesis_reserved = any(
+                (e.class_group == entry.class_group and e.day.lower().startswith('wed') and e.subject and (
+                    'thesis' in (e.subject.code or '').lower() or 'thesis' in (e.subject.name or '').lower()
+                )) for e in entries
+            )
+            if has_thesis_reserved:
+                return False
+
         # Check if the slot is already occupied by this class group
         for e in entries:
             if (e.class_group == entry.class_group and 
                 e.day == new_day and e.period == new_period):
+                return False
+        
+        # ENHANCED CONSTRAINT: Use centralized constraint enforcer for duplicate theory checking
+        if not entry.is_practical and entry.subject:
+            if not duplicate_constraint_enforcer.can_schedule_theory(
+                entries, entry.class_group, entry.subject.code, new_day, new_period
+            ):
                 return False
         
         # Check teacher availability

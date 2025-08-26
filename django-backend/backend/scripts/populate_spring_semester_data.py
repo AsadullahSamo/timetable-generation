@@ -320,17 +320,25 @@ def populate_teacher_assignments():
     
     for teacher_name, subject_code, batch_name, sections in assignments_data:
         try:
-            teacher = Teacher.objects.get(name=teacher_name)
+            # Resolve teacher by name safely in case of duplicates
+            teacher_qs = Teacher.objects.filter(name=teacher_name)
+            if not teacher_qs.exists():
+                print(f'   ❌ Teacher not found: {teacher_name}')
+                continue
+            if teacher_qs.count() > 1:
+                print(f'   ⚠️ Multiple teachers named "{teacher_name}" found. Using the earliest created.')
+            teacher = teacher_qs.order_by('id').first()
+
             subject = Subject.objects.get(code=subject_code)
             batch = Batch.objects.get(name=batch_name)
-            
+
             assignment, created = TeacherSubjectAssignment.objects.get_or_create(
                 teacher=teacher,
                 subject=subject,
                 batch=batch,
                 defaults={'sections': sections}
             )
-            
+
             if created:
                 print(f'   ✅ Created: {teacher_name} -> {subject_code} ({batch_name} - {", ".join(sections)})')
             else:
@@ -341,9 +349,7 @@ def populate_teacher_assignments():
                     print(f'   🔄 Updated: {teacher_name} -> {subject_code} ({batch_name} - {", ".join(sections)})')
                 else:
                     print(f'   ⚪ Exists: {teacher_name} -> {subject_code} ({batch_name} - {", ".join(sections)})')
-                    
-        except Teacher.DoesNotExist:
-            print(f'   ❌ Teacher not found: {teacher_name}')
+
         except Subject.DoesNotExist:
             print(f'   ❌ Subject not found: {subject_code}')
         except Batch.DoesNotExist:

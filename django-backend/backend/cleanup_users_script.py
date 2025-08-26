@@ -11,7 +11,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
 from users.models import User
-from timetable.models import Subject, Teacher, Classroom, Batch, ScheduleConfig, TimetableEntry, Department, UserDepartment, SharedAccess
+from timetable.models import Subject, Teacher, Classroom, Batch, ScheduleConfig, TimetableEntry, Department, UserDepartment
 
 def main():
     # Get all users
@@ -31,7 +31,7 @@ def main():
         (TimetableEntry, 'timetable entries'),
         (Department, 'departments'),
         (UserDepartment, 'user departments'),
-        (SharedAccess, 'shared access'),
+        # (SharedAccess, 'shared access'),
     ]
     
     for model, model_name in models_to_check:

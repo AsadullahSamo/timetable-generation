@@ -19,6 +19,7 @@ import random
 from .models import TimetableEntry, Subject, Teacher, Classroom, ScheduleConfig, Batch
 from .enhanced_constraint_validator import EnhancedConstraintValidator
 from .enhanced_room_allocator import EnhancedRoomAllocator
+from .duplicate_constraint_enforcer import duplicate_constraint_enforcer
 
 
 class EnhancedConstraintResolver:
@@ -847,6 +848,22 @@ class EnhancedConstraintResolver:
         
         # Find available slots
         available_slots = self._find_available_slots(entries, class_group, count)
+        
+        # ENHANCED CONSTRAINT: Check for duplicate theory classes per day
+        if not subject.is_practical:  # Only apply to theory subjects
+            # Check if this subject already has classes scheduled on any day for this class group
+            used_days = set()
+            for entry in entries:
+                if (entry.class_group == class_group and 
+                    entry.subject and 
+                    entry.subject.code == subject_code and 
+                    not entry.is_practical):
+                    used_days.add(entry.day)
+            
+            # Find available slots that don't violate the duplicate theory constraint
+            available_slots = self._find_available_slots_respecting_duplicate_constraint(
+                entries, class_group, count, used_days, subject
+            )
         
         for i, (day, period) in enumerate(available_slots[:count]):
             # Find appropriate teacher
