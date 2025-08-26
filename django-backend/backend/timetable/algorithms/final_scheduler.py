@@ -3521,29 +3521,43 @@ class FinalUniversalScheduler:
         
         # Check if this day is in teacher's unavailable periods
         
-        # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}} or {'mandatory': {'Mon': ['8:00 AM']}}
         if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
             mandatory_unavailable = teacher.unavailable_periods['mandatory']
             if day in mandatory_unavailable:
                 time_slots = mandatory_unavailable[day]
-                if isinstance(time_slots, list) and len(time_slots) >= 2:
-                    # Convert time strings to period numbers
-                    start_time_str = time_slots[0]  # e.g., '8:00 AM'
-                    end_time_str = time_slots[1]    # e.g., '9:00 AM'
-                    
-                    # Convert to period numbers
-                    start_period_unavailable = self._convert_time_to_period(start_time_str)
-                    end_period_unavailable = self._convert_time_to_period(end_time_str)
-                    
-                    if start_period_unavailable is not None and end_period_unavailable is not None:
-                        # Check if any part of the requested slot overlaps with unavailable time
-                        # A slot overlaps if: requested_start < unavailable_end AND requested_end > unavailable_start
-                        requested_start = start_period
-                        requested_end = start_period + duration - 1
+                if isinstance(time_slots, list):
+                    if len(time_slots) >= 2:
+                        # Two time slots: start and end time
+                        start_time_str = time_slots[0]  # e.g., '8:00 AM'
+                        end_time_str = time_slots[1]    # e.g., '9:00 AM'
                         
-                        if requested_start <= end_period_unavailable and requested_end >= start_period_unavailable:
-                            print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
-                            return False
+                        # Convert to period numbers
+                        start_period_unavailable = self._convert_time_to_period(start_time_str)
+                        end_period_unavailable = self._convert_time_to_period(end_time_str)
+                        
+                        if start_period_unavailable is not None and end_period_unavailable is not None:
+                            # Check if any part of the requested slot overlaps with unavailable time
+                            # A slot overlaps if: requested_start < unavailable_end AND requested_end > unavailable_start
+                            requested_start = start_period
+                            requested_end = start_period + duration - 1
+                            
+                            if requested_start <= end_period_unavailable and requested_end >= start_period_unavailable:
+                                print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                return False
+                    elif len(time_slots) == 1:
+                        # Single time slot: teacher unavailable for that entire hour
+                        time_str = time_slots[0]  # e.g., '8:00 AM'
+                        unavailable_period = self._convert_time_to_period(time_str)
+                        
+                        if unavailable_period is not None:
+                            # Check if the requested slot overlaps with the unavailable period
+                            requested_start = start_period
+                            requested_end = start_period + duration - 1
+                            
+                            if requested_start <= unavailable_period <= requested_end:
+                                print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{unavailable_period} (requested: P{requested_start}-P{requested_end})")
+                                return False
             
             # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
             elif isinstance(teacher.unavailable_periods, dict):
