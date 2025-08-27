@@ -4640,6 +4640,7 @@ class TimetableEntryViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
         try:
             entry = self.get_object()
             teacher = entry.teacher
+            subject = entry.subject
 
             config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
             if not config:
@@ -4666,12 +4667,26 @@ class TimetableEntryViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
                     teacher=teacher, day=day, period=period
                 ).exclude(id=entry.id).exists()
 
+            def duplicate_theory_same_day_with_same_teacher(day: str) -> bool:
+                # Disallow scheduling the same theory subject more than once per day
+                # for the same section with the same teacher
+                if not subject or getattr(subject, 'is_practical', False) or not teacher:
+                    return False
+                return TimetableEntry.objects.filter(
+                    class_group=entry.class_group,
+                    day=day,
+                    subject=subject,
+                    teacher=teacher
+                ).exclude(id=entry.id).exists()
+
             safe = []
             for day in days:
                 for period in range(1, max_periods + 1):
                     if not is_slot_blank_for_section(day, period):
                         continue
                     if not teacher_is_free(day, period):
+                        continue
+                    if duplicate_theory_same_day_with_same_teacher(day):
                         continue
                     safe.append({'day': day, 'period': period})
 
@@ -4715,7 +4730,16 @@ class TimetableEntryViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
             ).exclude(id=entry.id).exists():
                 return Response({'detail': 'Room is not available at the target time'}, status=400)
 
-            # Note: No extra checks here beyond section blank and teacher availability
+            # Enforce duplicate theory same day with same teacher as well
+            if entry.subject and not entry.is_practical and entry.teacher:
+                dup_same_day = TimetableEntry.objects.filter(
+                    class_group=entry.class_group,
+                    day=day,
+                    subject=entry.subject,
+                    teacher=entry.teacher
+                ).exclude(id=entry.id).exists()
+                if dup_same_day:
+                    return Response({'detail': 'Duplicate theory class with same teacher on same day is not allowed'}, status=400)
 
             entry.day = day
             entry.period = period
