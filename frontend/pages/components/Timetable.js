@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Navbar from './Navbar';
+import BackButton from './BackButton';
 import api from "../utils/api";
 import { generateTimetablePDF } from "../utils/pdfGenerator";
 
@@ -114,12 +115,7 @@ const Timetable = () => {
             {error}
           </div>
           <div className="mt-8 flex justify-between items-center">
-            <button
-              className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
-              onClick={() => router.back()}
-            >
-              ← Back to Constraints
-            </button>
+            <BackButton href="/components/DepartmentConfig" label="Back: Department Config" />
             
             {/* Download Button (disabled when no data) */}
             <button
@@ -148,12 +144,7 @@ const Timetable = () => {
           <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
             Invalid timetable data structure. Please try refreshing the page.
           </div>
-          <button
-            className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
-            onClick={() => router.back()}
-          >
-            ← Back to Constraints
-          </button>
+          <BackButton href="/components/DepartmentConfig" label="Back: Department Config" />
         </div>
       </div>
     );
@@ -285,12 +276,7 @@ const Timetable = () => {
         </div>
 
         <div className="mt-8 flex justify-between items-center">
-          <button
-            className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
-            onClick={() => router.back()}
-          >
-            ← Back to Constraints
-          </button>
+          <BackButton href="/components/DepartmentConfig" label="Back: Department Config" />
           
           {/* Bottom Download Button */}
           <button

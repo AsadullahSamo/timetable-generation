@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Navbar from "./Navbar";
 import Link from "next/link";
+import BackButton from "./BackButton";
 import api from "../utils/api";
-import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Trash2, BookOpen, Users, Edit2, AlertCircle, X } from 'lucide-react';
+import { Building2, Clock, Plus, ArrowLeft, ArrowRight, Loader2, Info, Trash2, BookOpen, Users, Edit2, AlertCircle, X, CheckCircle2 } from 'lucide-react';
 
 const DepartmentConfig = () => {
   const router = useRouter();
@@ -15,6 +16,9 @@ const DepartmentConfig = () => {
   const [periods, setPeriods] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [genLoading, setGenLoading] = useState(false);
+  const [genError, setGenError] = useState('');
+  const [genSuccess, setGenSuccess] = useState('');
   const [showTooltip, setShowTooltip] = useState("");
 
   // New states for subject-batch assignment
@@ -81,6 +85,136 @@ const DepartmentConfig = () => {
       }
     });
     setPeriods(newPeriods);
+  };
+
+  // Prerequisite validation adapted from Constraints page
+  const validatePrerequisites = async () => {
+    try {
+      const [configRes, subjectsRes, teachersRes, classroomsRes, batchesRes, assignmentsRes] = await Promise.all([
+        api.get('/api/timetable/schedule-configs/'),
+        api.get('/api/timetable/subjects/'),
+        api.get('/api/timetable/teachers/'),
+        api.get('/api/timetable/classrooms/'),
+        api.get('/api/timetable/batches/'),
+        api.get('/api/timetable/teacher-assignments/')
+      ]);
+
+      const issues = [];
+
+      if (!configRes.data.length || !configRes.data[0].start_time || !configRes.data[0].days?.length || !configRes.data[0].periods?.length) {
+        issues.push('⚙️ Department Configuration: Set up working days, periods, and times');
+      }
+
+      if (!batchesRes.data.length) {
+        issues.push('🎓 Batches: Add at least one batch (class)');
+      }
+
+      if (!subjectsRes.data.length) {
+        issues.push('📚 Subjects: Add at least one subject');
+      } else {
+        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch || s.batch.trim() === '');
+        if (subjectsWithoutBatch.length > 0) {
+          issues.push(`📚 Subjects: ${subjectsWithoutBatch.length} subjects need batch assignment`);
+        }
+      }
+
+      if (!teachersRes.data.length) {
+        issues.push('👨‍🏫 Teachers: Add at least one teacher');
+      }
+
+      if (!assignmentsRes.data.length) {
+        issues.push('👨‍🏫 Teacher Assignments: Create teacher-subject-section assignments');
+      }
+
+      if (!classroomsRes.data.length) {
+        issues.push('🏫 Classrooms: Add at least one classroom');
+      }
+
+      return issues;
+    } catch (error) {
+      console.error('Validation error:', error);
+      return ['❌ Unable to validate prerequisites. Please check your connection.'];
+    }
+  };
+
+  const handleTimetableError = (error) => {
+    let errorMessage = 'Timetable generation failed. ';
+    if (error?.response?.data?.error) {
+      const apiError = error.response.data.error;
+      if (apiError.includes('No valid schedule configuration found')) {
+        errorMessage = '⚠️ Missing Department Configuration: Please set up your schedule (working days, periods, times) before generating timetables.';
+      } else if (apiError.includes('Teacher') && apiError.includes('returned more than one')) {
+        errorMessage = '⚠️ Duplicate Teacher Found: Remove duplicates in Teachers section.';
+      } else if (apiError.includes('Subject') && apiError.includes('returned more than one')) {
+        errorMessage = '⚠️ Duplicate Subject Found: Remove duplicates in Subjects section.';
+      } else if (apiError.includes('Classroom') && apiError.includes('returned more than one')) {
+        errorMessage = '⚠️ Duplicate Classroom Found: Remove duplicates in Classrooms section.';
+      } else if (apiError.includes('No subjects found')) {
+        errorMessage = '⚠️ No Subjects Added: Add subjects before generating timetables.';
+      } else if (apiError.includes('No teachers found')) {
+        errorMessage = '⚠️ No Teachers Added: Add teachers before generating timetables.';
+      } else if (apiError.includes('No classrooms found')) {
+        errorMessage = '⚠️ No Classrooms Added: Add classrooms before generating timetables.';
+      } else if (apiError.includes('No class groups found')) {
+        errorMessage = '⚠️ No Classes Added: Add class groups before generating timetables.';
+      } else if (apiError.includes('batch')) {
+        errorMessage = '⚠️ Batch Assignment Issue: Some subjects may not be assigned to batches.';
+      } else if (apiError.includes('constraint')) {
+        errorMessage = '⚠️ Constraint Conflict: Current data cannot satisfy constraints.';
+      } else if (apiError.includes('schedule')) {
+        errorMessage = '⚠️ Scheduling Conflict: Check teacher availability, classroom capacity, or time slots.';
+      } else {
+        errorMessage = `⚠️ Generation Error: ${apiError}`;
+      }
+    } else if (error?.code === 'NETWORK_ERROR' || error?.message?.includes('Network Error')) {
+      errorMessage = '🌐 Network Error: Cannot connect to the server. Ensure backend is running.';
+    } else {
+      errorMessage = `⚠️ Unexpected Error: ${error?.message || 'Unknown error'}`;
+    }
+    setGenError(errorMessage);
+  };
+
+  const handleCheckPrerequisites = async () => {
+    setGenLoading(true);
+    setGenError('');
+    setGenSuccess('');
+    const issues = await validatePrerequisites();
+    if (issues.length === 0) {
+      setGenSuccess('✅ All prerequisites are met! You can now generate the timetable.');
+    } else {
+      const issuesList = issues.map(issue => `• ${issue}`).join('\n');
+      setGenError(`⚠️ Please fix the following issues before generating timetables:\n\n${issuesList}`);
+    }
+    setGenLoading(false);
+  };
+
+  const handleGenerateTimetable = async () => {
+    setGenLoading(true);
+    setGenError('');
+    setGenSuccess('');
+    try {
+      const validationIssues = await validatePrerequisites();
+      if (validationIssues.length > 0) {
+        const issuesList = validationIssues.map(issue => `• ${issue}`).join('\n');
+        setGenError(`⚠️ Please fix the following issues before generating timetables:\n\n${issuesList}`);
+        setGenLoading(false);
+        return;
+      }
+      const response = await api.post('/api/timetable/generate-timetable/', { constraints: [] });
+      if (response.data.message === 'Timetable generated successfully') {
+        const entriesCount = response.data.entries_count || 'multiple';
+        setGenSuccess(`🎉 Timetable generated successfully! Created ${entriesCount} schedule entries. Redirecting to view timetable...`);
+        setTimeout(() => {
+          router.push('/components/Timetable');
+        }, 2000);
+      } else {
+        handleTimetableError(new Error('Failed to generate timetable'));
+      }
+    } catch (error) {
+      handleTimetableError(error);
+    } finally {
+      setGenLoading(false);
+    }
   };
 
   // Clear form and reset to create mode
@@ -305,6 +439,22 @@ const DepartmentConfig = () => {
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+        )}
+
+        {/* Generation alerts (prereq/gen) */}
+        {(genSuccess || genError) && (
+          <div className={`p-4 rounded-xl mb-6 ${genError ? 'bg-red-500/10 border border-red-500/20' : 'bg-green-500/10 border border-green-500/20'}`}>
+            <div className="flex items-start gap-3">
+              {genError ? (
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+              ) : (
+                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1 text-sm whitespace-pre-line {genError ? 'text-red-500' : 'text-green-500'}">
+                {genError || genSuccess}
+              </div>
+            </div>
           </div>
         )}
 
@@ -685,21 +835,43 @@ const DepartmentConfig = () => {
         )}
 
         <div className="flex justify-between mt-8">
-          <Link
-            href="/components/Classrooms"
-            className="px-6 py-3 border border-border text-secondary rounded-xl hover:text-primary hover:border-accent-cyan/30 transition-colors flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Classrooms
-          </Link>
+          <BackButton href="/components/TeacherAssignments" label="Back: Teacher Assignments" />
 
-          <Link
-            href="/components/Constraints"
-            className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300"
-          >
-            Next: Constraints
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex gap-3">
+            <button
+              className="px-6 py-3 border border-accent-cyan/30 text-accent-cyan rounded-xl hover:bg-accent-cyan/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleCheckPrerequisites}
+              disabled={genLoading}
+            >
+              {genLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Check Prerequisites
+            </button>
+
+            <button
+              className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={(e) => {
+                e.preventDefault();
+                handleGenerateTimetable().catch(err => handleTimetableError(err));
+              }}
+              disabled={genLoading}
+            >
+              {genLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  Generate Timetable
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -21,6 +21,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import Link from "next/link";
+import BackButton from "./BackButton";
 
 const TeacherAssignments = () => {
   const [assignments, setAssignments] = useState([]);
@@ -1002,9 +1003,10 @@ const TeacherAssignments = () => {
           )}
 
           {/* Navigation */}
-          <div className="flex justify-end mt-8">
+          <div className="flex justify-between mt-8">
+            <BackButton href="/components/Classrooms" label="Back: Classrooms" />
             <Link href="/components/DepartmentConfig">
-              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300">
+              <button className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300">
                 Next: Department Config
                 <ArrowLeft className="h-4 w-4 rotate-180" />
               </button>

@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import api from "../utils/api";
 import Head from "next/head";
 import Link from "next/link";
+import BackButton from "./BackButton";
 import {
   User,
   Mail,
@@ -352,13 +353,7 @@ const AddTeacher = () => {
         <Navbar number={4} />
         <div className="flex-1 p-8 max-w-7xl mx-auto">
           <div className="mb-8">
-            <Link 
-              href="/components/Teachers"
-              className="flex items-center gap-2 text-secondary hover:text-primary transition-colors mb-4"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Teachers
-            </Link>
+            <BackButton href="/components/Teachers" label="Back to Teachers" className="mb-4" />
             <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
               {id ? "Edit Teacher" : "Add New Teacher"}
             </h1>

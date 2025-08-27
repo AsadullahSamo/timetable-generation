@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Navbar from './Navbar';
+import BackButton from './BackButton';
 import api from '../utils/api';
 
 const ConstraintTesting = () => {
@@ -383,12 +384,7 @@ const ConstraintTesting = () => {
             {error}
           </div>
           <div className="mt-8">
-            <button 
-              className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
-              onClick={() => router.back()}
-            >
-              ← Back to Timetable
-            </button>
+            <BackButton href="/components/Timetable" label="Back to Timetable" />
           </div>
         </div>
       </div>
@@ -525,12 +521,7 @@ const ConstraintTesting = () => {
 
         {/* Back Button */}
         <div className="mt-8">
-          <button 
-            className="px-6 py-3 border border-gray-700 text-gray-400 rounded-lg hover:border-purple-500 hover:text-purple-400 transition-colors"
-            onClick={() => router.push('/components/Timetable')}
-          >
-            ← Back to Timetable
-          </button>
+          <BackButton href="/components/Timetable" label="Back to Timetable" />
         </div>
       </div>
     </div>

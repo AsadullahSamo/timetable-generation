@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import Head from "next/head";
 import Navbar from "./Navbar";
 import Link from "next/link";
+import BackButton from "./BackButton";
 import api from "../utils/api";
 import { 
   User, 
@@ -490,13 +491,7 @@ const TeachersConfig = () => {
           </div>
 
           <div className="flex justify-between mt-8">
-            <Link
-              href="/components/Subjects"
-              className="px-6 py-3 border border-border text-secondary rounded-xl hover:text-primary hover:border-accent-cyan/30 transition-colors flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
+            <BackButton href="/components/Subjects" label="Back: Subjecets" />
 
             <Link
               href="/components/Classrooms"

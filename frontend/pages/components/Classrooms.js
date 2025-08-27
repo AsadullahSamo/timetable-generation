@@ -2,6 +2,7 @@
 import Head from "next/head";
 import Navbar from "./Navbar";
 import Link from "next/link";
+import BackButton from "./BackButton";
 import api from "../utils/api";
 import {
   Building2,
@@ -140,12 +141,6 @@ const Classrooms = () => {
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">Classrooms</h1>
               <p className="text-secondary/90">Manage classrooms and their capacities</p>
             </div>
-            <Link href="/components/Teachers">
-              <button className="flex items-center gap-2 px-4 py-2 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Teachers
-              </button>
-            </Link>
           </div>
 
           {error && (
@@ -313,12 +308,7 @@ const Classrooms = () => {
 
           {/* Navigation */}
           <div className="flex justify-between mt-8">
-            <Link href="/components/Teachers">
-              <button className="flex items-center gap-2 px-6 py-3 bg-surface/80 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Teachers
-              </button>
-            </Link>
+            <BackButton href="/components/Teachers" label="Back: Teachers" />
             <Link href="/components/TeacherAssignments">
               <button className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300">
                 Next: Teacher Assignments
