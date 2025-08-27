@@ -1,4 +1,6 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from .models import Subject, Teacher, Classroom, ScheduleConfig, TimetableEntry, Config, ClassGroup, Batch, TeacherSubjectAssignment, Department, UserDepartment
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -991,6 +993,7 @@ class LatestTimetableView(APIView):
             formatted_entries = []
             for entry in entries:
                 formatted_entries.append({
+                    'id': entry.id,
                     'day': entry.day,
                     'period': entry.period,
                     'subject': f"{entry.subject.name}{' (PR)' if entry.is_practical else ''}",
@@ -4627,6 +4630,100 @@ class TimetableEntryViewSet(DepartmentDataMixin, viewsets.ModelViewSet):
             serializer.save(department=user_dept, owner=user)
         else:
             serializer.save(owner=user)
+
+    @action(detail=True, methods=['get'], url_path='safe-moves', permission_classes=[AllowAny])
+    def safe_moves(self, request, pk=None):
+        """Return a list of safe (day, period) slots for this entry.
+        Per request: consider ALL blank slots for this section, then include those
+        where THIS entry's teacher has no class anywhere (any section/batch) at that time.
+        """
+        try:
+            entry = self.get_object()
+            teacher = entry.teacher
+
+            config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
+            if not config:
+                return Response({'safe_slots': []})
+
+            # Determine max periods
+            try:
+                max_periods = len(config.periods)
+            except Exception:
+                max_periods = TimetableEntry.objects.aggregate(models.Max('period')).get('period__max') or 8
+
+            days = list(config.days)
+
+            # Helper checks using DB queries to always reflect current state
+            def is_slot_blank_for_section(day: str, period: int) -> bool:
+                return not TimetableEntry.objects.filter(
+                    class_group=entry.class_group, day=day, period=period
+                ).exclude(id=entry.id).exists()
+
+            def teacher_is_free(day: str, period: int) -> bool:
+                if not teacher:
+                    return True
+                return not TimetableEntry.objects.filter(
+                    teacher=teacher, day=day, period=period
+                ).exclude(id=entry.id).exists()
+
+            safe = []
+            for day in days:
+                for period in range(1, max_periods + 1):
+                    if not is_slot_blank_for_section(day, period):
+                        continue
+                    if not teacher_is_free(day, period):
+                        continue
+                    safe.append({'day': day, 'period': period})
+
+            return Response({'safe_slots': safe})
+        except Exception as e:
+            logger.exception("Failed to compute safe moves: %s", e)
+            return Response({'detail': 'Failed to compute safe slots'}, status=500)
+
+    @action(detail=True, methods=['post'], url_path='move', permission_classes=[AllowAny])
+    def move(self, request, pk=None):
+        """Move an entry to a new day/period. If the requested slot is free for the
+        same class_group, and the entry's teacher is free at that time across all
+        sections/batches, perform the move.
+        """
+        try:
+            entry = self.get_object()
+            day = request.data.get('day')
+            period = request.data.get('period')
+            if not day or not period:
+                return Response({'detail': 'day and period are required'}, status=400)
+
+            try:
+                period = int(period)
+            except Exception:
+                return Response({'detail': 'period must be an integer'}, status=400)
+
+            # Enforce same checks as safe-moves to guarantee no issues
+            conflict_for_section = TimetableEntry.objects.filter(
+                class_group=entry.class_group, day=day, period=period
+            ).exclude(id=entry.id).exists()
+            if conflict_for_section:
+                return Response({'detail': 'Target slot already occupied for this section'}, status=400)
+
+            if entry.teacher and TimetableEntry.objects.filter(
+                teacher=entry.teacher, day=day, period=period
+            ).exclude(id=entry.id).exists():
+                return Response({'detail': 'Teacher is not available at the target time'}, status=400)
+
+            if entry.classroom and TimetableEntry.objects.filter(
+                classroom=entry.classroom, day=day, period=period
+            ).exclude(id=entry.id).exists():
+                return Response({'detail': 'Room is not available at the target time'}, status=400)
+
+            # Note: No extra checks here beyond section blank and teacher availability
+
+            entry.day = day
+            entry.period = period
+            entry.save(update_fields=['day', 'period'])
+            return Response({'success': True})
+        except Exception as e:
+            logger.exception("Failed to move slot: %s", e)
+            return Response({'detail': 'Move failed'}, status=500)
 
 
 class TeacherSubjectAssignmentViewSet(DepartmentDataMixin, viewsets.ModelViewSet):

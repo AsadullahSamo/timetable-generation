@@ -25,7 +25,7 @@ THE 19 CONSTRAINTS:
 18. Teacher Breaks - After 2 consecutive theory classes, teacher must have a break
 """
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from collections import defaultdict
 from datetime import time, timedelta
 from .models import TimetableEntry, Subject, Teacher, Classroom, ScheduleConfig
@@ -34,35 +34,37 @@ from .models import TimetableEntry, Subject, Teacher, Classroom, ScheduleConfig
 class EnhancedConstraintValidator:
     """Enhanced constraint validator ensuring all 18 constraints work harmoniously."""
     
-    def __init__(self):
+    def __init__(self, verbose: bool = False, include: Optional[List[str]] = None):
         self.violations = []
-        self.constraint_checks = [
-            # Core scheduling constraints
-            self._check_subject_frequency,
-            self._check_practical_blocks,
-            self._check_teacher_conflicts,
-            self._check_room_conflicts,
-            self._check_friday_time_limits,
-            self._check_minimum_daily_classes,
-            self._check_empty_fridays,
-            self._check_thesis_day_constraint,
-            self._check_compact_scheduling,
-            self._check_cross_semester_conflicts,
-            self._check_teacher_assignments,
-            self._check_friday_aware_scheduling,
-            self._check_working_hours,
-            
-            # Room allocation constraints
-            self._check_same_lab_rule,
-            self._check_practicals_in_labs,
-            self._check_room_consistency,
+        self.verbose = verbose
+        # Map of short names to check functions
+        self._checks_by_name = {
+            'subject_frequency': self._check_subject_frequency,
+            'practical_blocks': self._check_practical_blocks,
+            'teacher_conflicts': self._check_teacher_conflicts,
+            'room_conflicts': self._check_room_conflicts,
+            'friday_time_limits': self._check_friday_time_limits,
+            'minimum_daily_classes': self._check_minimum_daily_classes,
+            'empty_fridays': self._check_empty_fridays,
+            'thesis_day_constraint': self._check_thesis_day_constraint,
+            'compact_scheduling': self._check_compact_scheduling,
+            'cross_semester_conflicts': self._check_cross_semester_conflicts,
+            'teacher_assignments': self._check_teacher_assignments,
+            'friday_aware_scheduling': self._check_friday_aware_scheduling,
+            'working_hours': self._check_working_hours,
+            'teacher_unavailability': self._check_teacher_unavailability,
+            'same_lab_rule': self._check_same_lab_rule,
+            'practicals_in_labs': self._check_practicals_in_labs,
+            'room_consistency': self._check_room_consistency,
+            'same_theory_subject_distribution': self._check_same_theory_subject_distribution,
+            'breaks_between_classes': self._check_breaks_between_classes,
+            'teacher_breaks': self._check_teacher_breaks,
+        }
 
-            
-            # NEW CONSTRAINTS
-            self._check_same_theory_subject_distribution,
-            self._check_breaks_between_classes,
-            self._check_teacher_breaks,
-        ]
+        if include:
+            self.constraint_checks = [self._checks_by_name[name] for name in include if name in self._checks_by_name]
+        else:
+            self.constraint_checks = list(self._checks_by_name.values())
         
         # Constraint conflict detection
         self.constraint_conflicts = {
@@ -85,13 +87,15 @@ class EnhancedConstraintValidator:
             'harmony_score': 0.0
         }
         
-        print("🔍 ENHANCED CONSTRAINT VALIDATION - ALL 19 CONSTRAINTS")
-        print("=" * 60)
+        if self.verbose:
+            print("🔍 ENHANCED CONSTRAINT VALIDATION - ALL 19 CONSTRAINTS")
+            print("=" * 60)
         
         # Run all constraint checks
         for check_func in self.constraint_checks:
             constraint_name = check_func.__name__.replace('_check_', '').replace('_', ' ').title()
-            print(f"Checking {constraint_name}...")
+            if self.verbose:
+                print(f"Checking {constraint_name}...")
             
             violations = check_func(entries)
             results['constraint_results'][constraint_name] = {
@@ -110,11 +114,12 @@ class EnhancedConstraintValidator:
         
         results['overall_compliance'] = results['total_violations'] == 0 and len(results['constraint_conflicts']) == 0
         
-        print(f"\n📊 VALIDATION RESULTS:")
-        print(f"   Total Violations: {results['total_violations']}")
-        print(f"   Constraint Conflicts: {len(results['constraint_conflicts'])}")
-        print(f"   Harmony Score: {results['harmony_score']:.2f}%")
-        print(f"   Overall Compliance: {'✅ PASS' if results['overall_compliance'] else '❌ FAIL'}")
+        if self.verbose:
+            print(f"\n📊 VALIDATION RESULTS:")
+            print(f"   Total Violations: {results['total_violations']}")
+            print(f"   Constraint Conflicts: {len(results['constraint_conflicts'])}")
+            print(f"   Harmony Score: {results['harmony_score']:.2f}%")
+            print(f"   Overall Compliance: {'✅ PASS' if results['overall_compliance'] else '❌ FAIL'}")
         
         return results
     
@@ -600,6 +605,27 @@ class EnhancedConstraintValidator:
                     'description': f"Class {entry.subject.code if entry.subject else 'Unknown'} outside working hours: {start_time_obj} - {end_time_obj}"
                 })
         
+        return violations
+
+    def _check_teacher_unavailability(self, entries: List[TimetableEntry]) -> List[Dict]:
+        """Hard constraint: teachers cannot be scheduled during their unavailable periods."""
+        violations = []
+        # Map day abbreviations
+        def day_key(day: str) -> str:
+            return (day or '').upper()[:3]
+        for e in entries:
+            if not getattr(e, 'teacher', None):
+                continue
+            unavailable = getattr(e.teacher, 'unavailable_periods', {}) or {}
+            blocked = set(unavailable.get(day_key(e.day), []) or [])
+            if e.period in blocked:
+                violations.append({
+                    'type': 'Teacher Unavailability Violation',
+                    'teacher': e.teacher.name if e.teacher else 'Unknown',
+                    'day': e.day,
+                    'period': e.period,
+                    'description': f"{e.teacher.name if e.teacher else 'Teacher'} unavailable on {e.day} period {e.period}"
+                })
         return violations
     
     # ROOM ALLOCATION CONSTRAINTS
