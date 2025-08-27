@@ -12,7 +12,6 @@ import {
   Loader2,
   ArrowLeft,
   AlertCircle,
-  Search,
   X
 } from 'lucide-react';
 
@@ -27,7 +26,7 @@ const Classrooms = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  
 
   useEffect(() => {
     fetchClassrooms();
@@ -123,9 +122,7 @@ const Classrooms = () => {
     }
   };
 
-  const filteredClassrooms = classrooms.filter(room =>
-    room.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredClassrooms = classrooms;
 
   return (
     <>
@@ -153,17 +150,7 @@ const Classrooms = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
-              <input
-                type="text"
-                placeholder="Search classrooms..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
-              />
-            </div>
+          <div className="flex items-center justify-end mb-6">
             <button
               onClick={() => {
                 setShowForm(true);
@@ -295,12 +282,10 @@ const Classrooms = () => {
                 </div>
               ))}
 
-              {filteredClassrooms.length === 0 && !loading && (
+              {classrooms.length === 0 && !loading && (
                 <div className="col-span-full text-center py-12">
                   <Building2 className="h-12 w-12 text-secondary/50 mx-auto mb-4" />
-                  <p className="text-secondary">
-                    {searchTerm ? 'No classrooms match your search.' : 'No classrooms added yet.'}
-                  </p>
+                  <p className="text-secondary">No classrooms added yet.</p>
                 </div>
               )}
             </div>

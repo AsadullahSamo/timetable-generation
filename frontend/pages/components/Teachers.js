@@ -21,12 +21,9 @@ import {
   BookOpen,
   Clock,
   Mail,
-  Filter,
   Users,
   CalendarClock,
   Briefcase,
-  Check,
-  ChevronDown,
   Calendar,
   CheckCircle2,
   BookMarked
@@ -42,8 +39,6 @@ const TeachersConfig = () => {
   const [activeTeacher, setActiveTeacher] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [assignments, setAssignments] = useState([]);
-  const [filterSubject, setFilterSubject] = useState("");
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [weekDays, setWeekDays] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
   const [timetableConfig, setTimetableConfig] = useState(null);
   
@@ -152,16 +147,9 @@ const TeachersConfig = () => {
   };
 
   // Apply all filters
-  const filteredTeachers = teachers.filter(teacher => {
-    const matchesSearch = 
-      teacher.name.toLowerCase().includes(searchQuery.toLowerCase());
-      
-    const matchesSubject = 
-      !filterSubject || 
-      (teacher.subject_names && teacher.subject_names.includes(filterSubject));
-      
-    return matchesSearch && matchesSubject;
-  });
+  const filteredTeachers = teachers.filter(teacher => 
+    teacher.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
   
   // Get teacher availability for visualization
   const getAvailabilityStatus = (teacher, day, mode = 'mandatory') => {
@@ -228,7 +216,7 @@ const TeachersConfig = () => {
           </div>
 
           <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
-            {/* Search & Filter */}
+            {/* Search */}
             <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
               <div className="relative flex-1 md:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
@@ -239,47 +227,6 @@ const TeachersConfig = () => {
                   placeholder="Search by teacher name..."
                   className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
                 />
-              </div>
-              
-              <div className="relative">
-                <button 
-                  onClick={() => setShowFilterMenu(!showFilterMenu)}
-                  className="flex items-center gap-2 px-4 py-3 bg-background/95 border border-border rounded-xl text-primary hover:border-accent-cyan/30 transition-colors"
-                >
-                  <Filter className="h-4 w-4" />
-                  <span>{filterSubject || "Filter by Subject"}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-                
-                {showFilterMenu && (
-                  <div className="absolute left-0 top-full mt-2 w-64 bg-surface border border-border rounded-xl shadow-lg z-40">
-                    <div className="p-2">
-                      <button 
-                        onClick={() => {
-                          setFilterSubject("");
-                          setShowFilterMenu(false);
-                        }}
-                        className="flex items-center gap-2 w-full p-2 hover:bg-background/50 rounded-lg text-left"
-                      >
-                        <Check className={`h-4 w-4 ${!filterSubject ? 'opacity-100' : 'opacity-0'}`} />
-                        <span>All Subjects</span>
-                      </button>
-                      {subjects.map(subject => (
-                        <button
-                          key={subject.id}
-                          onClick={() => {
-                            setFilterSubject(subject.name);
-                            setShowFilterMenu(false);
-                          }}
-                          className="flex items-center gap-2 w-full p-2 hover:bg-background/50 rounded-lg text-left"
-                        >
-                          <Check className={`h-4 w-4 ${filterSubject === subject.name ? 'opacity-100' : 'opacity-0'}`} />
-                          <span>{subject.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
               
               <div className="relative">

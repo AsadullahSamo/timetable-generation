@@ -4,7 +4,6 @@ import Navbar from "./Navbar";
 import api from "../utils/api";
 import {
   GraduationCap,
-  Search,
   Plus,
   Edit2,
   Trash2,
@@ -34,7 +33,7 @@ const BatchManagement = () => {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  
 
   useEffect(() => {
     fetchBatches();
@@ -172,10 +171,7 @@ const BatchManagement = () => {
     }
   };
 
-  const filteredBatches = batches.filter(batch =>
-    batch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    batch.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredBatches = batches;
 
   return (
     <>
@@ -200,20 +196,7 @@ const BatchManagement = () => {
             </div>
           )}
 
-          <div className="flex justify-between items-center mb-6">
-            <div className="relative flex-1 max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-secondary/70" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search batches..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-background/95 backdrop-blur-sm border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
-              />
-            </div>
-
+          <div className="flex justify-end items-center mb-6">
             <button
               onClick={() => {
                 setShowForm(!showForm);
@@ -418,7 +401,7 @@ const BatchManagement = () => {
             </div>
           )}
 
-          {filteredBatches.length === 0 && !loading && (
+          {batches.length === 0 && !loading && (
             <div className="text-center py-12">
               <GraduationCap className="h-12 w-12 text-secondary/50 mx-auto mb-4" />
               <p className="text-secondary">No batches found</p>
