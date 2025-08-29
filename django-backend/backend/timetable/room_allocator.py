@@ -2225,10 +2225,11 @@ class RoomAllocator:
 
         # Check capacity constraints (assume 30 students per section)
         section_size = 30
-        if not senior_entry.classroom.can_accommodate_section_size(section_size):
-            return False
-        if not junior_entry.classroom.can_accommodate_section_size(section_size):
-            return False
+        # Capacity checks disabled - capacity field removed
+        # if not senior_entry.classroom.can_accommodate_section_size(section_size):
+        #     return False
+        # if not junior_entry.classroom.can_accommodate_section_size(section_size):
+        #     return False
 
         # Check for new room conflicts
         day = senior_entry.day

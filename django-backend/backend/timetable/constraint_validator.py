@@ -328,27 +328,9 @@ class ConstraintValidator:
                     })
 
     def _check_room_capacity_violations(self, entries: List[TimetableEntry], violations: List[Dict]):
-        """Check if room capacity can accommodate section sizes."""
-        # Assume 30 students per section as default (this could be made configurable)
-        default_section_size = 30
-
-        for entry in entries:
-            if entry.classroom:
-                # Check if room capacity is sufficient
-                if not entry.classroom.can_accommodate_section_size(default_section_size):
-                    violations.append({
-                        'type': 'Room Conflict',
-                        'subtype': 'capacity_violation',
-                        'classroom': entry.classroom.name,
-                        'day': entry.day,
-                        'period': entry.period,
-                        'severity': 'HIGH',
-                        'description': f"Room {entry.classroom.name} (capacity {entry.classroom.capacity}) cannot accommodate section {entry.class_group} (estimated {default_section_size} students)",
-                        'class_group': entry.class_group,
-                        'subject': entry.subject.code if entry.subject else 'Unknown',
-                        'room_capacity': entry.classroom.capacity,
-                        'required_capacity': default_section_size
-                    })
+        """Room capacity checking disabled - capacity field removed."""
+        # Capacity field removed from Classroom model - no capacity violations to check
+        pass
     
     def _check_friday_time_limits(self, entries: List[TimetableEntry]) -> List[Dict]:
         """Check Friday time limit constraints."""

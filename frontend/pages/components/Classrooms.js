@@ -19,7 +19,6 @@ const Classrooms = () => {
   const [classrooms, setClassrooms] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
-    capacity: "",
     building: ""
   });
   const [editingId, setEditingId] = useState(null);
@@ -57,10 +56,6 @@ const Classrooms = () => {
       setError("Classroom name is required");
       return false;
     }
-    if (!formData.capacity || formData.capacity <= 0) {
-      setError("Valid capacity is required");
-      return false;
-    }
     if (!formData.building.trim()) {
       setError("Building name is required");
       return false;
@@ -79,7 +74,6 @@ const Classrooms = () => {
     try {
       const payload = {
         name: formData.name.trim(),
-        capacity: parseInt(formData.capacity),
         building: formData.building.trim()
       };
 
@@ -93,7 +87,7 @@ const Classrooms = () => {
         setClassrooms([...classrooms, response.data]);
       }
 
-      setFormData({ name: "", capacity: "", building: "" });
+      setFormData({ name: "", building: "" });
       setShowForm(false);
       setEditingId(null);
     } catch (error) {
@@ -105,7 +99,6 @@ const Classrooms = () => {
   const handleEdit = (classroom) => {
     setFormData({
       name: classroom.name,
-      capacity: classroom.capacity.toString(),
       building: classroom.building || ""
     });
     setEditingId(classroom.id);
@@ -136,7 +129,7 @@ const Classrooms = () => {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">Classrooms</h1>
-              <p className="text-secondary/90">Manage classrooms and their capacities</p>
+              <p className="text-secondary/90">Manage classrooms and their buildings</p>
             </div>
           </div>
 
@@ -155,7 +148,7 @@ const Classrooms = () => {
               onClick={() => {
                 setShowForm(true);
                 setEditingId(null);
-                setFormData({ name: "", capacity: "", building: "" });
+                setFormData({ name: "", building: "" });
                 setError(null);
               }}
               className="px-6 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300"
@@ -182,23 +175,7 @@ const Classrooms = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      placeholder="e.g., Lab. No.1, C.R. 01"
-                      className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">
-                      Capacity *
-                    </label>
-                    <input
-                      type="number"
-                      name="capacity"
-                      value={formData.capacity}
-                      onChange={handleInputChange}
-                      placeholder="e.g., 30"
-                      min="1"
+                      placeholder="e.g., C.R. 01"
                       className="w-full px-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
                       required
                     />
@@ -225,7 +202,7 @@ const Classrooms = () => {
                       onClick={() => {
                         setShowForm(false);
                         setEditingId(null);
-                        setFormData({ name: "", capacity: "", building: "" });
+                        setFormData({ name: "", building: "" });
                         setError(null);
                       }}
                       className="flex-1 px-4 py-3 bg-background/95 hover:bg-surface text-secondary hover:text-primary rounded-xl border border-border transition-all"
@@ -259,7 +236,7 @@ const Classrooms = () => {
                       </div>
                       <div>
                         <h3 className="font-semibold text-primary">{classroom.name}</h3>
-                        <p className="text-sm text-secondary">Capacity: {classroom.capacity}</p>
+                        <p className="text-sm text-secondary">{classroom.building}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">

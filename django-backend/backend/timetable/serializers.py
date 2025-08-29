@@ -120,7 +120,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 class ClassroomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Classroom
-        fields = '__all__'
+        fields = ['id', 'name', 'building', 'department', 'owner', 'is_lab', 'room_type', 'building_priority']
 
 class ScheduleConfigSerializer(serializers.ModelSerializer):
     class Meta:

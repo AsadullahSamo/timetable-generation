@@ -5,7 +5,6 @@ from datetime import date
 
 class Classroom(models.Model):
     name = models.CharField(max_length=50)
-    capacity = models.PositiveIntegerField()
     building = models.CharField(max_length=50)
     # Add department and owner fields for data isolation
     department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True)
@@ -44,9 +43,7 @@ class Classroom(models.Model):
         """Check if this room is suitable for theory classes."""
         return True  # All rooms can host theory classes
 
-    def can_accommodate_section_size(self, section_size):
-        """Check if room capacity can accommodate the section size."""
-        return self.capacity >= section_size
+    # Capacity field removed - no longer needed
 
     class Meta:
         ordering = ['building', 'name']

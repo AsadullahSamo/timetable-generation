@@ -1941,7 +1941,8 @@ class IntelligentConstraintResolver:
 
         # Check capacity (assume 30 students per section as default)
         section_size = 30  # This could be made configurable
-        if not classroom.can_accommodate_section_size(section_size):
+        # Capacity check disabled - capacity field removed
+        if False:  # Always allow - capacity field removed
             return False
 
         # Simplified: No seniority-based room allocation
