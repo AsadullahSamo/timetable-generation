@@ -29,7 +29,7 @@ const AddTeacher = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-      const [maxClasses, setMaxClasses] = useState(4);
+      const [maxClasses, setMaxClasses] = useState(3);
   // Internal availability state: { day: { periodIndex: mode } }
   const [availabilityState, setAvailabilityState] = useState({});
   const [timetableConfig, setTimetableConfig] = useState(null);
@@ -439,13 +439,13 @@ const AddTeacher = () => {
                   )}
                 </div>
                 <div className="space-y-2">
-                                          <label className="text-sm font-medium text-secondary">Max Classes per Day*</label>
+                  <label className="text-sm font-medium text-secondary">Max Classes per Day*</label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
                       type="number"
                       value={maxClasses}
-                                              onChange={(e) => {
+                      onChange={(e) => {
                           setMaxClasses(Math.max(1, parseInt(e.target.value) || 1));
                           if (formErrors.maxClasses) {
                             setFormErrors({...formErrors, maxClasses: undefined});

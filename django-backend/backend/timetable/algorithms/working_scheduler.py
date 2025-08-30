@@ -35,7 +35,6 @@ class WorkingTimetableScheduler:
         if not self.classrooms:
             classroom = Classroom.objects.create(
                 name="Default Room",
-                capacity=50,
                 building="Main Building"
             )
             self.classrooms = [classroom]

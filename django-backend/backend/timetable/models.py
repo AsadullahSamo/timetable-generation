@@ -149,6 +149,7 @@ class Batch(models.Model):
 class Subject(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20)  # Remove unique=True to allow duplicates
+    subject_short_name = models.CharField(max_length=10, unique=True, null=True, blank=True, help_text="Short name for display (e.g., MATH, CS101)")
     credits = models.PositiveIntegerField()
     is_practical = models.BooleanField(default=False)
     batch = models.CharField(max_length=10, blank=True, null=True, help_text="e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.")
@@ -169,6 +170,14 @@ class Subject(models.Model):
             if existing_count >= 2:
                 raise ValidationError({
                     'code': f'Subject code "{self.code}" is already used twice. Maximum allowed is 2 (theory and practical versions).'
+                })
+        
+        # Check if subject_short_name is unique (only if provided)
+        if self.subject_short_name:
+            existing_short_name = Subject.objects.filter(subject_short_name__iexact=self.subject_short_name).exclude(pk=self.pk).first()
+            if existing_short_name:
+                raise ValidationError({
+                    'subject_short_name': f'Subject short name "{self.subject_short_name}" is already in use.'
                 })
 
     def save(self, *args, **kwargs):

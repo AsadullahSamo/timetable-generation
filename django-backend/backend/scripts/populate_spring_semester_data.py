@@ -233,19 +233,19 @@ def populate_classrooms():
     """Create all classrooms"""
     print('\n=== CREATING CLASSROOMS ===')
     classrooms_data = [
-        {'name': 'Room 01', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Room 02', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Room 03', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Room 04', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'A.C. Room 01', 'capacity': 50, 'building': 'Academic Building'},
-        {'name': 'A.C. Room 02', 'capacity': 50, 'building': 'Academic Building'},
-        {'name': 'A.C. Room 03', 'capacity': 50, 'building': 'Academic Building'},
-        {'name': 'Lab 1', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Lab 2', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Lab 3', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Lab 4', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Lab 5', 'capacity': 50, 'building': 'Main Building'},
-        {'name': 'Lab 6', 'capacity': 50, 'building': 'Main Building'},
+        {'name': 'Room 01', 'building': 'Main Building'},
+        {'name': 'Room 02', 'building': 'Main Building'},
+        {'name': 'Room 03', 'building': 'Main Building'},
+        {'name': 'Room 04', 'building': 'Main Building'},
+        {'name': 'A.C. Room 01', 'building': 'Academic Building'},
+        {'name': 'A.C. Room 02', 'building': 'Academic Building'},
+        {'name': 'A.C. Room 03', 'building': 'Academic Building'},
+        {'name': 'Lab 1', 'building': 'Main Building'},
+        {'name': 'Lab 2', 'building': 'Main Building'},
+        {'name': 'Lab 3', 'building': 'Main Building'},
+        {'name': 'Lab 4', 'building': 'Main Building'},
+        {'name': 'Lab 5', 'building': 'Main Building'},
+        {'name': 'Lab 6', 'building': 'Main Building'},
     ]
 
     for classroom_data in classrooms_data:
@@ -254,9 +254,9 @@ def populate_classrooms():
             defaults=classroom_data
         )
         if created:
-            print(f'   ✅ Created: {classroom.name} (Capacity: {classroom.capacity})')
+            print(f'   ✅ Created: {classroom.name}')
         else:
-            print(f'   ⚪ Exists: {classroom.name} (Capacity: {classroom.capacity})')
+            print(f'   ⚪ Exists: {classroom.name}')
 
     print(f'Total classrooms: {Classroom.objects.count()}')
 

@@ -502,10 +502,9 @@ class RoomAllocator:
             return None
         
         # 🎲 RANDOMIZE LAB SELECTION for variety in each generation
-        # Sort by seniority priority and capacity, then randomly select from top candidates
+        # Sort by seniority priority, then randomly select from top candidates
         sorted_labs = sorted(available_labs, key=lambda lab: (
             -self._get_batch_priority(class_group),  # Senior batches first
-            -lab.capacity,  # Higher capacity first
             lab.name  # Consistent ordering
         ))
         
@@ -1752,8 +1751,8 @@ class RoomAllocator:
             return None
 
         # 🎲 RANDOMIZE ROOM SELECTION for variety in each generation
-        # Sort by building priority and capacity, then randomly select from top candidates
-        sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, -room.capacity, room.name))
+        # Sort by building priority, then randomly select from top candidates
+        sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, room.name))
         
         # Select randomly from top 3 rooms (or all if less than 3) for variety
         top_candidates = sorted_rooms[:min(3, len(sorted_rooms))]
@@ -2487,7 +2486,6 @@ class RoomAllocator:
             return (
                 lab.building_priority,  # Primary: building priority
                 usage_count,           # Secondary: current usage (prefer less-used)
-                -lab.capacity,         # Tertiary: capacity (prefer larger)
                 lab.name              # Final: alphabetical
             )
 
@@ -2555,8 +2553,8 @@ class RoomAllocator:
         available_rooms = self.get_available_regular_rooms_for_time(day, period, entries, duration=1)
 
         if available_rooms:
-            # Sort by building priority and capacity
-            sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, -room.capacity, room.name))
+            # Sort by building priority
+            sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, room.name))
             return sorted_rooms[0]
 
         return None
@@ -2760,8 +2758,8 @@ class RoomAllocator:
         # Use regular rooms for theory classes
         available_rooms = self.get_available_regular_rooms_for_time(day, period, entries, duration=1)
         if available_rooms:
-            # Sort by building priority and capacity
-            sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, -room.capacity, room.name))
+            # Sort by building priority
+            sorted_rooms = sorted(available_rooms, key=lambda room: (room.building_priority, room.name))
             return sorted_rooms[0]
 
         # If no regular rooms, use labs as fallback

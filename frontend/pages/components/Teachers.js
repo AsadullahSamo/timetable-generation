@@ -283,7 +283,7 @@ const TeachersConfig = () => {
                   <div className="text-center py-8 text-secondary">
                     <User className="h-12 w-12 mx-auto mb-4 opacity-30" />
                     <p>
-                      {searchQuery || filterSubject
+                      {searchQuery
                         ? "No teachers found matching your search"
                         : "No teachers added yet"
                       }

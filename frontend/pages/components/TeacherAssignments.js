@@ -724,7 +724,7 @@ const TeacherAssignments = () => {
                           {/* Status indicator */}
                           {statusIndicator}
 
-                          <div className="font-medium text-sm text-current">{subject.code}</div>
+                          <div className="font-medium text-sm text-current">{subject.subject_short_name || subject.code}</div>
                           <div className="text-xs opacity-90 truncate text-current">{subject.name}</div>
                           <div className="text-xs mt-1 flex items-center gap-2 text-current">
                             <span>{subject.credits} credits</span>

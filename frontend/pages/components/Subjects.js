@@ -32,6 +32,7 @@ const SubjectConfig = () => {
   const [formData, setFormData] = useState({
     name: "",
     code: "",
+    subject_short_name: "",
     credits: 3,
     batch: ""
   });
@@ -136,14 +137,30 @@ const SubjectConfig = () => {
     } else if (!/^[A-Z0-9\s!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(formData.code)) {
       errors.code = "Subject code should only contain letters, numbers, spaces, and special characters";
     } else {
-      // Check for duplicate subject codes (allow max 2 - theory and practical)
-      const existingSubjectsWithSameCode = subjects.filter(subject => 
+      // Check for duplicate subject codes (must be unique)
+      const existingSubjectWithSameCode = subjects.find(subject => 
         subject.code.toLowerCase() === formData.code.trim().toLowerCase() && 
         subject.id !== editingId
       );
       
-      if (existingSubjectsWithSameCode.length >= 2) {
-        errors.code = "Subject code already used twice (max allowed for theory and practical versions)";
+      if (existingSubjectWithSameCode) {
+        errors.code = "Subject code must be unique";
+      }
+    }
+    
+    if (!formData.subject_short_name.trim()) {
+      errors.subject_short_name = "Subject short name is required";
+    } else if (formData.subject_short_name.length > 10) {
+      errors.subject_short_name = "Subject short name cannot exceed 10 characters";
+    } else {
+      // Check for duplicate subject short names (must be unique)
+      const existingSubjectWithSameShortName = subjects.find(subject => 
+        subject.subject_short_name && subject.subject_short_name.toLowerCase() === formData.subject_short_name.trim().toLowerCase() && 
+        subject.id !== editingId
+      );
+      
+      if (existingSubjectWithSameShortName) {
+        errors.subject_short_name = "Subject short name must be unique";
       }
     }
     
@@ -253,6 +270,7 @@ const SubjectConfig = () => {
     setFormData({
       name: subject.name,
       code: subject.code,
+      subject_short_name: subject.subject_short_name || "",
       credits: subject.credits,
       batch: subject.batch || ""
     });
@@ -262,14 +280,15 @@ const SubjectConfig = () => {
   };
   
   const clearForm = () => {
-    setFormData({ name: "", code: "", credits: 3, batch: "" });
+    setFormData({ name: "", code: "", subject_short_name: "", credits: 3, batch: "" });
     setEditingId(null);
     setFormErrors({});
   };
 
   const filteredSubjects = subjects.filter(subject =>
     subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    subject.code.toLowerCase().includes(searchQuery.toLowerCase())
+    subject.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (subject.subject_short_name && subject.subject_short_name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -331,7 +350,7 @@ const SubjectConfig = () => {
                 <p className="text-xs text-secondary/70 mt-1">All codes unique</p>
               )}
               {stats.duplicateCodes > 0 && (
-                <p className="text-xs text-secondary/70 mt-1">Theory + Practical</p>
+                <p className="text-xs text-secondary/70 mt-1">Duplicate codes found</p>
               )}
             </div>
           </div>
@@ -369,7 +388,7 @@ const SubjectConfig = () => {
                   </button>
                   {showTooltip === "form" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Enter subject details like name, code, and credits. Subject names can include letters, numbers, spaces, and special characters. Subject codes.
+                      Enter subject details like name, short name, code, and credits. Use _PR or P for practical in subject codes
                     </div>
                   )}
                 </div>
@@ -398,7 +417,7 @@ const SubjectConfig = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      placeholder="e.g. Mathematics 101, Advanced Calculus"
+                      placeholder="Programming Fundamentals"
                       className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.name ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
                     />
                   </div>
@@ -417,7 +436,7 @@ const SubjectConfig = () => {
                       name="code"
                       value={formData.code}
                       onChange={handleInputChange}
-                      placeholder="e.g. MATH101"
+                      placeholder="SW119"
                       className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.code ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
                     />
                   </div>
@@ -426,20 +445,14 @@ const SubjectConfig = () => {
                   )}
                   {!formErrors.code && formData.code && (
                     (() => {
-                      const existingCount = subjects.filter(subject => 
+                      const existingSubject = subjects.find(subject => 
                         subject.code.toLowerCase() === formData.code.trim().toLowerCase() && 
                         subject.id !== editingId
-                      ).length;
-                      if (existingCount === 1) {
+                      );
+                      if (existingSubject) {
                         return (
-                          <p className="text-blue-500 text-xs mt-1">
-                            This code is used 1 time (can use 1 more time for theory/practical)
-                          </p>
-                        );
-                      } else if (existingCount >= 2) {
-                        return (
-                          <p className="text-orange-500 text-xs mt-1">
-                            This code is used {existingCount} times (maximum allowed reached)
+                          <p className="text-red-500 text-xs mt-1">
+                            This code is already in use
                           </p>
                         );
                       }
@@ -448,6 +461,27 @@ const SubjectConfig = () => {
                   )}
                 </div>
                 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Subject Short Name</label>
+                  <p className="text-xs text-secondary/70">Letters, numbers, and special characters (max 10 chars)</p>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
+                    <input
+                      type="text"
+                      name="subject_short_name"
+                      value={formData.subject_short_name}
+                      onChange={handleInputChange}
+                      placeholder="PF"
+                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.subject_short_name ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                    />
+                  </div>
+                  {formErrors.subject_short_name && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.subject_short_name}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Credits</label>
                   <p className="text-xs text-secondary/70">Number of credit hours (1-10)</p>
@@ -467,35 +501,32 @@ const SubjectConfig = () => {
                     <p className="text-red-500 text-xs mt-1">{formErrors.credits}</p>
                   )}
                 </div>
-              </div>
-
-              {/* Batch Field */}
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Batch *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Hash className="h-5 w-5 text-secondary/70" />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-secondary">Batch</label>
+                  <p className="text-xs text-secondary/70">Select the batch for this subject</p>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Hash className="h-5 w-5 text-secondary/70" />
+                    </div>
+                    <select
+                      name="batch"
+                      value={formData.batch}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.batch ? 'border-red-500' : 'border-border'} rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
+                      required
+                    >
+                      <option value="">Select Batch</option>
+                      {batches.map((batch) => (
+                        <option key={batch.id} value={batch.name}>
+                          {batch.name} ({batch.description})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    name="batch"
-                    value={formData.batch}
-                    onChange={handleInputChange}
-                    className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.batch ? 'border-red-500' : 'border-border'} rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
-                    required
-                  >
-                    <option value="">Select Batch</option>
-                    {batches.map((batch) => (
-                      <option key={batch.id} value={batch.name}>
-                        {batch.name} ({batch.description})
-                      </option>
-                    ))}
-                  </select>
+                  {formErrors.batch && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.batch}</p>
+                  )}
                 </div>
-                {formErrors.batch && (
-                  <p className="text-red-500 text-xs mt-1">{formErrors.batch}</p>
-                )}
               </div>
 
               <button
@@ -557,6 +588,7 @@ const SubjectConfig = () => {
                     <thead>
                       <tr className="bg-background/95">
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Subject Name</th>
+                        <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Short Name</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Code</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Credits</th>
                         <th className="px-4 py-3 text-left border border-border text-secondary font-medium">Teacher Assignments</th>
@@ -584,6 +616,7 @@ const SubjectConfig = () => {
                               )}
                             </div>
                           </td>
+                          <td className="px-4 py-3 border border-border font-mono">{subject.subject_short_name || 'N/A'}</td>
                           <td className="px-4 py-3 border border-border font-mono">{subject.code}</td>
                           <td className="px-4 py-3 border border-border">{subject.credits}</td>
                           <td className="px-4 py-3 border border-border">

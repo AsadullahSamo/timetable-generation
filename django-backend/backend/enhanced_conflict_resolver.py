@@ -277,12 +277,8 @@ class EnhancedConflictResolver:
         try:
             entry1, entry2 = conflict['entries']
             
-            # Find alternative classrooms with sufficient capacity
-            required_capacity = 30  # Default capacity requirement
-            
-            alternative_rooms = Classroom.objects.filter(
-                capacity__gte=required_capacity
-            ).exclude(id=entry2.classroom.id)
+            # Find alternative classrooms (capacity no longer considered)
+            alternative_rooms = Classroom.objects.exclude(id=entry2.classroom.id)
             
             for alt_room in alternative_rooms:
                 # Check if alternative room is available

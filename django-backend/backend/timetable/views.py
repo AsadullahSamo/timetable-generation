@@ -997,7 +997,8 @@ class LatestTimetableView(APIView):
                     'day': entry.day,
                     'period': entry.period,
                     'subject': f"{entry.subject.name}{' (PR)' if entry.is_practical else ''}",
-                    'subject_code': entry.subject.code if entry.subject else '',  # Add subject code
+                    'subject_code': entry.subject.code if entry.subject else '',  # Use actual subject code
+                    'subject_short_name': entry.subject.subject_short_name if entry.subject and entry.subject.subject_short_name else '',
                     'teacher': entry.teacher.name if entry.teacher else '',
                     'classroom': entry.classroom.name if entry.classroom else '',
                     'class_group': entry.class_group,

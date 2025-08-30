@@ -72,7 +72,6 @@ class FinalUniversalScheduler:
         if not self.all_classrooms:
             classroom = Classroom.objects.create(
                 name="Default Classroom",
-                capacity=50,
                 building="Main Building"
             )
             self.all_classrooms = [classroom]
@@ -2945,8 +2944,7 @@ class FinalUniversalScheduler:
 
         # Use any available classroom (or create thesis room)
         thesis_classroom, created = Classroom.objects.get_or_create(
-            name="Thesis Room",
-            defaults={'capacity': 30}
+            name="Thesis Room"
         )
 
         # Create thesis day entry for the entire day (Period 1-7)

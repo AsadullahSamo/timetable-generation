@@ -239,14 +239,8 @@ class ConstraintManager:
     def _validate_room_constraint(self, constraint: ConstraintDefinition) -> bool:
         """Validate room-related constraints"""
         if constraint.parameters.get('type') == 'capacity':
-            # Check if classroom capacity data exists
-            classrooms = Classroom.objects.all()
-            for classroom in classrooms:
-                if not hasattr(classroom, 'capacity') or classroom.capacity <= 0:
-                    self.validation_errors.append(
-                        f"Invalid capacity for classroom {classroom.name}"
-                    )
-                    return False
+            # Capacity validation removed - no longer needed
+            return True
         return True
     
     def _validate_subject_constraint(self, constraint: ConstraintDefinition) -> bool:

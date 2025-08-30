@@ -321,7 +321,7 @@ const Timetable = () => {
                             draggable={editMode}
                             onDragStart={() => setDraggingEntry(entry)}
                           >
-                            {entry.subject_code || entry.subject}
+                            {entry.subject_short_name || entry.subject_code || entry.subject}
                           </div>
                           <div className="text-sm text-blue-400">{entry.teacher}</div>
                           <div className="text-xs text-emerald-400">{entry.classroom}</div>

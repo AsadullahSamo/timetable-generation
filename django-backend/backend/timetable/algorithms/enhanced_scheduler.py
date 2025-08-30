@@ -51,7 +51,6 @@ class EnhancedScheduler:
         if not self.all_classrooms:
             classroom = Classroom.objects.create(
                 name="Default Classroom",
-                capacity=50,
                 building="Main Building"
             )
             self.all_classrooms = [classroom]

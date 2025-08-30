@@ -121,15 +121,8 @@ class ConflictResolver:
         for entry in TimetableEntry.objects.select_related('classroom'):
             if entry.classroom and entry.class_group in class_sizes:
                 class_size = class_sizes[entry.class_group]
-                if entry.classroom.capacity < class_size:
-                    violations.append({
-                        'type': 'capacity_violation',
-                        'classroom': entry.classroom.name,
-                        'capacity': entry.classroom.capacity,
-                        'class_size': class_size,
-                        'class_group': entry.class_group,
-                        'entry': entry
-                    })
+                # Capacity validation removed - no longer needed
+                pass
         
         return violations
     
@@ -149,10 +142,8 @@ class ConflictResolver:
             if self._resolve_classroom_conflict(conflict):
                 resolved += 1
         
-        # Resolve capacity violations
-        for violation in conflicts['capacity_violations']:
-            if self._resolve_capacity_violation(violation):
-                resolved += 1
+        # Capacity violations removed - no longer needed
+        pass
         
         print(f"✅ RESOLVED: {resolved}/{conflicts['total']} conflicts")
         return resolved
@@ -205,37 +196,8 @@ class ConflictResolver:
             return False
     
     def _resolve_capacity_violation(self, violation):
-        """Resolve capacity violations"""
-        try:
-            # Strategy: Find larger classroom
-            larger_room = Classroom.objects.filter(
-                capacity__gte=violation['class_size']
-            ).exclude(
-                id=violation['entry'].classroom.id
-            ).first()
-            
-            if larger_room:
-                # Check if larger room is available
-                time_key = f"{violation['entry'].day}_P{violation['entry'].period}"
-                existing = TimetableEntry.objects.filter(
-                    classroom=larger_room,
-                    day=violation['entry'].day,
-                    period=violation['entry'].period
-                ).first()
-                
-                if not existing:
-                    violation['entry'].classroom = larger_room
-                    violation['entry'].save()
-                    
-                    print(f"  ✅ Moved to larger room: {larger_room.name} (cap: {larger_room.capacity})")
-                    return True
-            
-            print(f"  ❌ No suitable larger classroom available")
-            return False
-            
-        except Exception as e:
-            print(f"  ❌ Error resolving capacity violation: {e}")
-            return False
+        """Capacity violations removed - no longer needed"""
+        return False
     
     def _find_alternative_slot(self, entry):
         """Find alternative time slot for entry"""
@@ -265,19 +227,8 @@ class ConflictResolver:
     
     def _find_alternative_classroom(self, entry):
         """Find alternative classroom for entry"""
-        # Get class size
-        class_sizes = {}
-        for config in ScheduleConfig.objects.all():
-            for class_group in config.class_groups:
-                if isinstance(class_group, dict) and 'students' in class_group:
-                    class_sizes[class_group['name']] = class_group['students']
-        
-        required_capacity = class_sizes.get(entry.class_group, 30)
-        
-        # Find available classrooms with sufficient capacity
-        available_rooms = Classroom.objects.filter(
-            capacity__gte=required_capacity
-        ).exclude(id=entry.classroom.id)
+        # Find any available classroom (capacity no longer considered)
+        available_rooms = Classroom.objects.exclude(id=entry.classroom.id)
         
         for room in available_rooms:
             # Check if room is available at this time

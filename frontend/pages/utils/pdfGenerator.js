@@ -317,9 +317,8 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
               );
             }
             
-            if (entry) {
-              let subjectCode = entry.subject_code || entry.subject;
-              let cellContent = subjectCode || '';
+                                                   if (entry) {
+                            let cellContent = entry.subject_short_name || entry.subject || '';
               
               // Add room information if different from default
               if (entry.classroom && !entry.classroom.includes('Lab. No.')) {
@@ -408,25 +407,25 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       // Collect all entries from all sections in this batch
       const allBatchEntries = batchSections.flatMap(section => section.entries);
       
-      // Group entries by subject name across all sections
-      allBatchEntries.forEach(entry => {
-        const subjectCode = entry.subject_code || entry.subject || '';
-        const subjectName = entry.subject || '';
-        
-        // Clean the subject name for display (remove PR suffix if present)
-        const cleanSubjectName = subjectName.replace(' (PR)', '').replace('(PR)', '').trim();
-        
-        if (!subjectGroups[cleanSubjectName]) {
-          subjectGroups[cleanSubjectName] = {
-            theory: [],
-            practical: [],
-            subjectName: cleanSubjectName,
-            subjectCode: subjectCode,
-            allSubjectCodes: new Set([subjectCode])
-          };
-        } else {
-          subjectGroups[cleanSubjectName].allSubjectCodes.add(subjectCode);
-        }
+             // Group entries by subject name across all sections
+       allBatchEntries.forEach(entry => {
+         const subjectCode = entry.subject_code || entry.subject || '';
+         const subjectName = entry.subject || '';
+         
+         // Clean the subject name for display (remove PR suffix if present)
+         const cleanSubjectName = subjectName.replace(' (PR)', '').replace('(PR)', '').trim();
+         
+         if (!subjectGroups[cleanSubjectName]) {
+           subjectGroups[cleanSubjectName] = {
+             theory: [],
+             practical: [],
+             subjectName: cleanSubjectName,
+             subjectCode: '', // Will be set from theory entry
+             allSubjectCodes: new Set([subjectCode])
+           };
+         } else {
+           subjectGroups[cleanSubjectName].allSubjectCodes.add(subjectCode);
+         }
         
         // Group by theory/practical and section
         if (entry.is_practical) {
@@ -440,12 +439,26 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
             sectionName: entry.class_group.split('-')[1] || 'MAIN'
           });
         }
-      });
-      
-      // Convert grouped data to table format with smart teacher grouping
+             });
+       
+               // Set subject codes from theory entries
+        Object.values(subjectGroups).forEach(group => {
+          if (group.theory.length > 0) {
+            const theoryEntry = group.theory[0];
+            group.subjectCode = theoryEntry.subject_code || ''; // Use subject code, not short name
+          }
+        });
+       
+       // Convert grouped data to table format with smart teacher grouping
+      // Only show theory subjects in the table, but include practical info in teacher assignments
       Object.values(subjectGroups).forEach((group, index) => {
         const theoryEntries = group.theory;
         const practicalEntries = group.practical;
+        
+        // Skip subjects that only have practical entries (no theory)
+        if (theoryEntries.length === 0 && practicalEntries.length > 0) {
+          return; // Skip practical-only subjects
+        }
         
         // Determine credit hours
         let creditHours = '';
@@ -455,8 +468,8 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         } else if (theoryEntries.length > 0) {
           const theoryCredits = theoryEntries[0].credits || 3;
           creditHours = `${theoryCredits}+0`;
-        } else if (practicalEntries.length > 0) {
-          creditHours = `0+1`;
+        } else {
+          return; // Skip if no theory entries
         }
         
                  // Smart teacher grouping logic
@@ -519,9 +532,12 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
            }
          }
         
+                 // Format subject name as "Subject Name - Subject Code"
+         const displaySubjectName = group.subjectCode ? `${group.subjectName} - ${group.subjectCode}` : group.subjectName;
+        
         teacherData.push([
           index + 1,
-          group.subjectName,
+          displaySubjectName,
           creditHours,
           teacherNames
         ]);

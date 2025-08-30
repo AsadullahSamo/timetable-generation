@@ -803,7 +803,7 @@ const DepartmentConfig = () => {
                                >
                                  <div className="flex items-center justify-between">
                                    <div className="flex-1">
-                                     <div className="font-medium text-sm text-white">{subject.code}</div>
+                                     <div className="font-medium text-sm text-white">{subject.subject_short_name || subject.code}</div>
                                      <div className="text-xs text-white/90 truncate">{subject.name}</div>
                                    </div>
                                    <div className="flex items-center gap-2 ml-2">

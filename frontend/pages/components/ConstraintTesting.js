@@ -244,7 +244,7 @@ const ConstraintTesting = () => {
         return (
           <div>
             <div className="font-medium text-red-300 mb-2">
-              {violation.subject_name} ({violation.subject_code}) - {violation.class_group}
+              {violation.subject_name} ({violation.subject_short_name || violation.subject_code}) - {violation.class_group}
             </div>
             <div className="text-sm text-gray-300 grid grid-cols-2 gap-2">
               <div>Expected: {violation.expected_count} classes/week</div>
