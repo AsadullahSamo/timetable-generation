@@ -493,21 +493,126 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
              const theoryCoversAllSections = allTheorySections.size === batchSections.length;
              const practicalCoversAllSections = allPracticalSections.size === batchSections.length;
              
-             if (theoryCoversAllSections && practicalCoversAllSections) {
-               // Each teacher type covers all sections - show as Teacher1 (Th) / Teacher2 (Pr)
-               const theoryTeacher = theoryTeachers[0];
-               const practicalTeacher = practicalTeachers[0];
-               teacherNames = `${theoryTeacher} (Th) / ${practicalTeacher} (Pr)`;
-             } else {
-               // Mixed assignments - show detailed breakdown
-               const theoryTeacherGroups = groupTeachersBySections(theoryEntries);
-               const practicalTeacherGroups = groupTeachersBySections(practicalEntries);
-               
-               const theoryPart = formatTeacherGroups(theoryTeacherGroups, 'Th');
-               const practicalPart = formatTeacherGroups(practicalTeacherGroups, 'Pr');
-               
-               teacherNames = [theoryPart, practicalPart].filter(Boolean).join(' / ');
-             }
+                           // Check for your specific case FIRST: Teacher1 teaches theory to some sections + practical to all sections
+              // Teacher2 teaches theory to remaining sections
+              const theoryTeacherGroups = groupTeachersBySections(theoryEntries);
+              const practicalTeacherGroups = groupTeachersBySections(practicalEntries);
+              
+              // Check if one teacher teaches practical to all sections
+              const practicalAllSections = Object.values(practicalTeacherGroups).some(sections => sections.size === batchSections.length);
+              
+              if (practicalAllSections) {
+                // Found your specific case - handle it
+                let practicalAllTeacher = null;
+                Object.entries(practicalTeacherGroups).forEach(([teacher, sections]) => {
+                  if (sections.size === batchSections.length) {
+                    practicalAllTeacher = teacher;
+                  }
+                });
+                
+                if (practicalAllTeacher) {
+                  console.log('Debug - Found practicalAllTeacher:', practicalAllTeacher);
+                  
+                  // Check if this teacher also teaches theory to some sections
+                  const teacherTheorySections = theoryTeacherGroups[practicalAllTeacher] || new Set();
+                  console.log('Debug - teacherTheorySections:', Array.from(teacherTheorySections));
+                  
+                                     if (teacherTheorySections.size > 0) {
+                     console.log('Debug - practicalAllTeacher also teaches theory to sections:', Array.from(teacherTheorySections));
+                     
+                     // Create all teacher entries and sort them by section numbers
+                     const allTeacherEntries = [];
+                     
+                     // Add practical teacher with theory sections + pr
+                     const theorySections = Array.from(teacherTheorySections).sort();
+                     const theorySectionLabels = theorySections.map(section => getSectionLabel(section));
+                     allTeacherEntries.push({
+                       teacher: practicalAllTeacher,
+                       sections: theorySections,
+                       format: `${theorySectionLabels.join('+')} + pr`
+                     });
+                     
+                     // Add other theory teachers
+                     const otherTheoryTeachers = Object.entries(theoryTeacherGroups).filter(([teacher, sections]) => teacher !== practicalAllTeacher);
+                     otherTheoryTeachers.forEach(([teacher, sections]) => {
+                       allTeacherEntries.push({
+                         teacher,
+                         sections: Array.from(sections),
+                         format: Array.from(sections).map(section => getSectionLabel(section)).join('+')
+                       });
+                     });
+                     
+                     // Sort all teachers by their lowest section number
+                     allTeacherEntries.sort((a, b) => {
+                       const minSectionA = Math.min(...a.sections.map(s => getSectionNumber(s)));
+                       const minSectionB = Math.min(...b.sections.map(s => getSectionNumber(s)));
+                       return minSectionA - minSectionB;
+                     });
+                     
+                     // Build the final result
+                     const result = allTeacherEntries.map(entry => `${entry.teacher} (${entry.format})`).join(' / ');
+                     
+                     console.log('Debug - Final result for theory + practical case:', result);
+                     teacherNames = result;
+                   } else {
+                     console.log('Debug - practicalAllTeacher does not teach theory');
+                     
+                     // Create all teacher entries and sort them by section numbers
+                     const allTeacherEntries = [];
+                     
+                     // Add theory teachers first
+                     Object.entries(theoryTeacherGroups).forEach(([teacher, sections]) => {
+                       allTeacherEntries.push({
+                         teacher,
+                         sections: Array.from(sections),
+                         format: Array.from(sections).map(section => getSectionLabel(section)).join('+')
+                       });
+                     });
+                     
+                     // Add practical teacher last
+                     allTeacherEntries.push({
+                       teacher: practicalAllTeacher,
+                       sections: ['PRACTICAL'], // Use a dummy section for sorting
+                       format: 'pr'
+                     });
+                     
+                     // Sort all teachers by their lowest section number (practical teacher goes last)
+                     allTeacherEntries.sort((a, b) => {
+                       if (a.sections[0] === 'PRACTICAL') return 1; // Practical teacher goes last
+                       if (b.sections[0] === 'PRACTICAL') return -1;
+                       
+                       const minSectionA = Math.min(...a.sections.map(s => getSectionNumber(s)));
+                       const minSectionB = Math.min(...b.sections.map(s => getSectionNumber(s)));
+                       return minSectionA - minSectionB;
+                     });
+                     
+                     // Build the final result
+                     const result = allTeacherEntries.map(entry => `${entry.teacher} (${entry.format})`).join(' / ');
+                     
+                     teacherNames = result;
+                     console.log('Debug - Final result for practical only case:', result);
+                   }
+                } else {
+                  console.log('Debug - practicalAllTeacher is null, using fallback');
+                  // Fallback to detailed breakdown
+                  const theoryPart = formatTeacherGroups(theoryTeacherGroups, 'Th');
+                  const practicalPart = formatTeacherGroups(practicalTeacherGroups, 'Pr');
+                  teacherNames = [theoryPart, practicalPart].filter(Boolean).join(' / ');
+                }
+              } else if (theoryCoversAllSections && practicalCoversAllSections) {
+                // Each teacher type covers all sections - show as Teacher1 (Th) / Teacher2 (Pr)
+                const theoryTeacher = theoryTeachers[0];
+                const practicalTeacher = practicalTeachers[0];
+                teacherNames = `${theoryTeacher} (Th) / ${practicalTeacher} (Pr)`;
+                             } else {
+                 // Not the specific case - show detailed breakdown as before
+                 const theoryTeacherGroups = groupTeachersBySections(theoryEntries);
+                 const practicalTeacherGroups = groupTeachersBySections(practicalEntries);
+                 
+                 const theoryPart = formatTeacherGroups(theoryTeacherGroups, 'Th');
+                 const practicalPart = formatTeacherGroups(practicalTeacherGroups, 'Pr');
+                 teacherNames = [theoryPart, practicalPart].filter(Boolean).join(' / ');
+               }
            }
          } else if (theoryEntries.length > 0) {
            // Only theory exists
@@ -534,6 +639,8 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
         
                  // Format subject name as "Subject Name - Subject Code"
          const displaySubjectName = group.subjectCode ? `${group.subjectName} - ${group.subjectCode}` : group.subjectName;
+         
+         console.log('Debug - Final teacherNames for', displaySubjectName, ':', teacherNames);
         
         teacherData.push([
           index + 1,
@@ -684,10 +791,30 @@ function formatTeacherGroups(teacherGroups, type) {
 
 // Helper function to convert section names to proper labels
 function getSectionLabel(sectionName) {
+  console.log('Debug - getSectionLabel called with:', sectionName);
   if (sectionName === 'MAIN') return 'I';
   if (sectionName === 'A') return 'I';
   if (sectionName === 'B') return 'II';
   if (sectionName === 'C') return 'III';
   if (sectionName === 'D') return 'IV';
+  console.log('Debug - getSectionLabel returning:', sectionName);
   return sectionName;
+}
+
+// Helper function to get section number for sorting
+function getSectionNumber(sectionName) {
+  if (sectionName === 'MAIN') return 1;
+  if (sectionName === 'A') return 1;
+  if (sectionName === 'B') return 2;
+  if (sectionName === 'C') return 3;
+  if (sectionName === 'D') return 4;
+  if (sectionName === 'E') return 5;
+  if (sectionName === 'F') return 6;
+  if (sectionName === 'G') return 7;
+  if (sectionName === 'H') return 8;
+  if (sectionName === 'I') return 9;
+  if (sectionName === 'J') return 10;
+  // For any other section names, try to parse as number
+  const parsed = parseInt(sectionName);
+  return isNaN(parsed) ? 999 : parsed; // Put unknown sections at the end
 }
