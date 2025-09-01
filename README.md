@@ -1,147 +1,151 @@
-# 🗓️ Automated Timetable G### 🏫 Room & Lab Allocation
+# 🗓️ Automated Timetable Generation System
 
-* Enforces "same-lab" rule for practical blocks
-* Guarantees no room overlap and lab-only allocation for practicals
-* Enhanced room consistency for theory/practical separationtion System
-
-A web-based class scheduling platform that automates the creation of conflict-free, optimized academic timetables. Built using **Next.js** and **Django REST Framework**, the system leverages a custom constraint-based algorithm to generate schedules while adhering to 19 real-world academic and infrastructure constraints.
+A web-based academic timetable generation platform built with **Next.js** frontend and **Django REST Framework** backend. The system uses constraint-based algorithms to generate conflict-free academic schedules.
 
 ---
 
 ## 🚀 Key Features
 
-### 🔄 Advanced Timetable Generation
+### 🔄 Timetable Generation
+- Multiple scheduling algorithms (Final Universal Scheduler, Enhanced Scheduler, Working Scheduler)
+- Constraint-based optimization
+- Support for theory and practical subjects
+- Batch and section-based scheduling
 
-* Constraint-based optimization algorithm
-* Real-time generation with progress tracking
-* Generates compact, practical, and conflict-free schedules
+### 📋 Constraint Management
+- 19 academic and infrastructure constraints
+- Real-time constraint validation
+- Conflict detection and resolution
+- Room allocation optimization
 
-### 📋 Comprehensive Constraint Management
-
-* Handles academic, infrastructure, and institutional rules
-* Avoids common conflicts like teacher overlaps or double-booked rooms
-* Ensures practical classes are in labs, with consistent room usage
-
-### 🧠 Intelligent Scheduling Logic
-
-* Smart teacher-subject matching
-* Friday-aware scheduling (early dismissal rules)
-* Reserved thesis days for final-year students
-* Distribution of sessions across all weekdays
-
-### 🏫 Room & Lab Allocation
-
-* Enforces “same-lab” rule for practical blocks
-* Guarantees no room overlap and lab-only allocation for practicals
-* Adaptive assignment for senior batches with flexible lab preferences
-
-### 🔐 User Management & Auth
-
-* Firebase Authentication integration
-* Multi-user access for administrators, faculty, and staff
+### 🏫 Academic Features
+- Teacher-subject assignments with section specificity
+- Department-based data isolation
+- Batch and semester management
+- Classroom and lab allocation
 
 ### 📤 Export & Accessibility
-
-* Export generated timetables in PDF format using jsPDF
-* Mobile-friendly, responsive UI for on-the-go access
+- PDF export functionality using jsPDF
+- Responsive web interface
+- User role management (Admin, Teacher, Student)
 
 ---
 
-## ⚙️ Constraint Highlights
+## 🧮 Algorithm Implementation
 
-> The system respects **19 academic and room constraints**, including:
+The system implements a **Deterministic Constraint-Based Algorithm** with controlled randomization:
+
+### Key Characteristics:
+- **Deterministic Core**: Same input always produces identical output for consistent scheduling
+- **Constraint-Based Foundation**: All 19 academic constraints are strictly enforced
+- **Controlled Randomization**: Random elements only when explicitly regenerating timetables
+- **Predictable Results**: Ensures consistent timetables for same academic configuration
+
+### Algorithm Components:
+
+#### Final Universal Scheduler
+- Deterministic constraint-based scheduling
+- Enhanced room allocation with priority-based selection
+- Gap filling for compact scheduling
+- Section-based scheduling support
+
+#### Enhanced Scheduler
+- Advanced constraint validation
+- Teacher unavailability handling
+- Cross-semester conflict detection
+
+#### Working Scheduler
+- Basic conflict resolution
+- Teacher and room constraint enforcement
+
+#### Constraint Enforced Scheduler
+- Systematic constraint validation
+- Iterative conflict resolution
+
+---
+
+## ⚙️ Constraint System
+
+The system enforces **19 constraints**:
 
 #### Academic & Scheduling
+1. **Subject Frequency** - Correct number of classes per week based on credits
+2. **Practical Blocks** - 3-hour consecutive blocks for practical subjects
+3. **Teacher Conflicts** - No teacher double-booking
+4. **Room Conflicts** - No room double-booking
+5. **Friday Time Limits** - Classes must not exceed 12:00/1:00 PM with practical, 11:00 AM without practical
+6. **Minimum Daily Classes** - No day has only practical or only one class
+7. **Thesis Day Constraint** - Wednesday is exclusively reserved for Thesis subjects for final year students
+8. **Compact Scheduling** - Classes wrap up quickly while respecting Friday constraints
+9. **Cross Semester Conflicts** - Prevents scheduling conflicts across batches
+10. **Teacher Assignments** - Intelligent teacher assignment matching
+11. **Friday Aware Scheduling** - Monday-Thursday scheduling considers Friday limits proactively
+12. **Working Hours** - All classes are within 8:00 AM to 3:00 PM
+13. **Same Lab Rule** - All 3 blocks of practical subjects must use the same lab
+14. **Practicals in Labs** - Practical subjects must be scheduled only in laboratory rooms
+15. **Room Consistency** - Enhanced room consistency for theory/practical separation
+16. **Same Theory Subject Distribution** - Max 1 class per day, distributed across 5 weekdays
+17. **Breaks Between Classes** - Minimal breaks, only when needed
+18. **Teacher Breaks** - After 2 consecutive theory classes, teacher must have a break
+19. **Teacher Unavailability** - Teachers cannot be scheduled during their unavailable periods
 
-1. Subject Frequency - Correct number of classes per week based on credit hours
-2. Practical Blocks - 3-hour consecutive blocks for practical subjects
-3. No Duplicate Theory Per Day - No section can have multiple theory classes of the same subject on the same day
-4. Minimum Daily Classes - No day has only practical or only one class
-5. Thesis Day - Wednesday is exclusively reserved for Thesis subjects for final year students
-6. Intelligent Teacher Assignment - Matches teachers to their assigned subjects
-7. Working Hours - All classes are within 8:00 AM to 3:00 PM
-8. Same Theory Subject Distribution - Max 1 class per day, distributed across 5 weekdays
-9. Teacher Unavailability - Teachers cannot be scheduled during their unavailable periods (hard constraint)
-
-#### Room Allocation
-
-10. No Room Conflicts - Rooms cannot be double-booked
-11. Same Lab Rule - All 3 blocks of practical subjects must use the same lab
-12. Practicals in Labs - Practical subjects must be scheduled only in laboratory rooms
-13. Room Consistency - Consistent room assignment for theory classes per section
-
-#### Conflict Prevention
-
-14. No Teacher Overlap - Teachers cannot be in multiple places at once
-15. Cross-Semester Conflict Detection - Prevents scheduling conflicts across batches
-16. Section Conflicts - Prevents multiple simultaneous classes for same section
-17. Friday Time Limits - Classes must not exceed 12:00/1:00 PM with practical, 11:00 AM without practical
-18. Compact Scheduling - Classes wrap up quickly while respecting Friday constraints
-19. Appropriate Distribution - Classes are spread across all 5 days
-
-✅ All constraints have been successfully implemented and tested in real-time use cases.
+✅ **All 19 constraints have been successfully implemented and tested with real academic data from Software Engineering Department, including real faculty members, actual course structures, and comprehensive constraint validation.**
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-
-* **Next.js 15.1.4**
-* **React 19.1.0**
-* **Tailwind CSS** for UI styling
-* **Axios** for API communication
-* **MUI Icons** and **React Icons** for UI elements
-* **jsPDF** and **jspdf-autotable** for PDF exports
+- **Next.js 15.1.4**
+- **React 19.1.0**
+- **Tailwind CSS 3.4.1**
+- **Axios 1.7.9** for API communication
+- **MUI Icons 7.0.1**, **React Icons 5.4.0**, and **Lucide React 0.487.0** for UI elements
+- **jsPDF 3.0.1** and **jspdf-autotable 5.0.2** for PDF exports
 
 ### Backend
-
-* **Django 4.2.7** with Django REST Framework 3.14.0
-* **JWT** (djangorestframework-simplejwt) for secure API authentication
-* **SQLite** database
+- **Django 4.2.7** with Django REST Framework 3.14.0
+- **JWT** authentication via djangorestframework-simplejwt 5.3.0
+- **SQLite** database
 
 ### Development Tools
-
-* **ESLint 9** for code quality
-* **Turbopack** for faster development builds
+- **ESLint 9** for code quality
+- **Turbopack** for faster development builds
 
 ---
 
 ## 📦 Getting Started
 
 ### Prerequisites
-
-* Python 3.8+
-* Node.js 16+
+- Python 3.8+
+- Node.js 16+
 
 ### Setup Instructions
 
-1. **Clone the repo**
-
+1. **Clone the repository**
 ```bash
-git clone https://github.com/AsadullahSamo/timetable-generation.git
+git clone <repository-url>
 cd timetable-generation
 ```
 
 2. **Install Backend Dependencies**
-
 ```bash
-cd django-backend
+cd django-backend/backend
 pip install -r requirements.txt
 ```
 
 3. **Install Frontend Dependencies**
-
 ```bash
 cd frontend
 npm install
 ```
 
 4. **Set Environment Variables**
-   Create `.env` files for both backend and frontend with required Firebase and Django secrets.
+   - Create `.env` files for both backend and frontend
+   - Configure Firebase service account credentials
+   - Set Django secret key and database settings
 
-5. **Run the App**
-
+5. **Run the Application**
 ```bash
 # Start both backend and frontend concurrently
 npm start
@@ -153,20 +157,40 @@ npm run start:frontend
 
 ---
 
-## 🧪 Development Notes
+## 🏗️ Project Structure
 
-* Modular architecture with separation between UI, API, and scheduling logic
-* Enhanced constraint validator and resolver for complex scheduling requirements
-* Supports multiple user roles and access controls
+```
+timetable-generation/
+├── django-backend/          # Django backend application
+│   ├── backend/            # Django project settings
+│   ├── timetable/          # Main timetable app
+│   │   ├── algorithms/     # Scheduling algorithms
+│   │   ├── models.py       # Data models
+│   │   ├── views.py        # API views
+│   │   └── urls.py         # URL routing
+│   ├── users/              # User management app
+│   └── requirements.txt    # Python dependencies
+├── frontend/               # Next.js frontend application
+│   ├── pages/             # Application pages
+│   │   ├── components/    # React components
+│   │   └── utils/         # Utility functions
+│   ├── styles/            # CSS and styling
+│   └── package.json       # Node.js dependencies
+└── package.json           # Root package.json with scripts
+```
 
 ---
 
-## 🧠 Use Case
+## 🔧 Development Notes
 
-This system solves the tedious, error-prone, and time-consuming process of manually creating academic timetables. It’s designed for colleges, universities, and institutions looking to automate scheduling while retaining full control over educational and infrastructure constraints.
+- Modular architecture with separation between UI, API, and scheduling logic
+- Enhanced constraint validator and resolver for complex scheduling requirements
+- Supports multiple user roles and department-based access controls
+- Firebase integration for user authentication
+- Celery integration for background task processing
 
 ---
 
-## 🧠 Use Case
+## 🎯 Use Case
 
-This system solves the tedious, error-prone, and time-consuming process of manually creating academic timetables. It's designed for colleges, universities, and institutions looking to automate scheduling while retaining full control over educational and infrastructure constraints.
+This system automates the creation of academic timetables for educational institutions, handling complex scheduling constraints while ensuring conflict-free schedules. It's designed for colleges, universities, and institutions looking to streamline their timetable generation process.
