@@ -26,7 +26,8 @@ const BatchManagement = () => {
     description: "",
     semester_number: 1,
     academic_year: "2024-2025",
-    total_sections: 1
+    total_sections: 1,
+    class_advisor: ""
   });
   const [formErrors, setFormErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -79,6 +80,9 @@ const BatchManagement = () => {
     if (!formData.academic_year.trim()) {
       errors.academic_year = "Academic year is required";
     }
+    if (!formData.class_advisor.trim()) {
+      errors.class_advisor = "Class advisor is required";
+    }
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -122,7 +126,7 @@ const BatchManagement = () => {
         const { data } = await api.post("/api/timetable/batches/", formData);
         setBatches([...batches, data]);
       }
-      setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1 });
+      setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1, class_advisor: "" });
       setEditingId(null);
       setShowForm(false);
     } catch (err) {
@@ -147,7 +151,8 @@ const BatchManagement = () => {
       description: batch.description,
       semester_number: batch.semester_number,
       academic_year: batch.academic_year,
-      total_sections: batch.total_sections || 1
+      total_sections: batch.total_sections || 1,
+      class_advisor: batch.class_advisor || ""
     });
     setEditingId(batch.id);
     setShowForm(true);
@@ -155,7 +160,7 @@ const BatchManagement = () => {
   };
   
   const clearForm = () => {
-    setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1 });
+    setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1, class_advisor: "" });
     setEditingId(null);
     setFormErrors({});
   };
@@ -385,6 +390,25 @@ const BatchManagement = () => {
                   )}
                 </div>
                 
+                {/* Class Advisor */}
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Class Advisor *
+                  </label>
+                  <input
+                    type="text"
+                    name="class_advisor"
+                    value={formData.class_advisor}
+                    onChange={handleInputChange}
+                    placeholder="Dr. Qasim Ali (Email: qasim.arain@faculty.muet.edu.pk)"
+                    className={`w-full px-4 py-3 bg-background/95 border ${formErrors.class_advisor ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30`}
+                    required
+                  />
+                  {formErrors.class_advisor && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.class_advisor}</p>
+                  )}
+                </div>
+                
                 <button
                   type="submit"
                   className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -441,6 +465,11 @@ const BatchManagement = () => {
                   </div>
                   
                   <p className="text-secondary text-sm mb-3">{batch.description}</p>
+                  {batch.class_advisor && (
+                    <p className="text-sm text-primary mb-1">
+                      <span className="text-accent-cyan font-medium">Class Advisor</span>: {batch.class_advisor.split('(')[0].trim()}
+                    </p>
+                  )}
                   <p className="text-xs text-secondary/70">Academic Year: {batch.academic_year}</p>
                 </div>
               ))}

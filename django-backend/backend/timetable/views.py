@@ -965,7 +965,8 @@ class LatestTimetableView(APIView):
                             batch_info[batch_name] = {
                                 'description': batch_obj.description,
                                 'semester_number': batch_obj.semester_number,
-                                'academic_year': batch_obj.academic_year
+                                'academic_year': batch_obj.academic_year,
+                                'class_advisor': getattr(batch_obj, 'class_advisor', '')
                             }
             except Exception as e:
                 print(f"Warning: Could not fetch batch info: {e}")

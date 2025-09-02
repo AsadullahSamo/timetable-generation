@@ -85,28 +85,32 @@ def populate_batches():
             'description': '8th Semester - Final Year',
             'semester_number': 8,
             'total_sections': 3,
-            'academic_year': '2024-2025'
+            'academic_year': '2024-2025',
+            'class_advisor': 'Prof. Dr. Qasim Ali (Email: qasim.arain@faculty.muet.edu.pk)'
         },
         {
             'name': '22SW',
             'description': '6th Semester - 3rd Year',
             'semester_number': 6,
             'total_sections': 3,
-            'academic_year': '2024-2025'
+            'academic_year': '2024-2025',
+            'class_advisor': 'Dr. S.M. Shehram Shah (Email: shehram.shah@faculty.muet.edu.pk)'
         },
         {
             'name': '23SW',
             'description': '5th Semester - 2nd Year',
             'semester_number': 5,
             'total_sections': 3,
-            'academic_year': '2024-2025'
+            'academic_year': '2024-2025',
+            'class_advisor': 'Ms. Mariam Memon (Email: mariam.memon@faculty.muet.edu.pk)'
         },
         {
             'name': '24SW',
             'description': '3rd Semester - 1st Year',
             'semester_number': 3,
             'total_sections': 3,
-            'academic_year': '2024-2025'
+            'academic_year': '2024-2025',
+            'class_advisor': 'Mr. Naeem Ahmed (Email: naeem.mahoto@faculty.muet.edu.pk)'
         }
     ]
     
@@ -145,44 +149,44 @@ def populate_subjects():
     
     # 21SW - 8th Semester (Final Year)
     subjects_21sw = [
-        ('SM', 'Simulation and Modeling', 3, False),
-        ('SQE', 'Software Quality Engineering', 3, False),
-        ('SQE (PR)', 'Software Quality Engineering (PR)', 1, True),
-        ('CC', 'Cloud Computing', 3, False),
-        ('CC (PR)', 'Cloud Computing (PR)', 1, True),
-        ('THESIS', 'Thesis', 3, False), 
+        ('SW224', 'Simulation and Modeling', 3, False, 'SM'),
+        ('SW426', 'Software Quality Engineering', 3, False, 'SQE'),
+        ('SW426_PR', 'Software Quality Engineering (PR)', 1, True, 'SQE (PR)'),
+        ('SW425', 'Cloud Computing', 3, False, 'CC'),
+        ('SW425_PR', 'Cloud Computing (PR)', 1, True, 'CC (PR)'),
+        ('SW499', 'Thesis', 3, False, 'THESIS'), 
     ]
     
     # 22SW - 6th Semester (3rd Year)
     subjects_22sw = [
-        ('SPM', 'Software Project Management', 3, False),
-        ('TSW', 'Technical & Scientific Writing', 2, False),
-        ('DS', 'Discrete Structures', 3, False),
-        ('DS&A', 'Data Science & Analytics', 3, False),
-        ('DS&A (PR)', 'Data Science & Analytics (PR)', 1, True),
-        ('MAD', 'Mobile Application Development', 3, False),
-        ('MAD (PR)', 'Mobile Application Development (PR)', 1, True),
+        ('SW322', 'Software Project Management', 3, False, 'SPM'),
+        ('ENG301', 'Technical & Scientific Writing', 2, False, 'TSW'),
+        ('SW325', 'Discrete Structures', 3, False, 'DS'),
+        ('SW326', 'Data Science & Analytics', 3, False, 'DS&A'),
+        ('SW326_PR', 'Data Science & Analytics (PR)', 1, True, 'DS&A (PR)'),
+        ('SW327', 'Mobile Application Development', 3, False, 'MAD'),
+        ('SW327_PR', 'Mobile Application Development (PR)', 1, True, 'MAD (PR)'),
     ]
     
     # 23SW - 4th Semester (2nd Year)
     subjects_23sw = [
-        ('ABIS', 'Agent based Intelligent Systems', 3, False),
-        ('ISEC', 'Information Security', 3, False),
-        ('HCI', 'Human Computer Interaction', 3, False),
-        ('SP', 'Statistics & Probability', 3, False),
-        ('SCD', 'Software Construction & Development', 2, False),
-        ('SCD (PR)', 'Software Construction & Development (PR)', 1, True),
+        ('SW318', 'Agent based Intelligent Systems', 3, False, 'ABIS'),
+        ('SW316', 'Information Security', 3, False, 'ISEC'),
+        ('SW317', 'Human Computer Interaction', 3, False, 'HCI'),
+        ('MTH317', 'Statistics & Probability', 3, False, 'SP'),
+        ('SW315', 'Software Construction & Development', 2, False, 'SCD'),
+        ('SW315_PR', 'Software Construction & Development (PR)', 1, True, 'SCD (PR)'),
     ]
     
     # 24SW - 2nd Semester (1st Year)
     subjects_24sw = [
-        ('DBS', 'Database Systems', 3, False),
-        ('DBS (PR)', 'Database Systems (PR)', 1, True),
-        ('DSA', 'Data Structures & Algorithm', 3, False),
-        ('DSA (PR)', 'Data Structures & Algorithm (PR)', 1, True),
-        ('SRE', 'Software Requirement Engineering', 3, False),
-        ('OR', 'Operations Research', 3, False),
-        ('SEM', 'Software Economics & Management', 3, False),
+        ('SW215', 'Database Systems', 3, False, 'DBS'),
+        ('SW215_PR', 'Database Systems (PR)', 1, True, 'DBS (PR)'),
+        ('SW212', 'Data Structures & Algorithm', 3, False, 'DSA'),
+        ('SW212_PR', 'Data Structures & Algorithm (PR)', 1, True, 'DSA (PR)'),
+        ('SW216', 'Software Requirement Engineering', 3, False, 'SRE'),
+        ('SW217', 'Operations Research', 3, False, 'OR'),
+        ('SW211', 'Software Economics & Management', 3, False, 'SEM'),
     ]
     
     all_subjects = [
@@ -194,14 +198,15 @@ def populate_subjects():
     
     for batch_name, subjects in all_subjects:
         print(f'\n--- {batch_name} Subjects ---')
-        for code, name, credits, is_practical in subjects:
+        for code, name, credits, is_practical, short_name in subjects:
             subject, created = Subject.objects.get_or_create(
                 code=code,
                 defaults={
                     'name': name,
                     'credits': credits,
                     'is_practical': is_practical,
-                    'batch': batch_name
+                    'batch': batch_name,
+                    'subject_short_name': short_name
                 }
             )
             if created:
@@ -289,42 +294,42 @@ def populate_teacher_assignments():
     # Teacher assignments with specific sections
     assignments_data = [
         # 21SW assignments
-        ('Dr. Sania Bhatti', 'SM', '21SW', ['I', 'II']),
-        ('Mr. Umar Farooq', 'SM', '21SW', ['III']),
-        ('Mr. Aqib Ali', 'SQE', '21SW', ['I', 'II', 'III']),
-        ('Mr. Aqib Ali', 'SQE (PR)', '21SW', ['I', 'II', 'III']),
-        ('Dr. Rabeea Jaffari', 'CC', '21SW', ['I', 'II', 'III']),
-        ('Ms. Sana Faiz', 'CC (PR)', '21SW', ['I', 'II', 'III']),
+        ('Dr. Sania Bhatti', 'SW224', '21SW', ['I', 'II']),
+        ('Mr. Umar Farooq', 'SW224', '21SW', ['III']),
+        ('Mr. Aqib Ali', 'SW426', '21SW', ['I', 'II', 'III']),
+        ('Mr. Aqib Ali', 'SW426_PR', '21SW', ['I', 'II', 'III']),
+        ('Dr. Rabeea Jaffari', 'SW425', '21SW', ['I', 'II', 'III']),
+        ('Ms. Sana Faiz', 'SW425_PR', '21SW', ['I', 'II', 'III']),
         
         # 22SW assignments
-        ('Mr. Salahuddin Saddar', 'SPM', '22SW', ['I', 'II', 'III']),
-        ('Ms. Shazma Memon', 'TSW', '22SW', ['I', 'II']),
-        ('Mr. Sarwar Ali', 'TSW', '22SW', ['III']),
-        ('Ms. Shafya Qadeer', 'DS', '22SW', ['I', 'II', 'III']),
-        ('Dr. Areej Fatemah', 'DS&A', '22SW', ['I', 'II', 'III']),  # Fixed typo
-        ('Ms. Aisha Esani', 'DS&A (PR)', '22SW', ['I', 'II', 'III']),
-        ('Ms. Mariam Memon', 'MAD', '22SW', ['I', 'II', 'III']),
-        ('Mr. Umar Farooq', 'MAD (PR)', '22SW', ['I', 'II', 'III']),
+        ('Mr. Salahuddin Saddar', 'SW322', '22SW', ['I', 'II', 'III']),
+        ('Ms. Shazma Memon', 'ENG301', '22SW', ['I', 'II']),
+        ('Mr. Sarwar Ali', 'ENG301', '22SW', ['III']),
+        ('Ms. Shafya Qadeer', 'SW325', '22SW', ['I', 'II', 'III']),
+        ('Dr. Areej Fatemah', 'SW326', '22SW', ['I', 'II', 'III']),
+        ('Ms. Aisha Esani', 'SW326_PR', '22SW', ['I', 'II', 'III']),
+        ('Ms. Mariam Memon', 'SW327', '22SW', ['I', 'II', 'III']),
+        ('Mr. Umar Farooq', 'SW327_PR', '22SW', ['I', 'II', 'III']),
         
         # 23SW assignments
-        ('Mr. Naveen Kumar', 'ABIS', '23SW', ['I', 'II', 'III']),
-        ('Prof. Dr. Qasim Ali', 'ISEC', '23SW', ['I']),
-        ('Ms. Soonti Taj', 'ISEC', '23SW', ['II', 'III']),
-        ('Dr. S. M. Shehram Shah', 'HCI', '23SW', ['I', 'II']),
-        ('Mr. Arsalan', 'HCI', '23SW', ['III']),
-        ('Mr. Mansoor Bhaagat', 'SP', '23SW', ['I', 'II', 'III']),
-        ('Ms. Dua Agha', 'SCD', '23SW', ['I', 'II', 'III']),
-        ('Ms. Dua Agha', 'SCD (PR)', '23SW', ['I', 'II', 'III']),
+        ('Mr. Naveen Kumar', 'SW318', '23SW', ['I', 'II', 'III']),
+        ('Prof. Dr. Qasim Ali', 'SW316', '23SW', ['I']),
+        ('Ms. Soonti Taj', 'SW316', '23SW', ['II', 'III']),
+        ('Dr. S. M. Shehram Shah', 'SW317', '23SW', ['I', 'II']),
+        ('Mr. Arsalan', 'SW317', '23SW', ['III']),
+        ('Mr. Mansoor Bhaagat', 'MTH317', '23SW', ['I', 'II', 'III']),
+        ('Ms. Dua Agha', 'SW315', '23SW', ['I', 'II', 'III']),
+        ('Ms. Dua Agha', 'SW315_PR', '23SW', ['I', 'II', 'III']),
         
         # 24SW assignments
-        ('Ms. Aleena', 'DBS', '24SW', ['I', 'II', 'III']),
-        ('Ms. Hina Ali', 'DBS (PR)', '24SW', ['I', 'II', 'III']),
-        ('Dr. Mohsin Memon', 'DSA', '24SW', ['I', 'II']),
-        ('Mr. Mansoor', 'DSA', '24SW', ['III']),
-        ('Mr. Naveen Kumar', 'DSA (PR)', '24SW', ['I', 'II', 'III']),
-        ('Ms.Memona Sami', 'SRE', '24SW', ['I', 'II', 'III']),
-        ('Ms. Amirta Dewani', 'OR', '24SW', ['I', 'II', 'III']),
-        ('Mr. Junaid Ahmed', 'SEM', '24SW', ['I', 'II', 'III']),
+        ('Ms. Aleena', 'SW215', '24SW', ['I', 'II', 'III']),
+        ('Ms. Hina Ali', 'SW215_PR', '24SW', ['I', 'II', 'III']),
+        ('Dr. Mohsin Memon', 'SW212', '24SW', ['I', 'II']),
+        ('Mr. Mansoor', 'SW212', '24SW', ['III']),
+        ('Mr. Naveen Kumar', 'SW212_PR', '24SW', ['I', 'II', 'III']),
+        ('Ms.Memona Sami', 'SW216', '24SW', ['I', 'II', 'III']),
+        ('Ms. Amirta Dewani', 'SW217', '24SW', ['I', 'II', 'III']),
+        ('Mr. Junaid Ahmed', 'SW211', '24SW', ['I', 'II', 'III']),
     ]
     
     for teacher_name, subject_code, batch_name, sections in assignments_data:

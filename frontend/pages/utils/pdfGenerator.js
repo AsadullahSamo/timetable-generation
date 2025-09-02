@@ -31,30 +31,23 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
            batch_info: response.data.batch_info
          });
         
-        // Check if we got all sections or if pagination is still limiting us
-        const totalClassGroups = response.data.pagination?.total_class_groups || 0;
-        const currentClassGroups = response.data.pagination?.class_groups || [];
-        const allClassGroupsFromAPI = response.data.pagination?.all_class_groups || [];
-        
-        console.log(`📊 Pagination info: total=${totalClassGroups}, current=${currentClassGroups.length}, all=${allClassGroupsFromAPI.length}`);
-        
-        // If we have all_class_groups, use that directly
-        if (allClassGroupsFromAPI.length > 0 && allClassGroupsFromAPI.length >= totalClassGroups) {
-          console.log(`✅ API returned all ${allClassGroupsFromAPI.length} sections in single request`);
+        // Check if we got all_class_groups, use that directly
+        if (allSectionsData.pagination?.all_class_groups && allSectionsData.pagination.all_class_groups.length > 0 && allSectionsData.pagination.all_class_groups.length >= response.data.pagination.total_class_groups) {
+          console.log(`✅ API returned all ${allSectionsData.pagination.all_class_groups.length} sections in single request`);
           // Update the class_groups to include all sections
-          response.data.pagination.class_groups = allClassGroupsFromAPI;
+          response.data.pagination.class_groups = allSectionsData.pagination.all_class_groups;
         }
         // Otherwise, check if pagination is still limiting us
-        else if (totalClassGroups > currentClassGroups.length) {
-          console.warn(`⚠️  Pagination still limiting results: got ${currentClassGroups.length} out of ${totalClassGroups} total sections`);
+        else if (response.data.pagination?.total_class_groups > response.data.pagination?.class_groups?.length) {
+          console.warn(`⚠️  Pagination still limiting results: got ${response.data.pagination.class_groups.length} out of ${response.data.pagination.total_class_groups} total sections`);
           console.log('Attempting to fetch all sections by making multiple requests...');
           
           // Try to fetch all sections by making multiple requests
           let allEntries = [...response.data.entries];
-          let allClassGroups = [...currentClassGroups];
+          let allClassGroups = [...response.data.pagination.class_groups];
           let currentPage = 2;
           
-          while (allClassGroups.length < totalClassGroups && currentPage <= 10) { // Safety limit
+          while (allClassGroups.length < response.data.pagination.total_class_groups && currentPage <= 10) { // Safety limit
             try {
               const nextResponse = await api.get('/api/timetable/latest/', {
                 params: {
@@ -200,6 +193,14 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       textWidth = doc.getTextWidth(universityName);
     }
     
+    // Render chairman once at the start (above university name)
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Chairman', pageWidth / 2, 24, { align: 'center' });
+    
+    // University name
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', 'bold');
     doc.text(universityName, pageWidth / 2, 30, { align: 'center' });
     
     // Reset font size for department name
@@ -694,14 +695,15 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('Class Advisor: Dr. Qasim Ali (Email: Qasim.arain@faculty.muet.edu.pk)', margin, currentY);
+      let advisorText = '';
+      if (allSectionsData.batch_info && allSectionsData.batch_info[batchName] && allSectionsData.batch_info[batchName].class_advisor) {
+        advisorText = allSectionsData.batch_info[batchName].class_advisor;
+      }
+      const advisorLine = advisorText ? `Class Advisor: ${advisorText}` : 'Class Advisor:';
+      doc.text(advisorLine, margin, currentY);
       currentY += 15;
       
-      // Signature line
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Chairman', pageWidth - margin - 30, currentY);
-      
+      // Removed per-batch chairman footer; shown once at start
       currentY += 30;
       
       processedBatches++;

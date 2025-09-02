@@ -116,6 +116,7 @@ class Batch(models.Model):
     semester_number = models.PositiveIntegerField(default=8, help_text="e.g., 8 for 8th semester")
     academic_year = models.CharField(max_length=20, default="2024-2025")
     total_sections = models.PositiveIntegerField(default=1, help_text="Number of sections in this batch (e.g., 3 for I, II, III)")
+    class_advisor = models.CharField(max_length=255, default="", blank=True, help_text="Name or details of the class advisor for this batch")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # Add department and owner fields for data isolation

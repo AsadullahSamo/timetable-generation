@@ -499,14 +499,8 @@ const DepartmentConfig = () => {
                 <div key={config.id} className="bg-background/95 rounded-xl p-4 border border-border">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                                             <div className="flex items-center gap-3 mb-2">
+                         <div className="flex items-center gap-3 mb-2">
                          <h3 className="font-semibold text-white text-lg">{config.name}</h3>
-                         <span className="px-2 py-1 text-xs bg-accent-cyan/20 text-white rounded-full border border-accent-cyan/30">
-                           {config.semester}
-                         </span>
-                         <span className="px-2 py-1 text-xs bg-accent-pink/20 text-white rounded-full border border-accent-pink/30">
-                           {config.academic_year}
-                         </span>
                        </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-secondary">
                         <div className="flex items-center gap-2">
