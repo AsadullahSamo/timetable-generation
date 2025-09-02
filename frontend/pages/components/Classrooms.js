@@ -12,7 +12,8 @@ import {
   Loader2,
   ArrowLeft,
   AlertCircle,
-  X
+  X,
+  Shield
 } from 'lucide-react';
 
 const Classrooms = () => {
@@ -25,6 +26,11 @@ const Classrooms = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [showDeleteOneConfirm, setShowDeleteOneConfirm] = useState(null);
+  const [deleteOneLoading, setDeleteOneLoading] = useState(false);
   
 
   useEffect(() => {
@@ -106,12 +112,44 @@ const Classrooms = () => {
   };
 
   const handleDelete = async (id) => {
+    setShowDeleteOneConfirm(id);
+  };
+
+  const confirmDeleteOne = async () => {
+    if (!showDeleteOneConfirm) return;
     try {
-      await api.delete(`/api/timetable/classrooms/${id}/`);
-      setClassrooms(classrooms.filter(room => room.id !== id));
+      setDeleteOneLoading(true);
+      await api.delete(`/api/timetable/classrooms/${showDeleteOneConfirm}/`);
+      setClassrooms(classrooms.filter(room => room.id !== showDeleteOneConfirm));
+      setSuccess('Classroom deleted');
+      setTimeout(() => setSuccess(null), 2500);
     } catch (error) {
       setError('Failed to delete classroom');
-      console.error('Error deleting classroom:', error);
+    } finally {
+      setShowDeleteOneConfirm(null);
+      setDeleteOneLoading(false);
+    }
+  };
+
+  const handleDeleteAllClassrooms = async () => {
+    try {
+      setDeleteAllLoading(true);
+      const response = await api.delete('/api/timetable/data-management/classrooms/');
+      
+      if (response.data.success) {
+        setClassrooms([]);
+        setError(null);
+        setShowDeleteAllConfirm(false);
+        setSuccess(`Deleted ${response.data.deleted_counts.classrooms} classrooms, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
+        setTimeout(() => setSuccess(null), 2500);
+      } else {
+        setError('Failed to delete all classrooms');
+      }
+    } catch (err) {
+      setError('Failed to delete all classrooms');
+      console.error('Delete all classrooms error:', err);
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -143,7 +181,18 @@ const Classrooms = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-end mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex gap-3">
+              {classrooms.length > 0 && (
+                <button
+                  onClick={() => setShowDeleteAllConfirm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  Delete All Classrooms
+                </button>
+              )}
+            </div>
             <button
               onClick={() => {
                 setShowForm(true);
@@ -278,6 +327,91 @@ const Classrooms = () => {
               </button>
             </Link>
           </div>
+
+          {/* Delete All Confirmation Modal */}
+          {showDeleteAllConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete All Classrooms</h3>
+                </div>
+                
+                <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <span className="text-sm text-white">
+                      This will delete ALL classrooms and related timetable entries. This action cannot be undone!
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-secondary mb-6">
+                  Are you sure you want to proceed? This will permanently delete {classrooms.length} classroom(s) and all related data.
+                </p>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(false)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAllClassrooms}
+                    disabled={deleteAllLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteAllLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete All"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete One Confirmation Modal */}
+          {showDeleteOneConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete Classroom</h3>
+                </div>
+                <p className="text-secondary mb-6">
+                  Are you sure you want to delete this classroom?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteOneConfirm(null)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteOne}
+                    disabled={deleteOneLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteOneLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

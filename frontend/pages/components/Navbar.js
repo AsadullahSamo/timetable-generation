@@ -10,7 +10,6 @@ import {
   Calendar,
   LogOut,
   GraduationCap,
-  
 } from 'lucide-react';
 
 const menuItems = [

@@ -17,7 +17,9 @@ import {
   Loader2,
   Building2,
   BookOpen,
-  Users
+  Users,
+  Trash2,
+  Shield
 } from 'lucide-react';
 
 const Timetable = () => {
@@ -44,6 +46,8 @@ const Timetable = () => {
   const [safeSlotsErrorFor, setSafeSlotsErrorFor] = useState(null);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [showDeleteTimetableConfirm, setShowDeleteTimetableConfirm] = useState(false);
+  const [deleteTimetableLoading, setDeleteTimetableLoading] = useState(false);
 
   // Handle client-side mounting
   useEffect(() => {
@@ -246,6 +250,43 @@ const Timetable = () => {
       setLoading(false); // Clear loading state on error
     } finally {
       setRegenerating(false);
+    }
+  };
+
+  const handleDeleteTimetable = async () => {
+    try {
+      setDeleteTimetableLoading(true);
+      const response = await api.delete('/api/timetable/data-management/timetable/');
+      
+      if (response.data.success) {
+        setTimetableData({ entries: [], days: timetableData?.days || [], timeSlots: timetableData?.timeSlots || [], pagination: timetableData?.pagination });
+        setError("");
+        setShowDeleteTimetableConfirm(false);
+        setMessage({ type: 'success', text: `Successfully deleted ${response.data.deleted_count} timetable entries.` });
+        setTimeout(() => setMessage(null), 5000);
+        // Refetch latest to sync empty state cleanly
+        try {
+          const params = new URLSearchParams();
+          if (selectedClassGroup) params.append('class_group', selectedClassGroup);
+          const latest = await api.get(`/api/timetable/latest/?${params}`);
+          // If backend returns empty after delete, ensure UI shows empty template not blank screen
+          const data = latest.data;
+          if (!data || !Array.isArray(data.entries)) {
+            setTimetableData({ entries: [], days: timetableData?.days || [], timeSlots: timetableData?.timeSlots || [], pagination: timetableData?.pagination });
+          } else {
+            setTimetableData(data);
+          }
+        } catch (_) {
+          // Ignore refetch errors; UI already shows cleared timetable
+        }
+      } else {
+        setError("Failed to delete timetable");
+      }
+    } catch (err) {
+      setError("Failed to delete timetable");
+      console.error("Delete timetable error:", err);
+    } finally {
+      setDeleteTimetableLoading(false);
     }
   };
 
@@ -525,6 +566,14 @@ const Timetable = () => {
                 {editMode ? 'On' : 'Off'}
               </button>
             </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteTimetableConfirm(true)}
+                className="px-4 py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300 flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Timetable
+              </button>
             <button
               onClick={handleRegenerateTimetable}
               disabled={regenerating}
@@ -546,6 +595,7 @@ const Timetable = () => {
                 </>
               )}
             </button>
+            </div>
             <p className="text-xs text-secondary/70 text-right max-w-xs">
               Wipes existing data and generates<br/>a completely new timetable
             </p>
@@ -845,6 +895,54 @@ const Timetable = () => {
             )}
           </button>
         </div>
+
+        {/* Delete Timetable Confirmation Modal */}
+        {showDeleteTimetableConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+              <div className="flex items-center gap-3 mb-4">
+                <Shield className="h-6 w-6 text-red-500" />
+                <h3 className="text-lg font-semibold text-primary">Confirm Delete Timetable</h3>
+              </div>
+              
+              <div className="mb-4 p-3 border bg-red-800 border-yellow-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-white">
+                    This will delete ALL timetable entries and related data. This action cannot be undone!
+                  </span>
+                </div>
+              </div>
+              
+              <p className="text-secondary mb-6">
+                Are you sure you want to proceed? This will permanently delete all timetable data.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteTimetableConfirm(false)}
+                  className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteTimetable}
+                  disabled={deleteTimetableLoading}
+                  className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {deleteTimetableLoading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </div>
+                  ) : (
+                    "Confirm Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

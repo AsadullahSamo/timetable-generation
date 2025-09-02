@@ -18,7 +18,8 @@ import {
   User,
   Hash,
   BarChart3,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from 'lucide-react';
 import Link from "next/link";
 import BackButton from "./BackButton";
@@ -40,6 +41,8 @@ const TeacherAssignments = () => {
   const [viewMode, setViewMode] = useState('assign'); // 'assign' or 'manage'
   const [searchTerm, setSearchTerm] = useState("");
   const [teacherFilter, setTeacherFilter] = useState('all'); // 'all', 'unassigned', 'assigned'
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -308,20 +311,49 @@ const TeacherAssignments = () => {
   };
 
   // Delete assignment
-  const handleDelete = async (assignmentId) => {
-    if (!confirm('Are you sure you want to delete this assignment?')) return;
+  const [showDeleteOneConfirm, setShowDeleteOneConfirm] = useState(null);
+  const [deleteOneLoading, setDeleteOneLoading] = useState(false);
 
+  const handleDelete = async (assignmentId) => {
+    setShowDeleteOneConfirm(assignmentId);
+  };
+
+  const confirmDeleteOne = async () => {
+    if (!showDeleteOneConfirm) return;
     try {
-      setLoading(true);
-      await api.delete(`/api/timetable/teacher-assignments/${assignmentId}/`);
-      setSuccess('✅ Assignment deleted successfully');
-      fetchData();
-      setTimeout(() => setSuccess(null), 3000);
+      setDeleteOneLoading(true);
+      await api.delete(`/api/timetable/teacher-assignments/${showDeleteOneConfirm}/`);
+      setSuccess('Assignment deleted successfully');
+      await fetchData();
+      setTimeout(() => setSuccess(null), 2500);
     } catch (error) {
       setError('Failed to delete assignment');
-      console.error('Error deleting assignment:', error);
     } finally {
-      setLoading(false);
+      setDeleteOneLoading(false);
+      setShowDeleteOneConfirm(null);
+    }
+  };
+
+  const handleDeleteAllAssignments = async () => {
+    try {
+      setDeleteAllLoading(true);
+      const response = await api.delete('/api/timetable/data-management/teacher_assignments/');
+      
+      if (response.data.success) {
+        setAssignments([]);
+        setError(null);
+        setShowDeleteAllConfirm(false);
+        setSuccess(`Deleted ${response.data.deleted_counts.teacher_assignments} assignments, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
+        setTimeout(() => setSuccess(null), 2500);
+        fetchData(); // Refresh the data
+      } else {
+        setError('Failed to delete all teacher assignments');
+      }
+    } catch (err) {
+      setError('Failed to delete all teacher assignments');
+      console.error('Delete all teacher assignments error:', err);
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -934,6 +966,15 @@ const TeacherAssignments = () => {
                     className="w-full pl-10 pr-4 py-3 bg-background/95 backdrop-blur-sm border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
                   />
                 </div>
+                {assignments.length > 0 && (
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(true)}
+                    className="flex items-center gap-2 px-4 py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                    Delete All Assignments
+                  </button>
+                )}
               </div>
 
               {/* Assignments List */}
@@ -1012,6 +1053,91 @@ const TeacherAssignments = () => {
               </button>
             </Link>
           </div>
+
+          {/* Delete All Confirmation Modal */}
+          {showDeleteAllConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete All Assignments</h3>
+                </div>
+                
+                <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <span className="text-sm text-white">
+                      This will delete ALL teacher assignments and related timetable entries. This action cannot be undone!
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-secondary mb-6">
+                  Are you sure you want to proceed? This will permanently delete {assignments.length} assignment(s) and all related data.
+                </p>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(false)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAllAssignments}
+                    disabled={deleteAllLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteAllLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete All"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete One Confirmation Modal */}
+          {showDeleteOneConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete Assignment</h3>
+                </div>
+                <p className="text-secondary mb-6">
+                  Are you sure you want to delete this teacher assignment?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteOneConfirm(null)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteOne}
+                    disabled={deleteOneLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteOneLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

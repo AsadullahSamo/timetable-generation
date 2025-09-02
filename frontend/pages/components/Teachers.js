@@ -26,7 +26,8 @@ import {
   Briefcase,
   Calendar,
   CheckCircle2,
-  BookMarked
+  BookMarked,
+  Shield
 } from 'lucide-react';
 
 const TeachersConfig = () => {
@@ -41,6 +42,9 @@ const TeachersConfig = () => {
   const [assignments, setAssignments] = useState([]);
   const [weekDays, setWeekDays] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
   const [timetableConfig, setTimetableConfig] = useState(null);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [success, setSuccess] = useState("");
   
   // Stats calculation
   const stats = {
@@ -135,6 +139,28 @@ const TeachersConfig = () => {
     } catch (err) {
       setError("Delete failed - teacher might be in use.");
       setShowDeleteConfirm(null);
+    }
+  };
+
+  const handleDeleteAllTeachers = async () => {
+    try {
+      setDeleteAllLoading(true);
+      const response = await api.delete('/api/timetable/data-management/teachers/');
+      
+      if (response.data.success) {
+        setTeachers([]);
+        setError("");
+        setShowDeleteAllConfirm(false);
+        setSuccess(`Deleted ${response.data.deleted_counts.teachers} teachers, ${response.data.deleted_counts.teacher_assignments} assignments, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
+        setTimeout(() => setSuccess(""), 3000);
+      } else {
+        setError("Failed to delete all teachers");
+      }
+    } catch (err) {
+      setError("Failed to delete all teachers");
+      console.error("Delete all teachers error:", err);
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -237,13 +263,24 @@ const TeachersConfig = () => {
               </div>
             </div>
             
-            <Link
-              href="/components/AddTeacher"
-              className="px-4 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4" />
-              Add New Teacher
-            </Link>
+            <div className="flex gap-3">
+              {teachers.length > 0 && (
+                <button
+                  onClick={() => setShowDeleteAllConfirm(true)}
+                  className="flex items-center gap-2 px-4 py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete All Teachers
+                </button>
+              )}
+              <Link
+                href="/components/AddTeacher"
+                className="px-4 py-3 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 whitespace-nowrap"
+              >
+                <Plus className="h-4 w-4" />
+                Add New Teacher
+              </Link>
+            </div>
           </div>
 
           <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft mb-8">
@@ -479,6 +516,54 @@ const TeachersConfig = () => {
                 className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Confirmation Modal */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Shield className="h-6 w-6 text-red-500" />
+              <h3 className="text-lg font-semibold text-primary">Confirm Delete All Teachers</h3>
+            </div>
+            
+            <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                <span className="text-sm text-white">
+                  This will delete ALL teachers and related data including teacher assignments and timetable entries. This action cannot be undone!
+                </span>
+              </div>
+            </div>
+            
+            <p className="text-secondary mb-6">
+              Are you sure you want to proceed? This will permanently delete {teachers.length} teacher(s) and all related data.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteAllConfirm(false)}
+                className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAllTeachers}
+                disabled={deleteAllLoading}
+                className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {deleteAllLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Deleting...
+                  </div>
+                ) : (
+                  "Confirm Delete All"
+                )}
               </button>
             </div>
           </div>

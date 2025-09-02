@@ -21,7 +21,8 @@ import {
   Hash,
   Award,
   CheckCircle2,
-  BookMarked
+  BookMarked,
+  Shield
 } from 'lucide-react';
 
 const SubjectConfig = () => {
@@ -46,6 +47,9 @@ const SubjectConfig = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [activeSubject, setActiveSubject] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [success, setSuccess] = useState(null);
 
   // Stats calculation
   const stats = {
@@ -266,6 +270,28 @@ const SubjectConfig = () => {
     }
   };
 
+  const handleDeleteAllSubjects = async () => {
+    try {
+      setDeleteAllLoading(true);
+      const response = await api.delete('/api/timetable/data-management/subjects/');
+      
+      if (response.data.success) {
+        setSubjects([]);
+        setError("");
+        setShowDeleteAllConfirm(false);
+        setSuccess(`Deleted ${response.data.deleted_counts.subjects} subjects, ${response.data.deleted_counts.teacher_assignments} assignments, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError("Failed to delete all subjects");
+      }
+    } catch (err) {
+      setError("Failed to delete all subjects");
+      console.error("Delete all subjects error:", err);
+    } finally {
+      setDeleteAllLoading(false);
+    }
+  };
+
   const handleEdit = (subject) => {
     setFormData({
       name: subject.name,
@@ -367,6 +393,15 @@ const SubjectConfig = () => {
                 className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
               />
             </div>
+            {subjects.length > 0 && (
+              <button
+                onClick={() => setShowDeleteAllConfirm(true)}
+                className="flex items-center gap-2 px-4 py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
+              >
+                <Trash2 className="h-5 w-5" />
+                Delete All Subjects
+              </button>
+            )}
           </div>
 
           {/* Add/Edit Subject Form */}
@@ -708,6 +743,54 @@ const SubjectConfig = () => {
                 className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Confirmation Modal */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Shield className="h-6 w-6 text-red-500" />
+              <h3 className="text-lg font-semibold text-primary">Confirm Delete All Subjects</h3>
+            </div>
+            
+            <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                <span className="text-sm text-white">
+                  This will delete ALL subjects and related data including teacher assignments and timetable entries. This action cannot be undone!
+                </span>
+              </div>
+            </div>
+            
+            <p className="text-secondary mb-6">
+              Are you sure you want to proceed? This will permanently delete {subjects.length} subject(s) and all related data.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteAllConfirm(false)}
+                className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAllSubjects}
+                disabled={deleteAllLoading}
+                className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {deleteAllLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Deleting...
+                  </div>
+                ) : (
+                  "Confirm Delete All"
+                )}
               </button>
             </div>
           </div>

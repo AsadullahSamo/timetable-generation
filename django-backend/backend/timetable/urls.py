@@ -26,6 +26,7 @@ from .views import (
     CrossSemesterConflictView,
     ConstraintTestingView,
     ConstraintResolverView,
+    DataManagementView,
 )
 
 # router = DefaultRouter()
@@ -84,4 +85,8 @@ urlpatterns = [
 
     # Task management
     path('task-status/<uuid:task_id>/', TaskStatusView.as_view(), name='task-status'),
+    
+    # Data management
+    path('data-management/', DataManagementView.as_view(), name='data-management'),
+    path('data-management/<str:action>/', DataManagementView.as_view(), name='data-management-action'),
 ] + router.urls

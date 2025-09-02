@@ -4793,3 +4793,245 @@ class TeacherSubjectAssignmentViewSet(DepartmentDataMixin, viewsets.ModelViewSet
         
         serializer.save()
 
+
+class DataManagementView(APIView):
+    """API endpoints for data management operations"""
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, action=None):
+        """Handle DELETE requests for different deletion operations"""
+        if action == 'timetable':
+            return self.delete_timetable(request)
+        elif action == 'all_data':
+            return self.delete_all_data(request)
+        elif action == 'batches':
+            return self.delete_batches(request)
+        elif action == 'subjects':
+            return self.delete_subjects(request)
+        elif action == 'teachers':
+            return self.delete_teachers(request)
+        elif action == 'classrooms':
+            return self.delete_classrooms(request)
+        elif action == 'teacher_assignments':
+            return self.delete_teacher_assignments(request)
+        else:
+            return Response({
+                'success': False,
+                'error': 'Invalid action specified'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request):
+        """Handle GET requests for data counts"""
+        return self.get_data_counts(request)
+    
+    def delete_timetable(self, request):
+        """Delete all timetable entries"""
+        try:
+            count = TimetableEntry.objects.count()
+            TimetableEntry.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {count} timetable entries',
+                'deleted_count': count
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete_all_data(self, request):
+        """Delete all data from the database"""
+        try:
+            # Count before deletion
+            counts_before = {
+                'timetable_entries': TimetableEntry.objects.count(),
+                'teacher_assignments': TeacherSubjectAssignment.objects.count(),
+                'teachers': Teacher.objects.count(),
+                'subjects': Subject.objects.count(),
+                'classrooms': Classroom.objects.count(),
+                'schedule_configs': ScheduleConfig.objects.count(),
+                'configs': Config.objects.count(),
+                'class_groups': ClassGroup.objects.count(),
+                'batches': Batch.objects.count(),
+            }
+            
+            # Delete in reverse dependency order
+            TimetableEntry.objects.all().delete()
+            TeacherSubjectAssignment.objects.all().delete()
+            Teacher.objects.all().delete()
+            Subject.objects.all().delete()
+            Classroom.objects.all().delete()
+            ScheduleConfig.objects.all().delete()
+            Config.objects.all().delete()
+            ClassGroup.objects.all().delete()
+            Batch.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': 'Successfully deleted all data',
+                'deleted_counts': counts_before
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete_batches(self, request):
+        """Delete all batches and related data"""
+        try:
+            batch_count = Batch.objects.count()
+            assignment_count = TeacherSubjectAssignment.objects.count()
+            timetable_count = TimetableEntry.objects.count()
+            
+            # Delete in order to handle foreign key relationships
+            TimetableEntry.objects.all().delete()
+            TeacherSubjectAssignment.objects.all().delete()
+            Batch.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {batch_count} batches and related data',
+                'deleted_counts': {
+                    'batches': batch_count,
+                    'teacher_assignments': assignment_count,
+                    'timetable_entries': timetable_count
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete_subjects(self, request):
+        """Delete all subjects and related data"""
+        try:
+            subject_count = Subject.objects.count()
+            assignment_count = TeacherSubjectAssignment.objects.count()
+            timetable_count = TimetableEntry.objects.count()
+            
+            # Delete in order to handle foreign key relationships
+            TimetableEntry.objects.all().delete()
+            TeacherSubjectAssignment.objects.all().delete()
+            Subject.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {subject_count} subjects and related data',
+                'deleted_counts': {
+                    'subjects': subject_count,
+                    'teacher_assignments': assignment_count,
+                    'timetable_entries': timetable_count
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete_teachers(self, request):
+        """Delete all teachers and related data"""
+        try:
+            teacher_count = Teacher.objects.count()
+            assignment_count = TeacherSubjectAssignment.objects.count()
+            timetable_count = TimetableEntry.objects.count()
+            
+            # Delete in order to handle foreign key relationships
+            TimetableEntry.objects.all().delete()
+            TeacherSubjectAssignment.objects.all().delete()
+            Teacher.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {teacher_count} teachers and related data',
+                'deleted_counts': {
+                    'teachers': teacher_count,
+                    'teacher_assignments': assignment_count,
+                    'timetable_entries': timetable_count
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete_classrooms(self, request):
+        """Delete all classrooms and related data"""
+        try:
+            classroom_count = Classroom.objects.count()
+            timetable_count = TimetableEntry.objects.count()
+            
+            # Delete in order to handle foreign key relationships
+            TimetableEntry.objects.all().delete()
+            Classroom.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {classroom_count} classrooms and related data',
+                'deleted_counts': {
+                    'classrooms': classroom_count,
+                    'timetable_entries': timetable_count
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete_teacher_assignments(self, request):
+        """Delete all teacher assignments and related data"""
+        try:
+            assignment_count = TeacherSubjectAssignment.objects.count()
+            timetable_count = TimetableEntry.objects.count()
+            
+            # Delete in order to handle foreign key relationships
+            TimetableEntry.objects.all().delete()
+            TeacherSubjectAssignment.objects.all().delete()
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully deleted {assignment_count} teacher assignments and related data',
+                'deleted_counts': {
+                    'teacher_assignments': assignment_count,
+                    'timetable_entries': timetable_count
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_data_counts(self, request):
+        """Get current data counts for all models"""
+        try:
+            counts = {
+                'timetable_entries': TimetableEntry.objects.count(),
+                'teacher_assignments': TeacherSubjectAssignment.objects.count(),
+                'teachers': Teacher.objects.count(),
+                'subjects': Subject.objects.count(),
+                'classrooms': Classroom.objects.count(),
+                'schedule_configs': ScheduleConfig.objects.count(),
+                'configs': Config.objects.count(),
+                'class_groups': ClassGroup.objects.count(),
+                'batches': Batch.objects.count(),
+                'departments': Department.objects.count(),
+                'user_departments': UserDepartment.objects.count(),
+            }
+            
+            return Response({
+                'success': True,
+                'counts': counts
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

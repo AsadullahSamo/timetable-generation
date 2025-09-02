@@ -14,7 +14,8 @@ import {
   Calendar,
   BookOpen,
   Users,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from 'lucide-react';
 import Link from "next/link";
 
@@ -33,6 +34,11 @@ const BatchManagement = () => {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [showDeleteOneConfirm, setShowDeleteOneConfirm] = useState(null);
+  const [deleteOneLoading, setDeleteOneLoading] = useState(false);
   
 
   useEffect(() => {
@@ -155,19 +161,48 @@ const BatchManagement = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Are you sure you want to delete this batch? This will affect all subjects assigned to this batch.")) {
-      return;
-    }
+    setShowDeleteOneConfirm(id);
+  };
 
+  const confirmDeleteOne = async () => {
+    if (!showDeleteOneConfirm) return;
     try {
-      await api.delete(`/api/timetable/batches/${id}/`);
-      setBatches(batches.filter(batch => batch.id !== id));
-      if (editingId === id) {
+      setDeleteOneLoading(true);
+      await api.delete(`/api/timetable/batches/${showDeleteOneConfirm}/`);
+      setBatches(batches.filter(batch => batch.id !== showDeleteOneConfirm));
+      if (editingId === showDeleteOneConfirm) {
         clearForm();
         setShowForm(false);
       }
+      setSuccess("Batch deleted successfully");
+      setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       setError("Delete failed - batch might be in use by subjects.");
+    } finally {
+      setShowDeleteOneConfirm(null);
+      setDeleteOneLoading(false);
+    }
+  };
+
+  const handleDeleteAllBatches = async () => {
+    try {
+      setDeleteAllLoading(true);
+      const response = await api.delete('/api/timetable/data-management/batches/');
+      
+      if (response.data.success) {
+        setBatches([]);
+        setError("");
+        setShowDeleteAllConfirm(false);
+        setSuccess(`Deleted ${response.data.deleted_counts.batches} batches, ${response.data.deleted_counts.teacher_assignments} assignments, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
+        setTimeout(() => setSuccess(""), 3000);
+      } else {
+        setError("Failed to delete all batches");
+      }
+    } catch (err) {
+      setError("Failed to delete all batches");
+      console.error("Delete all batches error:", err);
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -196,7 +231,18 @@ const BatchManagement = () => {
             </div>
           )}
 
-          <div className="flex justify-end items-center mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex gap-3">
+              {batches.length > 0 && (
+                <button
+                  onClick={() => setShowDeleteAllConfirm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  Delete All Batches
+                </button>
+              )}
+            </div>
             <button
               onClick={() => {
                 setShowForm(!showForm);
@@ -417,6 +463,91 @@ const BatchManagement = () => {
               </button>
             </Link>
           </div>
+
+          {/* Delete All Confirmation Modal */}
+          {showDeleteAllConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete All Batches</h3>
+                </div>
+                
+                <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <span className="text-sm text-white">
+                      This will delete ALL batches and related data including teacher assignments and timetable entries. This action cannot be undone!
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-secondary mb-6">
+                  Are you sure you want to proceed? This will permanently delete {batches.length} batch(es) and all related data.
+                </p>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(false)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAllBatches}
+                    disabled={deleteAllLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteAllLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete All"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete One Confirmation Modal */}
+          {showDeleteOneConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete Batch</h3>
+                </div>
+                <p className="text-secondary mb-6">
+                  Are you sure you want to delete this batch? Subjects mapped to this batch may be affected.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteOneConfirm(null)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteOne}
+                    disabled={deleteOneLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteOneLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
