@@ -35,7 +35,7 @@ const TeacherAssignments = () => {
 
   // New simplified state for easy assignment
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [selectedSubjects, setSelectedSubjects] = useState([]); // Changed to array for multiple selection
+  const [selectedSubjects, setSelectedSubjects] = useState(null); // Changed to single object for single selection
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [selectedSections, setSelectedSections] = useState([]);
   const [viewMode, setViewMode] = useState('assign'); // 'assign' or 'manage'
@@ -69,10 +69,10 @@ const TeacherAssignments = () => {
     }
   };
 
-  // Enhanced assignment creation for multiple subjects
+  // Enhanced assignment creation for single subject
   const createAssignment = async () => {
-    if (!selectedTeacher || selectedSubjects.length === 0 || !selectedBatch || selectedSections.length === 0) {
-      setError('Please select teacher, at least one subject, batch, and at least one section');
+    if (!selectedTeacher || !selectedSubjects || !selectedBatch || selectedSections.length === 0) {
+      setError('Please select teacher, subject, batch, and at least one section');
       setTimeout(() => setError(null), 5000);
       return;
     }
@@ -80,36 +80,30 @@ const TeacherAssignments = () => {
     try {
       setLoading(true);
 
-      // Create assignments for each selected subject
-      const assignmentPromises = selectedSubjects.map(subject =>
-        api.post('/api/timetable/teacher-assignments/', {
-          teacher: selectedTeacher.id,
-          subject: subject.id,
-          batch: selectedBatch.id,
-          sections: selectedSections
-        })
-      );
-
-      await Promise.all(assignmentPromises);
+      // Create assignment for the selected subject
+      await api.post('/api/timetable/teacher-assignments/', {
+        teacher: selectedTeacher.id,
+        subject: selectedSubjects.id,
+        batch: selectedBatch.id,
+        sections: selectedSections
+      });
 
       // Generate detailed success message
-      const subjectNames = selectedSubjects.map(s => s.code).join(', ');
+      const subjectName = selectedSubjects.subject_short_name;
       const sectionNames = selectedSections.join(', ');
       
       // Check if this is adding to existing assignments
-      const isAddingToExisting = selectedSubjects.some(subject => 
-        getExistingAssignments(selectedTeacher.id, subject.id, selectedBatch.id).length > 0
-      );
+      const isAddingToExisting = getExistingAssignments(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).length > 0;
       
       const message = isAddingToExisting 
-        ? `✅ Added sections ${sectionNames} to ${selectedTeacher.name}'s existing assignments for ${subjectNames} in ${selectedBatch.name}`
-        : `✅ Assigned ${selectedTeacher.name} to teach ${subjectNames} for ${selectedBatch.name} (${sectionNames})`;
+        ? `✅ Added sections ${sectionNames} to ${selectedTeacher.name}'s existing assignments for ${subjectName} in ${selectedBatch.name}`
+        : `✅ Assigned ${selectedTeacher.name} to teach ${subjectName} for ${selectedBatch.name} (${sectionNames})`;
       
       setSuccess(message);
 
       // Reset selections
       setSelectedTeacher(null);
-      setSelectedSubjects([]);
+      setSelectedSubjects(null);
       setSelectedBatch(null);
       setSelectedSections([]);
 
@@ -118,9 +112,9 @@ const TeacherAssignments = () => {
 
       setTimeout(() => setSuccess(null), 5000);
     } catch (error) {
-      setError('Failed to create assignments');
+      setError('Failed to create assignment');
       setTimeout(() => setError(null), 5000);
-      console.error('Error creating assignments:', error);
+      console.error('Error creating assignment:', error);
     } finally {
       setLoading(false);
     }
@@ -457,7 +451,7 @@ const TeacherAssignments = () => {
                 </div>
               </div>
               {/* Selection Summary */}
-              {(selectedTeacher || selectedSubjects.length > 0 || selectedBatch || selectedSections.length > 0) && (
+              {(selectedTeacher || selectedSubjects || selectedBatch || selectedSections.length > 0) && (
                 <div className="bg-surface/50 rounded-xl p-4 border border-border">
                 <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                   <Plus className="h-4 w-4 text-accent-cyan" />
@@ -473,12 +467,9 @@ const TeacherAssignments = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-secondary" />
-                    <span className="text-secondary">Subjects:</span>
+                    <span className="text-secondary">Subject:</span>
                     <span className="font-medium text-primary">
-                      {selectedSubjects.length > 0
-                        ? selectedSubjects.map(s => s.code).join(', ')
-                        : 'None selected'
-                      }
+                      {selectedSubjects ? selectedSubjects.subject_short_name : 'None selected'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -501,16 +492,16 @@ const TeacherAssignments = () => {
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={createAssignment}
-                    disabled={!selectedTeacher || selectedSubjects.length === 0 || !selectedBatch || selectedSections.length === 0 || loading}
+                    disabled={!selectedTeacher || !selectedSubjects || !selectedBatch || selectedSections.length === 0 || loading}
                     className="px-6 py-2 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2"
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    Create Assignment{selectedSubjects.length > 1 ? 's' : ''}
+                    Create Assignment
                   </button>
                   <button
                     onClick={() => {
                       setSelectedTeacher(null);
-                      setSelectedSubjects([]);
+                      setSelectedSubjects(null);
                       setSelectedBatch(null);
                       setSelectedSections([]);
                     }}
@@ -696,12 +687,12 @@ const TeacherAssignments = () => {
 
                   {/* Selection Info */}
                   <div className="mb-3 text-sm text-secondary">
-                    Select one subject at a time
+                    Select a subject (only one at a time)
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {getAvailableSubjects().map((subject) => {
-                      const isSelected = selectedSubjects.some(s => s.id === subject.id);
+                      const isSelected = selectedSubjects?.id === subject.id;
                       const isCompletelyAssigned = isSubjectCompletelyAssigned(subject.id, selectedBatch.id);
                       const isPartiallyAssigned = isSubjectPartiallyAssigned(subject.id, selectedBatch.id);
                       const teacherExistingAssignments = selectedTeacher ? 
@@ -746,9 +737,9 @@ const TeacherAssignments = () => {
                           key={subject.id}
                           onClick={() => {
                             if (isSelected) {
-                              setSelectedSubjects(selectedSubjects.filter(s => s.id !== subject.id));
+                              setSelectedSubjects(null);
                             } else {
-                              setSelectedSubjects([...selectedSubjects, subject]);
+                              setSelectedSubjects(subject);
                             }
                           }}
                           className={`p-3 rounded-lg border cursor-pointer transition-all relative ${cardStyle}`}
@@ -801,7 +792,7 @@ const TeacherAssignments = () => {
               )}
 
               {/* Step 4: Select Sections */}
-              {selectedTeacher && selectedBatch && selectedSubjects.length > 0 && (
+              {selectedTeacher && selectedBatch && selectedSubjects && (
                 <div className="bg-surface/30 rounded-xl p-4 border border-border">
                   <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                     <Hash className="h-4 w-4 text-accent-cyan" />
@@ -810,45 +801,33 @@ const TeacherAssignments = () => {
 
                   {/* Show assignment status info */}
                   <div className="mb-3 space-y-2">
-                    {selectedSubjects.map(subject => {
-                      const teacherAssignedSections = getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id);
-                      const otherAssignedSections = getAssignedSections(subject.id, selectedBatch.id);
-                      const availableSections = getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id);
-                      
-                      return (
-                        <div key={subject.id} className="text-sm">
-                          <div className="font-medium text-primary mb-1">{subject.code}:</div>
-                          {teacherAssignedSections.length > 0 && (
-                            <div className="text-green-600 mb-1">
-                              ✓ Already teaching sections: {teacherAssignedSections.join(', ')}
-                            </div>
-                          )}
-                          {availableSections.length > 0 && (
-                            <div className="text-accent-cyan mb-1">
-                              ➕ Available sections: {availableSections.join(', ')}
-                            </div>
-                          )}
-                          {otherAssignedSections.length > 0 && (
-                            <div className="text-yellow-600">
-                              ⚠️ Other teachers assigned to: {otherAssignedSections.join(', ')}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {selectedSubjects && (
+                      <div key={selectedSubjects.id} className="text-sm">
+                        <div className="font-medium text-primary mb-1">{selectedSubjects.subject_short_name}:</div>
+                        {getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).length > 0 && (
+                          <div className="text-green-600 mb-1">
+                            ✓ Already teaching sections: {getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).join(', ')}
+                          </div>
+                        )}
+                        {getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).length > 0 && (
+                          <div className="text-accent-cyan mb-1">
+                            ➕ Available sections: {getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).join(', ')}
+                          </div>
+                        )}
+                        {getAssignedSections(selectedSubjects.id, selectedBatch.id).length > 0 && (
+                          <div className="text-yellow-600">
+                            ⚠️ Other teachers assigned to: {getAssignedSections(selectedSubjects.id, selectedBatch.id).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
                     {selectedBatch.get_sections ? selectedBatch.get_sections().map((section) => {
-                      const isAssignedToAnySubject = selectedSubjects.some(subject =>
-                        isSectionAssigned(subject.id, selectedBatch.id, section)
-                      );
-                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects.some(subject =>
-                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
-                      );
-                      const isAvailableForTeacher = selectedTeacher && selectedSubjects.some(subject =>
-                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
-                      );
+                      const isAssignedToAnySubject = selectedSubjects && isSectionAssigned(selectedSubjects.id, selectedBatch.id, section);
+                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects && getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
+                      const isAvailableForTeacher = selectedTeacher && selectedSubjects && getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
 
                       return (
                         <button
@@ -893,15 +872,9 @@ const TeacherAssignments = () => {
                         </button>
                       );
                     }) : ['I', 'II', 'III'].slice(0, selectedBatch.total_sections).map((section) => {
-                      const isAssignedToAnySubject = selectedSubjects.some(subject =>
-                        isSectionAssigned(subject.id, selectedBatch.id, section)
-                      );
-                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects.some(subject =>
-                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
-                      );
-                      const isAvailableForTeacher = selectedTeacher && selectedSubjects.some(subject =>
-                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
-                      );
+                      const isAssignedToAnySubject = selectedSubjects && isSectionAssigned(selectedSubjects.id, selectedBatch.id, section);
+                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects && getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
+                      const isAvailableForTeacher = selectedTeacher && selectedSubjects && getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
 
                       return (
                         <button
