@@ -57,7 +57,7 @@ const TeachersConfig = () => {
 
   // Helper function to generate time slots from config
   const generateTimeSlots = (config) => {
-            if (!config || !config.start_time || !config.class_duration || !config.periods) {
+    if (!config || !config.start_time || !config.class_duration || !config.periods) {
       return {};
     }
 
@@ -69,14 +69,26 @@ const TeachersConfig = () => {
       let currentTime = new Date(`2000-01-01T${config.start_time}`);
       
       for (let i = 0; i < config.periods.length; i++) {
-        const timeString = currentTime.toLocaleTimeString('en-US', {
+        const startTimeString = currentTime.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true
         });
-        timeSlots[day].push(timeString);
         
-        // Add class duration
+        // Calculate end time
+        const endTime = new Date(currentTime);
+        endTime.setMinutes(endTime.getMinutes() + config.class_duration);
+        const endTimeString = endTime.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        
+        // Create time range string
+        const timeRangeString = `${startTimeString} - ${endTimeString}`;
+        timeSlots[day].push(timeRangeString);
+        
+        // Add class duration for next iteration
         currentTime.setMinutes(currentTime.getMinutes() + config.class_duration);
       }
     });

@@ -80,7 +80,7 @@ const DepartmentConfig = () => {
       newPeriods[day] = [];
       let dayTime = config.start_time.substring(0, 5);
       for (let i = 0; i < config.periods.length; i++) {
-        newPeriods[day].push(formatTime(dayTime));
+        newPeriods[day].push(formatTimeRange(dayTime, config.class_duration));
         dayTime = incrementTime(dayTime, config.class_duration);
       }
     });
@@ -267,8 +267,70 @@ const DepartmentConfig = () => {
     setPeriods(newPeriods);
   };
 
+  const formatTimeRange = (startTime, duration) => {
+    const [hours, minutes] = startTime.split(":").map(Number);
+    
+    // Calculate end time
+    let endHours = hours;
+    let endMinutes = minutes + duration;
+    
+    while (endMinutes >= 60) {
+      endHours += 1;
+      endMinutes -= 60;
+    }
+    endHours %= 24;
+    
+    // Format start time
+    const startPeriod = hours >= 12 ? "PM" : "AM";
+    const startFormattedHours = hours % 12 || 12;
+    const startFormatted = `${startFormattedHours}:${String(minutes).padStart(2, "0")} ${startPeriod}`;
+    
+    // Format end time
+    const endPeriod = endHours >= 12 ? "PM" : "AM";
+    const endFormattedHours = endHours % 12 || 12;
+    const endFormatted = `${endFormattedHours}:${String(endMinutes).padStart(2, "0")} ${endPeriod}`;
+    
+    return `${startFormatted} - ${endFormatted}`;
+  };
 
+  const addPeriod = (day) => {
+    // Find the last period and add a new one after it
+    const lastPeriod = periods[day][periods[day].length - 1];
+    if (!lastPeriod) {
+      // If no periods exist, use the start time
+      const newTime = incrementTime(startTime, classDuration);
+      setPeriods(prev => ({
+        ...prev,
+        [day]: [...prev[day], formatTimeRange(newTime, classDuration)]
+      }));
+      return;
+    }
 
+    // Parse the last period time and add class duration
+    // Extract the end time from the last period (format: "8:00 AM - 9:00 AM")
+    const lastPeriodParts = lastPeriod.split(" - ");
+    if (lastPeriodParts.length === 2) {
+      const lastEndTime = lastPeriodParts[1]; // "9:00 AM"
+      const [lastEndTimePart, lastEndPeriod] = lastEndTime.split(" ");
+      const [lastEndHours, lastEndMinutes] = lastEndTimePart.split(":").map(Number);
+      
+      // Convert to 24-hour format for calculation
+      let lastEndHours24 = lastEndHours;
+      if (lastEndPeriod === "PM" && lastEndHours !== 12) {
+        lastEndHours24 += 12;
+      } else if (lastEndPeriod === "AM" && lastEndHours === 12) {
+        lastEndHours24 = 0;
+      }
+      
+      // Calculate new start time (same as last end time)
+      const newStartTime = `${String(lastEndHours24).padStart(2, "0")}:${String(lastEndMinutes).padStart(2, "0")}`;
+      
+      setPeriods(prev => ({
+        ...prev,
+        [day]: [...prev[day], formatTimeRange(newStartTime, classDuration)]
+      }));
+    }
+  };
 
 
   const validateConfiguration = () => {
@@ -305,35 +367,13 @@ const DepartmentConfig = () => {
       newPeriods[day] = [];
       let dayTime = startTime;
       for (let i = 0; i < numPeriods; i++) {
-        newPeriods[day].push(formatTime(dayTime));
+        newPeriods[day].push(formatTimeRange(dayTime, classDuration));
         dayTime = incrementTime(dayTime, classDuration);
       }
     });
 
     setPeriods(newPeriods);
     setError(null); // Clear any previous errors
-  };
-
-  const addPeriod = (day) => {
-    // Find the last period and add a new one after it
-    const lastPeriod = periods[day][periods[day].length - 1];
-    if (!lastPeriod) {
-      // If no periods exist, use the start time
-      const newTime = incrementTime(startTime, classDuration);
-      setPeriods(prev => ({
-        ...prev,
-        [day]: [...prev[day], formatTime(newTime)]
-      }));
-      return;
-    }
-
-    // Parse the last period time and add class duration
-    const [time, period] = lastPeriod.split(" ");
-    const newTime = incrementTime(time, classDuration);
-    setPeriods(prev => ({
-      ...prev,
-      [day]: [...prev[day], formatTime(newTime)]
-    }));
   };
 
   const handleSubmit = async (e) => {
