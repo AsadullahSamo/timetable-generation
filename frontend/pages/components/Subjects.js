@@ -54,13 +54,15 @@ const SubjectConfig = () => {
   // Stats calculation
   const stats = {
     totalSubjects: subjects.length,
-    totalCredits: subjects.reduce((acc, subject) => acc + subject.credits, 0),
-    avgCredits: subjects.length ? (subjects.reduce((acc, subject) => acc + subject.credits, 0) / subjects.length).toFixed(1) : 0,
+    totalCredits: subjects.reduce((acc, subject) => acc + (subject.credits || 0), 0),
+    avgCredits: subjects.length ? (subjects.reduce((acc, subject) => acc + (subject.credits || 0), 0) / subjects.length).toFixed(1) : 0,
     duplicateCodes: (() => {
       const codeCounts = {};
       subjects.forEach(subject => {
-        const code = subject.code.toLowerCase();
-        codeCounts[code] = (codeCounts[code] || 0) + 1;
+        if (subject.code) {
+          const code = subject.code.toLowerCase();
+          codeCounts[code] = (codeCounts[code] || 0) + 1;
+        }
       });
       return Object.values(codeCounts).filter(count => count > 1).length;
     })()
@@ -124,10 +126,15 @@ const SubjectConfig = () => {
     return assignments.filter(assignment => assignment.subject === subjectId);
   };
 
+  // Safe string trim utility function
+  const safeTrim = (value) => {
+    return value && typeof value === 'string' ? value.trim() : '';
+  };
+
   const validateForm = () => {
     const errors = {};
     
-    if (!formData.name.trim()) {
+    if (!safeTrim(formData.name)) {
       errors.name = "Subject name is required";
     } else if (formData.name.length < 2) {
       errors.name = "Subject name must be at least 2 characters";
@@ -136,14 +143,14 @@ const SubjectConfig = () => {
     }
     // Note: Subject name allows letters, numbers, spaces, and special characters
     
-    if (!formData.code.trim()) {
+    if (!safeTrim(formData.code)) {
       errors.code = "Subject code is required";
     } else if (!/^[A-Z0-9\s!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(formData.code)) {
       errors.code = "Subject code should only contain letters, numbers, spaces, and special characters";
     } else {
       // Check for duplicate subject codes (must be unique)
       const existingSubjectWithSameCode = subjects.find(subject => 
-        subject.code.toLowerCase() === formData.code.trim().toLowerCase() && 
+        subject.code && formData.code && subject.code.toLowerCase() === safeTrim(formData.code).toLowerCase() && 
         subject.id !== editingId
       );
       
@@ -152,14 +159,14 @@ const SubjectConfig = () => {
       }
     }
     
-    if (!formData.subject_short_name.trim()) {
+    if (!safeTrim(formData.subject_short_name)) {
       errors.subject_short_name = "Subject short name is required";
     } else if (formData.subject_short_name.length > 10) {
       errors.subject_short_name = "Subject short name cannot exceed 10 characters";
     } else {
       // Check for duplicate subject short names (must be unique)
       const existingSubjectWithSameShortName = subjects.find(subject => 
-        subject.subject_short_name && subject.subject_short_name.toLowerCase() === formData.subject_short_name.trim().toLowerCase() && 
+        subject.subject_short_name && formData.subject_short_name && subject.subject_short_name.toLowerCase() === safeTrim(formData.subject_short_name).toLowerCase() && 
         subject.id !== editingId
       );
       
@@ -174,7 +181,7 @@ const SubjectConfig = () => {
       errors.credits = "Credits cannot exceed 10";
     }
 
-    if (!formData.batch.trim()) {
+    if (!safeTrim(formData.batch)) {
       errors.batch = "Batch is required (e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.)";
     } else if (!/^\d{2}[A-Z]{2}$/i.test(formData.batch)) {
       errors.batch = "Batch must be in format: 2 digits + 2 letters (e.g., 21SW, 22SW, 23SW, 24SW, 25SW, etc.)";
@@ -188,7 +195,7 @@ const SubjectConfig = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === "credits" ? Math.max(1, parseInt(value) || 1) : value
+      [name]: name === "credits" ? Math.max(1, parseInt(value) || 1) : (value || "")
     }));
     
     // Clear specific error when user types
@@ -481,7 +488,7 @@ const SubjectConfig = () => {
                   {!formErrors.code && formData.code && (
                     (() => {
                       const existingSubject = subjects.find(subject => 
-                        subject.code.toLowerCase() === formData.code.trim().toLowerCase() && 
+                        subject.code && formData.code && subject.code.toLowerCase() === safeTrim(formData.code).toLowerCase() && 
                         subject.id !== editingId
                       );
                       if (existingSubject) {

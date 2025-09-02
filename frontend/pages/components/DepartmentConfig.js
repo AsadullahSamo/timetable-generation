@@ -112,7 +112,7 @@ const DepartmentConfig = () => {
       if (!subjectsRes.data.length) {
         issues.push('📚 Subjects: Add at least one subject');
       } else {
-        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch || s.batch.trim() === '');
+        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch || (typeof s.batch === 'string' && s.batch.trim() === ''));
         if (subjectsWithoutBatch.length > 0) {
           issues.push(`📚 Subjects: ${subjectsWithoutBatch.length} subjects need batch assignment`);
         }
@@ -827,18 +827,20 @@ const DepartmentConfig = () => {
                           <span className="w-2 h-2 bg-accent-cyan rounded-full"></span>
                           Assigned Subjects ({subjects.filter(subject => subject.batch === batch.name).length})
                         </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           {subjects
                             .filter(subject => subject.batch === batch.name)
                             .map((subject) => (
                               <div
                                 key={subject.id}
-                                className="p-3 rounded-lg bg-accent-cyan/10 border border-accent-cyan/30 text-white group hover:bg-accent-cyan/15 transition-all min-w-0"
+                                className="p-3 rounded-lg bg-accent-cyan/10 border border-accent-cyan/30 text-white group hover:bg-accent-cyan/15 transition-all min-w-0 overflow-hidden"
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm text-white mb-1">{subject.subject_short_name || subject.code}</div>
-                                    <div className="text-xs text-white/90 break-words leading-relaxed" title={subject.name}>
+                                  <div className="flex-1 min-w-0 overflow-hidden">
+                                    <div className="font-medium text-sm text-white mb-1 truncate" title={subject.subject_short_name || subject.code}>
+                                      {subject.subject_short_name || subject.code}
+                                    </div>
+                                    <div className="text-xs text-white/90 break-words leading-relaxed overflow-hidden" title={subject.name}>
                                       {subject.name}
                                     </div>
                                   </div>
