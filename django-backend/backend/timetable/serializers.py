@@ -52,7 +52,6 @@ class TeacherSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'name',
-            'email',
             'subject_names',
             'assignments',
             'max_classes_per_day',
@@ -62,7 +61,6 @@ class TeacherSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Custom validation to check for duplicate teachers"""
         name = attrs.get('name')
-        email = attrs.get('email')
         instance = getattr(self, 'instance', None)
         
         # Check for existing teachers with same name
@@ -74,17 +72,6 @@ class TeacherSerializer(serializers.ModelSerializer):
             if existing_teachers_by_name.exists():
                 raise serializers.ValidationError({
                     'detail': 'A teacher with this name already exists.'
-                })
-        
-        # Check for existing teachers with same email (only if email is provided)
-        if email:
-            existing_teachers_by_email = Teacher.objects.filter(email=email)
-            if instance:
-                existing_teachers_by_email = existing_teachers_by_email.exclude(id=instance.id)
-            
-            if existing_teachers_by_email.exists():
-                raise serializers.ValidationError({
-                    'detail': 'A teacher with this email already exists.'
                 })
         
         return attrs

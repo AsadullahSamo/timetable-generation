@@ -195,7 +195,6 @@ class Subject(models.Model):
     
 class Teacher(models.Model):
     name = models.CharField(max_length=255, default="")
-    email = models.EmailField(unique=True, null=True, blank=True, default=None)
     # Note: subjects relationship now handled through TeacherSubjectAssignment
     max_classes_per_day = models.PositiveIntegerField(default=4)
     unavailable_periods = models.JSONField(default=dict, blank=True)

@@ -6,7 +6,6 @@ import Link from "next/link";
 import BackButton from "./BackButton";
 import {
   User,
-  Mail,
   Clock,
   Save,
   CheckCircle2,
@@ -27,7 +26,6 @@ const AddTeacher = () => {
   
   // Form states
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
 
       const [maxClasses, setMaxClasses] = useState(3);
   // Internal availability state: { day: { periodIndex: mode } }
@@ -120,7 +118,6 @@ const AddTeacher = () => {
       try {
         const { data } = await api.get(`/api/timetable/teachers/${id}/`);
         setName(data.name);
-        setEmail(data.email);
         setMaxClasses(data.max_classes_per_day);
         // Convert availability data to internal state
         const newState = {};
@@ -155,10 +152,7 @@ const AddTeacher = () => {
       errors.name = "Teacher name is required";
     }
     
-    // Email is optional, but if provided, it must be valid
-    if (email.trim() && !/\S+@\S+\.\S+/.test(email)) {
-      errors.email = "Please enter a valid email address";
-    }
+
     
             if (maxClasses < 1) {
             errors.maxClasses = "Must be at least 1 class per day";
@@ -184,7 +178,6 @@ const AddTeacher = () => {
       const availability = convertAvailability();
       const teacherData = {
         name,
-        email,
         max_classes_per_day: maxClasses,
         unavailable_periods: { mandatory: availability }
       };
@@ -205,26 +198,9 @@ const AddTeacher = () => {
       if (err.response?.data) {
         const errorData = err.response.data;
         
-        // Check for field-specific validation errors and determine the exact duplicate scenario
-        let hasEmailError = false;
+        // Check for field-specific validation errors
         let hasNameError = false;
-        let emailMessage = "";
         let nameMessage = "";
-        
-        // Check email errors
-        if (errorData.email) {
-          hasEmailError = true;
-          if (Array.isArray(errorData.email)) {
-            const emailError = errorData.email[0];
-            if (typeof emailError === 'object' && emailError.string) {
-              emailMessage = emailError.string;
-            } else {
-              emailMessage = emailError;
-            }
-          } else {
-            emailMessage = errorData.email;
-          }
-        }
         
         // Check name errors
         if (errorData.name) {
@@ -242,12 +218,8 @@ const AddTeacher = () => {
         }
         
         // Determine the specific duplicate scenario
-        if (hasEmailError && hasNameError) {
-          errorMessage = "Teacher with name and email already exists";
-        } else if (hasEmailError) {
-          errorMessage = "Email already exists";
-        } else if (hasNameError) {
-          errorMessage = "Teacher already exists";
+        if (hasNameError) {
+          errorMessage = "Teacher name already exists";
         } else if (errorData.detail) {
           // Handle other error types
           if (typeof errorData.detail === 'string') {
@@ -401,7 +373,7 @@ const AddTeacher = () => {
                   </button>
                   {showTooltip === "basic" && (
                     <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                      Enter teacher's name, email, and maximum number of classes they can teach per day.
+                      Enter teacher's name and maximum number of classes they can teach per day.
                     </div>
                   )}
                 </div>
@@ -429,27 +401,7 @@ const AddTeacher = () => {
                     <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Email (Optional)</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (formErrors.email) {
-                          setFormErrors({...formErrors, email: undefined});
-                        }
-                      }}
-                      className={`w-full pl-10 pr-4 py-3 bg-background/95 border ${formErrors.email ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30`}
-                      placeholder="email@example.com (optional)"
-                    />
-                  </div>
-                  {formErrors.email && (
-                    <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
-                  )}
-                </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-secondary">Max Classes per Day*</label>
                   <div className="relative">
