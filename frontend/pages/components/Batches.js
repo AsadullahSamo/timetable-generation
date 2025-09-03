@@ -14,7 +14,8 @@ import {
   Calendar,
   BookOpen,
   Users,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from 'lucide-react';
 import Link from "next/link";
 
@@ -25,7 +26,8 @@ const BatchManagement = () => {
     description: "",
     semester_number: 1,
     academic_year: "2024-2025",
-    total_sections: 1
+    total_sections: 1,
+    class_advisor: ""
   });
   const [formErrors, setFormErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -33,6 +35,11 @@ const BatchManagement = () => {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [showDeleteOneConfirm, setShowDeleteOneConfirm] = useState(null);
+  const [deleteOneLoading, setDeleteOneLoading] = useState(false);
   
 
   useEffect(() => {
@@ -72,6 +79,9 @@ const BatchManagement = () => {
     
     if (!formData.academic_year.trim()) {
       errors.academic_year = "Academic year is required";
+    }
+    if (!formData.class_advisor.trim()) {
+      errors.class_advisor = "Class advisor is required";
     }
     
     setFormErrors(errors);
@@ -116,7 +126,7 @@ const BatchManagement = () => {
         const { data } = await api.post("/api/timetable/batches/", formData);
         setBatches([...batches, data]);
       }
-      setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1 });
+      setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1, class_advisor: "" });
       setEditingId(null);
       setShowForm(false);
     } catch (err) {
@@ -141,7 +151,8 @@ const BatchManagement = () => {
       description: batch.description,
       semester_number: batch.semester_number,
       academic_year: batch.academic_year,
-      total_sections: batch.total_sections || 1
+      total_sections: batch.total_sections || 1,
+      class_advisor: batch.class_advisor || ""
     });
     setEditingId(batch.id);
     setShowForm(true);
@@ -149,25 +160,54 @@ const BatchManagement = () => {
   };
   
   const clearForm = () => {
-    setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1 });
+    setFormData({ name: "", description: "", semester_number: 1, academic_year: "2024-2025", total_sections: 1, class_advisor: "" });
     setEditingId(null);
     setFormErrors({});
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Are you sure you want to delete this batch? This will affect all subjects assigned to this batch.")) {
-      return;
-    }
+    setShowDeleteOneConfirm(id);
+  };
 
+  const confirmDeleteOne = async () => {
+    if (!showDeleteOneConfirm) return;
     try {
-      await api.delete(`/api/timetable/batches/${id}/`);
-      setBatches(batches.filter(batch => batch.id !== id));
-      if (editingId === id) {
+      setDeleteOneLoading(true);
+      await api.delete(`/api/timetable/batches/${showDeleteOneConfirm}/`);
+      setBatches(batches.filter(batch => batch.id !== showDeleteOneConfirm));
+      if (editingId === showDeleteOneConfirm) {
         clearForm();
         setShowForm(false);
       }
+      setSuccess("Batch deleted successfully");
+      setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       setError("Delete failed - batch might be in use by subjects.");
+    } finally {
+      setShowDeleteOneConfirm(null);
+      setDeleteOneLoading(false);
+    }
+  };
+
+  const handleDeleteAllBatches = async () => {
+    try {
+      setDeleteAllLoading(true);
+      const response = await api.delete('/api/timetable/data-management/batches/');
+      
+      if (response.data.success) {
+        setBatches([]);
+        setError("");
+        setShowDeleteAllConfirm(false);
+        setSuccess(`Deleted ${response.data.deleted_counts.batches} batches, ${response.data.deleted_counts.teacher_assignments} assignments, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
+        setTimeout(() => setSuccess(""), 3000);
+      } else {
+        setError("Failed to delete all batches");
+      }
+    } catch (err) {
+      setError("Failed to delete all batches");
+      console.error("Delete all batches error:", err);
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -196,7 +236,18 @@ const BatchManagement = () => {
             </div>
           )}
 
-          <div className="flex justify-end items-center mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex gap-3">
+              {batches.length > 0 && (
+                <button
+                  onClick={() => setShowDeleteAllConfirm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  Delete All Batches
+                </button>
+              )}
+            </div>
             <button
               onClick={() => {
                 setShowForm(!showForm);
@@ -339,6 +390,25 @@ const BatchManagement = () => {
                   )}
                 </div>
                 
+                {/* Class Advisor */}
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Class Advisor *
+                  </label>
+                  <input
+                    type="text"
+                    name="class_advisor"
+                    value={formData.class_advisor}
+                    onChange={handleInputChange}
+                    placeholder="Dr. Qasim Ali (Email: qasim.arain@faculty.muet.edu.pk)"
+                    className={`w-full px-4 py-3 bg-background/95 border ${formErrors.class_advisor ? 'border-red-500' : 'border-border'} rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30`}
+                    required
+                  />
+                  {formErrors.class_advisor && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.class_advisor}</p>
+                  )}
+                </div>
+                
                 <button
                   type="submit"
                   className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center gap-2 hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -395,6 +465,11 @@ const BatchManagement = () => {
                   </div>
                   
                   <p className="text-secondary text-sm mb-3">{batch.description}</p>
+                  {batch.class_advisor && (
+                    <p className="text-sm text-primary mb-1">
+                      <span className="text-accent-cyan font-medium">Class Advisor</span>: {batch.class_advisor.split('(')[0].trim()}
+                    </p>
+                  )}
                   <p className="text-xs text-secondary/70">Academic Year: {batch.academic_year}</p>
                 </div>
               ))}
@@ -417,6 +492,91 @@ const BatchManagement = () => {
               </button>
             </Link>
           </div>
+
+          {/* Delete All Confirmation Modal */}
+          {showDeleteAllConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete All Batches</h3>
+                </div>
+                
+                <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <span className="text-sm text-white">
+                      This will delete ALL batches and related data including teacher assignments and timetable entries. This action cannot be undone!
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-secondary mb-6">
+                  Are you sure you want to proceed? This will permanently delete {batches.length} batch(es) and all related data.
+                </p>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(false)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAllBatches}
+                    disabled={deleteAllLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteAllLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete All"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete One Confirmation Modal */}
+          {showDeleteOneConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="h-6 w-6 text-red-500" />
+                  <h3 className="text-lg font-semibold text-primary">Confirm Delete Batch</h3>
+                </div>
+                <p className="text-secondary mb-6">
+                  Are you sure you want to delete this batch? Subjects mapped to this batch may be affected.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteOneConfirm(null)}
+                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteOne}
+                    disabled={deleteOneLoading}
+                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteOneLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </div>
+                    ) : (
+                      "Confirm Delete"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

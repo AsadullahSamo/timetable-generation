@@ -318,8 +318,8 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
             }
             
             if (entry) {
-              let subjectCode = entry.subject_code || entry.subject;
-              let cellContent = subjectCode || '';
+              let subjectShortName = entry.subject_short_name || '';
+              let cellContent = subjectShortName || '';
               
               // Add room information if different from default
               if (entry.classroom && !entry.classroom.includes('Lab. No.')) {
@@ -410,7 +410,7 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       
       // Group entries by subject name across all sections
       allBatchEntries.forEach(entry => {
-        const subjectCode = entry.subject_code || entry.subject || '';
+        const subjectCode = entry.subject_short_name || entry.subject || '';
         const subjectName = entry.subject || '';
         
         // Clean the subject name for display (remove PR suffix if present)
@@ -519,9 +519,17 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
            }
          }
         
+        // Format subject name as "subject name - subject code"
+        let formattedSubjectName = group.subjectName;
+        // Get the actual subject code from the entry data
+        const firstEntry = [...group.theory, ...group.practical][0];
+        if (firstEntry && firstEntry.subject_code && firstEntry.subject_code.trim()) {
+          formattedSubjectName = `${group.subjectName} - ${firstEntry.subject_code}`;
+        }
+        
         teacherData.push([
           index + 1,
-          group.subjectName,
+          formattedSubjectName,
           creditHours,
           teacherNames
         ]);
@@ -571,7 +579,17 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('Class Advisor: Dr. Qasim Ali (Email: Qasim.arain@faculty.muet.edu.pk)', margin, currentY);
+      
+      // Get class advisor from batch info
+      let classAdvisorText = 'Class Advisor: Not Assigned';
+      if (allSectionsData.batch_info && allSectionsData.batch_info[batchName]) {
+        const batchData = allSectionsData.batch_info[batchName];
+        if (batchData.class_advisor && batchData.class_advisor.trim()) {
+          classAdvisorText = `Class Advisor: ${batchData.class_advisor}`;
+        }
+      }
+      
+      doc.text(classAdvisorText, margin, currentY);
       currentY += 15;
       
       // Signature line
