@@ -3912,33 +3912,28 @@ class FinalUniversalScheduler:
                         for i in range(3):
                             period = start_period + i
                             
-                            # Find available teacher (NO CONSTRAINTS - just get any teacher)
+                            # Pick any teacher if exists; otherwise None (ignore constraints)
                             teachers = self._get_teachers_for_subject(subject, class_group)
-                            teacher = teachers[0] if teachers else None  # Just take first available
+                            teacher = teachers[0] if teachers else None
                             
-                            # Find available lab room (NO CONSTRAINTS - just get any lab)
-                            room = self._find_available_classroom(day, period, 1, class_group, subject)
+                            # Pick any classroom if exists; otherwise None (ignore constraints)
+                            room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
                             
-                            if teacher and room:
-                                # Create entry with * suffix
-                                entry = self._create_entry(
-                                    day, period, subject, teacher, room, class_group, is_practical=True
-                                )
-                                
-                                # Mark this as an extra class
-                                entry.is_extra_class = True
-                                
-                                subject_entries.append(entry)
-                                
-                                # Mark slots as occupied
-                                if class_group not in scheduled_slots:
-                                    scheduled_slots[class_group] = set()
-                                scheduled_slots[class_group].add((day, period))
-                                
-                                print(f"           ✅ Scheduled {subject.code}* on {day} P{period} with {teacher.name} in {room.name}")
-                            else:
-                                print(f"           ⚠️ Could not schedule {subject.code}* - missing teacher or room")
-                                break
+                            # Create entry regardless of teacher/room presence
+                            entry = self._create_entry(
+                                day, period, subject, teacher, room, class_group, is_practical=True
+                            )
+                            entry.is_extra_class = True
+                            subject_entries.append(entry)
+                            
+                            # Mark slots as occupied for this class_group
+                            if class_group not in scheduled_slots:
+                                scheduled_slots[class_group] = set()
+                            scheduled_slots[class_group].add((day, period))
+                            
+                            teacher_name = teacher.name if teacher else 'No Teacher'
+                            room_name = room.name if room else 'No Room'
+                            print(f"           ✅ Scheduled {subject.code}* on {day} P{period} with {teacher_name} in {room_name}")
                         
                         if len(subject_entries) == 3:
                             all_entries.extend(subject_entries)
@@ -3949,8 +3944,70 @@ class FinalUniversalScheduler:
                             print(f"         ❌ Failed to schedule all 3 blocks for {subject.code}*")
                             failed_schedules += 1
                     else:
-                        print(f"         ❌ No consecutive slots found for {subject.code}*")
-                        failed_schedules += 1
+                        print(f"         ❌ No consecutive slots found for {subject.code}* — trying same-day non-consecutive fallback")
+                        
+                        # Fallback 1: any 3 slots on the same day
+                        # Group blank slots by day for current snapshot
+                        slots_by_day = {}
+                        for d, p in blank_slots:
+                            if (d, p) in scheduled_slots.get(class_group, set()):
+                                continue
+                            slots_by_day.setdefault(d, []).append(p)
+                        same_day_triplet = None
+                        for d, periods in slots_by_day.items():
+                            periods = sorted(list(set(periods)))
+                            if len(periods) >= 3:
+                                same_day_triplet = (d, periods[:3])
+                                break
+                        if same_day_triplet:
+                            d, ps = same_day_triplet
+                            subject_entries = []
+                            for period in ps:
+                                teachers = self._get_teachers_for_subject(subject, class_group)
+                                teacher = teachers[0] if teachers else None
+                                room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
+                                entry = self._create_entry(d, period, subject, teacher, room, class_group, is_practical=True)
+                                entry.is_extra_class = True
+                                subject_entries.append(entry)
+                                if class_group not in scheduled_slots:
+                                    scheduled_slots[class_group] = set()
+                                scheduled_slots[class_group].add((d, period))
+                                
+                            if len(subject_entries) == 3:
+                                all_entries.extend(subject_entries)
+                                extra_classes_scheduled += 3
+                                extra_practical_scheduled += 3
+                                print(f"         ✅ Scheduled fallback same-day 3 blocks for {subject.code}* on {d}: {ps}")
+                            else:
+                                failed_schedules += 1
+                        else:
+                            print(f"         ↪️ No same-day triplet available — trying any 3 blank slots across week")
+                            # Fallback 2: any 3 blank slots across days
+                            available_any = []
+                            for d, p in blank_slots:
+                                if (d, p) not in scheduled_slots.get(class_group, set()):
+                                    available_any.append((d, p))
+                                if len(available_any) == 3:
+                                    break
+                            if len(available_any) == 3:
+                                subject_entries = []
+                                for d, period in available_any:
+                                    teachers = self._get_teachers_for_subject(subject, class_group)
+                                    teacher = teachers[0] if teachers else None
+                                    room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
+                                    entry = self._create_entry(d, period, subject, teacher, room, class_group, is_practical=True)
+                                    entry.is_extra_class = True
+                                    subject_entries.append(entry)
+                                    if class_group not in scheduled_slots:
+                                        scheduled_slots[class_group] = set()
+                                    scheduled_slots[class_group].add((d, period))
+                                all_entries.extend(subject_entries)
+                                extra_classes_scheduled += 3
+                                extra_practical_scheduled += 3
+                                print(f"         ✅ Scheduled fallback non-consecutive 3 blocks for {subject.code}* across: {available_any}")
+                            else:
+                                print(f"         ❌ Could not find any 3 slots for {subject.code}* — this should be rare")
+                                failed_schedules += 1
                 
                 # STEP 2: Schedule ALL extra theory classes (1 block each) in remaining slots
                 print(f"       📚 STEP 2: Scheduling {len(theory_subjects)} extra theory classes...")
@@ -3973,35 +4030,31 @@ class FinalUniversalScheduler:
                         day, period = available_slot
                         print(f"         ✅ Found slot: {day} P{period}")
                         
-                        # Find available teacher (NO CONSTRAINTS - just get any teacher)
+                        # Pick any teacher if exists; otherwise None
                         teachers = self._get_teachers_for_subject(subject, class_group)
-                        teacher = teachers[0] if teachers else None  # Just take first available
+                        teacher = teachers[0] if teachers else None
                         
-                        # Find available regular room (NO CONSTRAINTS - just get any room)
-                        room = self._find_available_classroom(day, period, 1, class_group, subject)
+                        # Pick any classroom if exists; otherwise None
+                        room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
                         
-                        if teacher and room:
-                            # Create entry with * suffix
-                            entry = self._create_entry(
-                                day, period, subject, teacher, room, class_group, is_practical=False
-                            )
-                            
-                            # Mark this as an extra class
-                            entry.is_extra_class = True
-                            
-                            all_entries.append(entry)
-                            extra_classes_scheduled += 1
-                            extra_theory_scheduled += 1
-                            
-                            # Mark slot as occupied
-                            if class_group not in scheduled_slots:
-                                scheduled_slots[class_group] = set()
-                            scheduled_slots[class_group].add((day, period))
-                            
-                            print(f"           ✅ Scheduled {subject.code}* on {day} P{period} with {teacher.name} in {room.name}")
-                        else:
-                            print(f"           ❌ Could not schedule {subject.code}* - missing teacher or room")
-                            failed_schedules += 1
+                        # Create entry regardless of teacher/room presence
+                        entry = self._create_entry(
+                            day, period, subject, teacher, room, class_group, is_practical=False
+                        )
+                        entry.is_extra_class = True
+                        
+                        all_entries.append(entry)
+                        extra_classes_scheduled += 1
+                        extra_theory_scheduled += 1
+                        
+                        # Mark slot as occupied
+                        if class_group not in scheduled_slots:
+                            scheduled_slots[class_group] = set()
+                        scheduled_slots[class_group].add((day, period))
+                        
+                        teacher_name = teacher.name if teacher else 'No Teacher'
+                        room_name = room.name if room else 'No Room'
+                        print(f"           ✅ Scheduled {subject.code}* on {day} P{period} with {teacher_name} in {room_name}")
                     else:
                         print(f"         ❌ No available slots for {subject.code}*")
                         failed_schedules += 1
