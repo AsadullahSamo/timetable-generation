@@ -321,6 +321,11 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
               let subjectShortName = entry.subject_short_name || '';
               let cellContent = subjectShortName || '';
               
+              // Add asterisk for extra classes
+              if (entry.is_extra_class) {
+                cellContent += '*';
+              }
+              
               // Add room information if different from default
               if (entry.classroom && !entry.classroom.includes('Lab. No.')) {
                 cellContent += ` [${entry.classroom}]`;
@@ -408,8 +413,13 @@ export const generateTimetablePDF = async (timetableData, selectedClassGroup = n
       // Collect all entries from all sections in this batch
       const allBatchEntries = batchSections.flatMap(section => section.entries);
       
-      // Group entries by subject name across all sections
+      // Group entries by subject name across all sections (excluding extra classes)
       allBatchEntries.forEach(entry => {
+        // Skip extra classes in the Subject and Teacher Details table
+        if (entry.is_extra_class) {
+          return;
+        }
+        
         const subjectCode = entry.subject_short_name || entry.subject || '';
         const subjectName = entry.subject || '';
         
