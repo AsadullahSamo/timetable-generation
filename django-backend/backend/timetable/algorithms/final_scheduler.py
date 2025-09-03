@@ -3886,8 +3886,21 @@ class FinalUniversalScheduler:
                 print(f"       🧪 Found {len(practical_subjects)} practical subjects for extra classes")
                 print(f"       📚 Found {len(theory_subjects)} theory subjects for extra classes")
                 
+                # Rule: For final year (with Thesis), do NOT schedule any extra on Wednesday
+                is_final_year = False
+                try:
+                    is_final_year = self._is_final_year_with_thesis(class_group, subjects)
+                except Exception:
+                    is_final_year = False
+                
+                def not_wednesday(slot):
+                    d, _p = slot
+                    return not str(d).lower().startswith('wed')
+                
                 # Find blank slots for this class group
                 blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
+                if is_final_year:
+                    blank_slots = [s for s in blank_slots if not_wednesday(s)]
                 
                 if not blank_slots:
                     print(f"       ⚠️ No blank slots found for {class_group}")
@@ -4014,6 +4027,8 @@ class FinalUniversalScheduler:
                 
                 # Re-find blank slots after practical scheduling
                 updated_blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
+                if is_final_year:
+                    updated_blank_slots = [s for s in updated_blank_slots if not_wednesday(s)]
                 print(f"         🔍 After practical scheduling: {len(updated_blank_slots)} blank slots remaining")
                 
                 for subject in theory_subjects:
