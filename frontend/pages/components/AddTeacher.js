@@ -29,7 +29,7 @@ const AddTeacher = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-      const [maxClasses, setMaxClasses] = useState(3);
+      const [maxClasses, setMaxClasses] = useState(4);
   // Internal availability state: { day: { periodIndex: mode } }
   const [availabilityState, setAvailabilityState] = useState({});
   const [timetableConfig, setTimetableConfig] = useState(null);
@@ -46,7 +46,7 @@ const AddTeacher = () => {
 
   // Helper function to generate time slots from config
   const generateTimeSlots = (config) => {
-    if (!config || !config.start_time || !config.class_duration || !config.periods) {
+            if (!config || !config.start_time || !config.class_duration || !config.periods) {
       return {};
     }
 
@@ -58,26 +58,14 @@ const AddTeacher = () => {
       let currentTime = new Date(`2000-01-01T${config.start_time}`);
       
       for (let i = 0; i < config.periods.length; i++) {
-        const startTimeString = currentTime.toLocaleTimeString('en-US', {
+        const timeString = currentTime.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true
         });
+        timeSlots[day].push(timeString);
         
-        // Calculate end time
-        const endTime = new Date(currentTime);
-        endTime.setMinutes(endTime.getMinutes() + config.class_duration);
-        const endTimeString = endTime.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
-        
-        // Create time range string
-        const timeRangeString = `${startTimeString} - ${endTimeString}`;
-        timeSlots[day].push(timeRangeString);
-        
-        // Add class duration for next iteration
+        // Add class duration
         currentTime.setMinutes(currentTime.getMinutes() + config.class_duration);
       }
     });
@@ -451,13 +439,13 @@ const AddTeacher = () => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Max Classes per Day*</label>
+                                          <label className="text-sm font-medium text-secondary">Max Classes per Day*</label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary/70" />
                     <input
                       type="number"
                       value={maxClasses}
-                      onChange={(e) => {
+                                              onChange={(e) => {
                           setMaxClasses(Math.max(1, parseInt(e.target.value) || 1));
                           if (formErrors.maxClasses) {
                             setFormErrors({...formErrors, maxClasses: undefined});

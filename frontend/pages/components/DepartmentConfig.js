@@ -80,7 +80,7 @@ const DepartmentConfig = () => {
       newPeriods[day] = [];
       let dayTime = config.start_time.substring(0, 5);
       for (let i = 0; i < config.periods.length; i++) {
-        newPeriods[day].push(formatTimeRange(dayTime, config.class_duration));
+        newPeriods[day].push(formatTime(dayTime));
         dayTime = incrementTime(dayTime, config.class_duration);
       }
     });
@@ -112,7 +112,7 @@ const DepartmentConfig = () => {
       if (!subjectsRes.data.length) {
         issues.push('📚 Subjects: Add at least one subject');
       } else {
-        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch || (typeof s.batch === 'string' && s.batch.trim() === ''));
+        const subjectsWithoutBatch = subjectsRes.data.filter(s => !s.batch || s.batch.trim() === '');
         if (subjectsWithoutBatch.length > 0) {
           issues.push(`📚 Subjects: ${subjectsWithoutBatch.length} subjects need batch assignment`);
         }
@@ -205,7 +205,7 @@ const DepartmentConfig = () => {
         const entriesCount = response.data.entries_count || 'multiple';
         setGenSuccess(`🎉 Timetable generated successfully! Created ${entriesCount} schedule entries. Redirecting to view timetable...`);
         setTimeout(() => {
-          router.push('/components/TimetableViewer');
+          router.push('/components/Timetable');
         }, 2000);
       } else {
         handleTimetableError(new Error('Failed to generate timetable'));
@@ -267,70 +267,8 @@ const DepartmentConfig = () => {
     setPeriods(newPeriods);
   };
 
-  const formatTimeRange = (startTime, duration) => {
-    const [hours, minutes] = startTime.split(":").map(Number);
-    
-    // Calculate end time
-    let endHours = hours;
-    let endMinutes = minutes + duration;
-    
-    while (endMinutes >= 60) {
-      endHours += 1;
-      endMinutes -= 60;
-    }
-    endHours %= 24;
-    
-    // Format start time
-    const startPeriod = hours >= 12 ? "PM" : "AM";
-    const startFormattedHours = hours % 12 || 12;
-    const startFormatted = `${startFormattedHours}:${String(minutes).padStart(2, "0")} ${startPeriod}`;
-    
-    // Format end time
-    const endPeriod = endHours >= 12 ? "PM" : "AM";
-    const endFormattedHours = endHours % 12 || 12;
-    const endFormatted = `${endFormattedHours}:${String(endMinutes).padStart(2, "0")} ${endPeriod}`;
-    
-    return `${startFormatted} - ${endFormatted}`;
-  };
 
-  const addPeriod = (day) => {
-    // Find the last period and add a new one after it
-    const lastPeriod = periods[day][periods[day].length - 1];
-    if (!lastPeriod) {
-      // If no periods exist, use the start time
-      const newTime = incrementTime(startTime, classDuration);
-      setPeriods(prev => ({
-        ...prev,
-        [day]: [...prev[day], formatTimeRange(newTime, classDuration)]
-      }));
-      return;
-    }
 
-    // Parse the last period time and add class duration
-    // Extract the end time from the last period (format: "8:00 AM - 9:00 AM")
-    const lastPeriodParts = lastPeriod.split(" - ");
-    if (lastPeriodParts.length === 2) {
-      const lastEndTime = lastPeriodParts[1]; // "9:00 AM"
-      const [lastEndTimePart, lastEndPeriod] = lastEndTime.split(" ");
-      const [lastEndHours, lastEndMinutes] = lastEndTimePart.split(":").map(Number);
-      
-      // Convert to 24-hour format for calculation
-      let lastEndHours24 = lastEndHours;
-      if (lastEndPeriod === "PM" && lastEndHours !== 12) {
-        lastEndHours24 += 12;
-      } else if (lastEndPeriod === "AM" && lastEndHours === 12) {
-        lastEndHours24 = 0;
-      }
-      
-      // Calculate new start time (same as last end time)
-      const newStartTime = `${String(lastEndHours24).padStart(2, "0")}:${String(lastEndMinutes).padStart(2, "0")}`;
-      
-      setPeriods(prev => ({
-        ...prev,
-        [day]: [...prev[day], formatTimeRange(newStartTime, classDuration)]
-      }));
-    }
-  };
 
 
   const validateConfiguration = () => {
@@ -367,13 +305,35 @@ const DepartmentConfig = () => {
       newPeriods[day] = [];
       let dayTime = startTime;
       for (let i = 0; i < numPeriods; i++) {
-        newPeriods[day].push(formatTimeRange(dayTime, classDuration));
+        newPeriods[day].push(formatTime(dayTime));
         dayTime = incrementTime(dayTime, classDuration);
       }
     });
 
     setPeriods(newPeriods);
     setError(null); // Clear any previous errors
+  };
+
+  const addPeriod = (day) => {
+    // Find the last period and add a new one after it
+    const lastPeriod = periods[day][periods[day].length - 1];
+    if (!lastPeriod) {
+      // If no periods exist, use the start time
+      const newTime = incrementTime(startTime, classDuration);
+      setPeriods(prev => ({
+        ...prev,
+        [day]: [...prev[day], formatTime(newTime)]
+      }));
+      return;
+    }
+
+    // Parse the last period time and add class duration
+    const [time, period] = lastPeriod.split(" ");
+    const newTime = incrementTime(time, classDuration);
+    setPeriods(prev => ({
+      ...prev,
+      [day]: [...prev[day], formatTime(newTime)]
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -539,8 +499,14 @@ const DepartmentConfig = () => {
                 <div key={config.id} className="bg-background/95 rounded-xl p-4 border border-border">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                         <div className="flex items-center gap-3 mb-2">
+                                             <div className="flex items-center gap-3 mb-2">
                          <h3 className="font-semibold text-white text-lg">{config.name}</h3>
+                         <span className="px-2 py-1 text-xs bg-accent-cyan/20 text-white rounded-full border border-accent-cyan/30">
+                           {config.semester}
+                         </span>
+                         <span className="px-2 py-1 text-xs bg-accent-pink/20 text-white rounded-full border border-accent-pink/30">
+                           {config.academic_year}
+                         </span>
                        </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-secondary">
                         <div className="flex items-center gap-2">
@@ -827,33 +793,29 @@ const DepartmentConfig = () => {
                           <span className="w-2 h-2 bg-accent-cyan rounded-full"></span>
                           Assigned Subjects ({subjects.filter(subject => subject.batch === batch.name).length})
                         </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {subjects
                             .filter(subject => subject.batch === batch.name)
                             .map((subject) => (
-                              <div
-                                key={subject.id}
-                                className="p-3 rounded-lg bg-accent-cyan/10 border border-accent-cyan/30 text-white group hover:bg-accent-cyan/15 transition-all min-w-0 overflow-hidden"
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0 overflow-hidden">
-                                    <div className="font-medium text-sm text-white mb-1 truncate" title={subject.subject_short_name || subject.code}>
-                                      {subject.subject_short_name || subject.code}
-                                    </div>
-                                    <div className="text-xs text-white/90 break-words leading-relaxed overflow-hidden" title={subject.name}>
-                                      {subject.name}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                                    <span className="text-xs text-white/90 whitespace-nowrap">
-                                      {subject.credits} cr
-                                      {subject.is_practical && (
-                                        <span className="ml-1 text-accent-pink font-medium">Lab</span>
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
+                                                             <div
+                                 key={subject.id}
+                                 className="p-3 rounded-lg bg-accent-cyan/10 border border-accent-cyan/30 text-white group hover:bg-accent-cyan/15 transition-all"
+                               >
+                                 <div className="flex items-center justify-between">
+                                   <div className="flex-1">
+                                     <div className="font-medium text-sm text-white">{subject.code}</div>
+                                     <div className="text-xs text-white/90 truncate">{subject.name}</div>
+                                   </div>
+                                   <div className="flex items-center gap-2 ml-2">
+                                     <span className="text-xs text-white/90 whitespace-nowrap">
+                                       {subject.credits} cr
+                                       {subject.is_practical && (
+                                         <span className="ml-1 text-accent-pink font-medium">Lab</span>
+                                       )}
+                                     </span>
+                                   </div>
+                                 </div>
+                               </div>
                             ))}
                         </div>
                         {subjects.filter(subject => subject.batch === batch.name).length === 0 && (

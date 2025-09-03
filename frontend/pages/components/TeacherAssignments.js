@@ -18,8 +18,7 @@ import {
   User,
   Hash,
   BarChart3,
-  ArrowLeft,
-  Shield
+  ArrowLeft
 } from 'lucide-react';
 import Link from "next/link";
 import BackButton from "./BackButton";
@@ -35,14 +34,12 @@ const TeacherAssignments = () => {
 
   // New simplified state for easy assignment
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [selectedSubjects, setSelectedSubjects] = useState(null); // Changed to single object for single selection
+  const [selectedSubjects, setSelectedSubjects] = useState([]); // Changed to array for multiple selection
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [selectedSections, setSelectedSections] = useState([]);
   const [viewMode, setViewMode] = useState('assign'); // 'assign' or 'manage'
   const [searchTerm, setSearchTerm] = useState("");
   const [teacherFilter, setTeacherFilter] = useState('all'); // 'all', 'unassigned', 'assigned'
-  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -69,10 +66,10 @@ const TeacherAssignments = () => {
     }
   };
 
-  // Enhanced assignment creation for single subject
+  // Enhanced assignment creation for multiple subjects
   const createAssignment = async () => {
-    if (!selectedTeacher || !selectedSubjects || !selectedBatch || selectedSections.length === 0) {
-      setError('Please select teacher, subject, batch, and at least one section');
+    if (!selectedTeacher || selectedSubjects.length === 0 || !selectedBatch || selectedSections.length === 0) {
+      setError('Please select teacher, at least one subject, batch, and at least one section');
       setTimeout(() => setError(null), 5000);
       return;
     }
@@ -80,30 +77,36 @@ const TeacherAssignments = () => {
     try {
       setLoading(true);
 
-      // Create assignment for the selected subject
-      await api.post('/api/timetable/teacher-assignments/', {
-        teacher: selectedTeacher.id,
-        subject: selectedSubjects.id,
-        batch: selectedBatch.id,
-        sections: selectedSections
-      });
+      // Create assignments for each selected subject
+      const assignmentPromises = selectedSubjects.map(subject =>
+        api.post('/api/timetable/teacher-assignments/', {
+          teacher: selectedTeacher.id,
+          subject: subject.id,
+          batch: selectedBatch.id,
+          sections: selectedSections
+        })
+      );
+
+      await Promise.all(assignmentPromises);
 
       // Generate detailed success message
-      const subjectName = selectedSubjects.subject_short_name;
+      const subjectNames = selectedSubjects.map(s => s.code).join(', ');
       const sectionNames = selectedSections.join(', ');
       
       // Check if this is adding to existing assignments
-      const isAddingToExisting = getExistingAssignments(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).length > 0;
+      const isAddingToExisting = selectedSubjects.some(subject => 
+        getExistingAssignments(selectedTeacher.id, subject.id, selectedBatch.id).length > 0
+      );
       
       const message = isAddingToExisting 
-        ? `✅ Added sections ${sectionNames} to ${selectedTeacher.name}'s existing assignments for ${subjectName} in ${selectedBatch.name}`
-        : `✅ Assigned ${selectedTeacher.name} to teach ${subjectName} for ${selectedBatch.name} (${sectionNames})`;
+        ? `✅ Added sections ${sectionNames} to ${selectedTeacher.name}'s existing assignments for ${subjectNames} in ${selectedBatch.name}`
+        : `✅ Assigned ${selectedTeacher.name} to teach ${subjectNames} for ${selectedBatch.name} (${sectionNames})`;
       
       setSuccess(message);
 
       // Reset selections
       setSelectedTeacher(null);
-      setSelectedSubjects(null);
+      setSelectedSubjects([]);
       setSelectedBatch(null);
       setSelectedSections([]);
 
@@ -112,9 +115,9 @@ const TeacherAssignments = () => {
 
       setTimeout(() => setSuccess(null), 5000);
     } catch (error) {
-      setError('Failed to create assignment');
+      setError('Failed to create assignments');
       setTimeout(() => setError(null), 5000);
-      console.error('Error creating assignment:', error);
+      console.error('Error creating assignments:', error);
     } finally {
       setLoading(false);
     }
@@ -305,49 +308,20 @@ const TeacherAssignments = () => {
   };
 
   // Delete assignment
-  const [showDeleteOneConfirm, setShowDeleteOneConfirm] = useState(null);
-  const [deleteOneLoading, setDeleteOneLoading] = useState(false);
-
   const handleDelete = async (assignmentId) => {
-    setShowDeleteOneConfirm(assignmentId);
-  };
+    if (!confirm('Are you sure you want to delete this assignment?')) return;
 
-  const confirmDeleteOne = async () => {
-    if (!showDeleteOneConfirm) return;
     try {
-      setDeleteOneLoading(true);
-      await api.delete(`/api/timetable/teacher-assignments/${showDeleteOneConfirm}/`);
-      setSuccess('Assignment deleted successfully');
-      await fetchData();
-      setTimeout(() => setSuccess(null), 2500);
+      setLoading(true);
+      await api.delete(`/api/timetable/teacher-assignments/${assignmentId}/`);
+      setSuccess('✅ Assignment deleted successfully');
+      fetchData();
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       setError('Failed to delete assignment');
+      console.error('Error deleting assignment:', error);
     } finally {
-      setDeleteOneLoading(false);
-      setShowDeleteOneConfirm(null);
-    }
-  };
-
-  const handleDeleteAllAssignments = async () => {
-    try {
-      setDeleteAllLoading(true);
-      const response = await api.delete('/api/timetable/data-management/teacher_assignments/');
-      
-      if (response.data.success) {
-        setAssignments([]);
-        setError(null);
-        setShowDeleteAllConfirm(false);
-        setSuccess(`Deleted ${response.data.deleted_counts.teacher_assignments} assignments, ${response.data.deleted_counts.timetable_entries} timetable entries.`);
-        setTimeout(() => setSuccess(null), 2500);
-        fetchData(); // Refresh the data
-      } else {
-        setError('Failed to delete all teacher assignments');
-      }
-    } catch (err) {
-      setError('Failed to delete all teacher assignments');
-      console.error('Delete all teacher assignments error:', err);
-    } finally {
-      setDeleteAllLoading(false);
+      setLoading(false);
     }
   };
 
@@ -451,7 +425,7 @@ const TeacherAssignments = () => {
                 </div>
               </div>
               {/* Selection Summary */}
-              {(selectedTeacher || selectedSubjects || selectedBatch || selectedSections.length > 0) && (
+              {(selectedTeacher || selectedSubjects.length > 0 || selectedBatch || selectedSections.length > 0) && (
                 <div className="bg-surface/50 rounded-xl p-4 border border-border">
                 <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                   <Plus className="h-4 w-4 text-accent-cyan" />
@@ -467,9 +441,12 @@ const TeacherAssignments = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-secondary" />
-                    <span className="text-secondary">Subject:</span>
+                    <span className="text-secondary">Subjects:</span>
                     <span className="font-medium text-primary">
-                      {selectedSubjects ? selectedSubjects.subject_short_name : 'None selected'}
+                      {selectedSubjects.length > 0
+                        ? selectedSubjects.map(s => s.code).join(', ')
+                        : 'None selected'
+                      }
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -492,16 +469,16 @@ const TeacherAssignments = () => {
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={createAssignment}
-                    disabled={!selectedTeacher || !selectedSubjects || !selectedBatch || selectedSections.length === 0 || loading}
+                    disabled={!selectedTeacher || selectedSubjects.length === 0 || !selectedBatch || selectedSections.length === 0 || loading}
                     className="px-6 py-2 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2"
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    Create Assignment
+                    Create Assignment{selectedSubjects.length > 1 ? 's' : ''}
                   </button>
                   <button
                     onClick={() => {
                       setSelectedTeacher(null);
-                      setSelectedSubjects(null);
+                      setSelectedSubjects([]);
                       setSelectedBatch(null);
                       setSelectedSections([]);
                     }}
@@ -687,12 +664,12 @@ const TeacherAssignments = () => {
 
                   {/* Selection Info */}
                   <div className="mb-3 text-sm text-secondary">
-                    Select a subject (only one at a time)
+                    Select one subject at a time
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {getAvailableSubjects().map((subject) => {
-                      const isSelected = selectedSubjects?.id === subject.id;
+                      const isSelected = selectedSubjects.some(s => s.id === subject.id);
                       const isCompletelyAssigned = isSubjectCompletelyAssigned(subject.id, selectedBatch.id);
                       const isPartiallyAssigned = isSubjectPartiallyAssigned(subject.id, selectedBatch.id);
                       const teacherExistingAssignments = selectedTeacher ? 
@@ -737,9 +714,9 @@ const TeacherAssignments = () => {
                           key={subject.id}
                           onClick={() => {
                             if (isSelected) {
-                              setSelectedSubjects(null);
+                              setSelectedSubjects(selectedSubjects.filter(s => s.id !== subject.id));
                             } else {
-                              setSelectedSubjects(subject);
+                              setSelectedSubjects([...selectedSubjects, subject]);
                             }
                           }}
                           className={`p-3 rounded-lg border cursor-pointer transition-all relative ${cardStyle}`}
@@ -747,7 +724,7 @@ const TeacherAssignments = () => {
                           {/* Status indicator */}
                           {statusIndicator}
 
-                          <div className="font-medium text-sm text-current">{subject.subject_short_name || subject.code}</div>
+                          <div className="font-medium text-sm text-current">{subject.code}</div>
                           <div className="text-xs opacity-90 truncate text-current">{subject.name}</div>
                           <div className="text-xs mt-1 flex items-center gap-2 text-current">
                             <span>{subject.credits} credits</span>
@@ -792,7 +769,7 @@ const TeacherAssignments = () => {
               )}
 
               {/* Step 4: Select Sections */}
-              {selectedTeacher && selectedBatch && selectedSubjects && (
+              {selectedTeacher && selectedBatch && selectedSubjects.length > 0 && (
                 <div className="bg-surface/30 rounded-xl p-4 border border-border">
                   <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
                     <Hash className="h-4 w-4 text-accent-cyan" />
@@ -801,33 +778,45 @@ const TeacherAssignments = () => {
 
                   {/* Show assignment status info */}
                   <div className="mb-3 space-y-2">
-                    {selectedSubjects && (
-                      <div key={selectedSubjects.id} className="text-sm">
-                        <div className="font-medium text-primary mb-1">{selectedSubjects.subject_short_name}:</div>
-                        {getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).length > 0 && (
-                          <div className="text-green-600 mb-1">
-                            ✓ Already teaching sections: {getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).join(', ')}
-                          </div>
-                        )}
-                        {getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).length > 0 && (
-                          <div className="text-accent-cyan mb-1">
-                            ➕ Available sections: {getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).join(', ')}
-                          </div>
-                        )}
-                        {getAssignedSections(selectedSubjects.id, selectedBatch.id).length > 0 && (
-                          <div className="text-yellow-600">
-                            ⚠️ Other teachers assigned to: {getAssignedSections(selectedSubjects.id, selectedBatch.id).join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {selectedSubjects.map(subject => {
+                      const teacherAssignedSections = getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id);
+                      const otherAssignedSections = getAssignedSections(subject.id, selectedBatch.id);
+                      const availableSections = getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id);
+                      
+                      return (
+                        <div key={subject.id} className="text-sm">
+                          <div className="font-medium text-primary mb-1">{subject.code}:</div>
+                          {teacherAssignedSections.length > 0 && (
+                            <div className="text-green-600 mb-1">
+                              ✓ Already teaching sections: {teacherAssignedSections.join(', ')}
+                            </div>
+                          )}
+                          {availableSections.length > 0 && (
+                            <div className="text-accent-cyan mb-1">
+                              ➕ Available sections: {availableSections.join(', ')}
+                            </div>
+                          )}
+                          {otherAssignedSections.length > 0 && (
+                            <div className="text-yellow-600">
+                              ⚠️ Other teachers assigned to: {otherAssignedSections.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="flex gap-2">
                     {selectedBatch.get_sections ? selectedBatch.get_sections().map((section) => {
-                      const isAssignedToAnySubject = selectedSubjects && isSectionAssigned(selectedSubjects.id, selectedBatch.id, section);
-                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects && getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
-                      const isAvailableForTeacher = selectedTeacher && selectedSubjects && getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
+                      const isAssignedToAnySubject = selectedSubjects.some(subject =>
+                        isSectionAssigned(subject.id, selectedBatch.id, section)
+                      );
+                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
+                      const isAvailableForTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
 
                       return (
                         <button
@@ -872,9 +861,15 @@ const TeacherAssignments = () => {
                         </button>
                       );
                     }) : ['I', 'II', 'III'].slice(0, selectedBatch.total_sections).map((section) => {
-                      const isAssignedToAnySubject = selectedSubjects && isSectionAssigned(selectedSubjects.id, selectedBatch.id, section);
-                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects && getTeacherAssignedSections(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
-                      const isAvailableForTeacher = selectedTeacher && selectedSubjects && getAvailableSectionsForTeacher(selectedTeacher.id, selectedSubjects.id, selectedBatch.id).includes(section);
+                      const isAssignedToAnySubject = selectedSubjects.some(subject =>
+                        isSectionAssigned(subject.id, selectedBatch.id, section)
+                      );
+                      const isAssignedToSelectedTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getTeacherAssignedSections(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
+                      const isAvailableForTeacher = selectedTeacher && selectedSubjects.some(subject =>
+                        getAvailableSectionsForTeacher(selectedTeacher.id, subject.id, selectedBatch.id).includes(section)
+                      );
 
                       return (
                         <button
@@ -939,15 +934,6 @@ const TeacherAssignments = () => {
                     className="w-full pl-10 pr-4 py-3 bg-background/95 backdrop-blur-sm border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
                   />
                 </div>
-                {assignments.length > 0 && (
-                  <button
-                    onClick={() => setShowDeleteAllConfirm(true)}
-                    className="flex items-center gap-2 px-4 py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 hover:shadow-lg transition-all duration-300"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                    Delete All Assignments
-                  </button>
-                )}
               </div>
 
               {/* Assignments List */}
@@ -1026,91 +1012,6 @@ const TeacherAssignments = () => {
               </button>
             </Link>
           </div>
-
-          {/* Delete All Confirmation Modal */}
-          {showDeleteAllConfirm && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <Shield className="h-6 w-6 text-red-500" />
-                  <h3 className="text-lg font-semibold text-primary">Confirm Delete All Assignments</h3>
-                </div>
-                
-                <div className="mb-4 p-3 bg-red-700 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm text-white">
-                      This will delete ALL teacher assignments and related timetable entries. This action cannot be undone!
-                    </span>
-                  </div>
-                </div>
-                
-                <p className="text-secondary mb-6">
-                  Are you sure you want to proceed? This will permanently delete {assignments.length} assignment(s) and all related data.
-                </p>
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowDeleteAllConfirm(false)}
-                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteAllAssignments}
-                    disabled={deleteAllLoading}
-                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {deleteAllLoading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Deleting...
-                      </div>
-                    ) : (
-                      "Confirm Delete All"
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Delete One Confirmation Modal */}
-          {showDeleteOneConfirm && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <Shield className="h-6 w-6 text-red-500" />
-                  <h3 className="text-lg font-semibold text-primary">Confirm Delete Assignment</h3>
-                </div>
-                <p className="text-secondary mb-6">
-                  Are you sure you want to delete this teacher assignment?
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowDeleteOneConfirm(null)}
-                    className="flex-1 py-2 px-4 border border-border rounded-lg text-secondary hover:bg-background transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmDeleteOne}
-                    disabled={deleteOneLoading}
-                    className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {deleteOneLoading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Deleting...
-                      </div>
-                    ) : (
-                      "Confirm Delete"
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </>

@@ -10,6 +10,7 @@ import {
   Calendar,
   LogOut,
   GraduationCap,
+  
 } from 'lucide-react';
 
 const menuItems = [
@@ -19,7 +20,7 @@ const menuItems = [
   { name: "Classrooms", icon: Building2, path: "/components/Classrooms" },
   { name: "Teacher Assignments", icon: Users, path: "/components/TeacherAssignments" },
   { name: "Department Config", icon: Settings, path: "/components/DepartmentConfig" },
-  { name: "Timetable", icon: Calendar, path: "/components/TimetableViewer" }
+  { name: "Timetable", icon: Calendar, path: "/components/Timetable" }
 ];
 
 export default function Navbar() {
