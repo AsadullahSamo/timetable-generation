@@ -3897,6 +3897,11 @@ class FinalUniversalScheduler:
                     d, _p = slot
                     return not str(d).lower().startswith('wed')
                 
+                # Exclude Thesis from extra classes for final-year students
+                if is_final_year:
+                    practical_subjects = [s for s in practical_subjects if not self._is_thesis_subject(s)]
+                    theory_subjects = [s for s in theory_subjects if not self._is_thesis_subject(s)]
+
                 # Find blank slots for this class group
                 blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
                 if is_final_year:
@@ -3929,8 +3934,8 @@ class FinalUniversalScheduler:
                             teachers = self._get_teachers_for_subject(subject, class_group)
                             teacher = teachers[0] if teachers else None
                             
-                            # Pick any classroom if exists; otherwise None (ignore constraints)
-                            room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
+                            # For extra classes, do not assign a room (leave blank)
+                            room = None
                             
                             # Create entry regardless of teacher/room presence
                             entry = self._create_entry(
@@ -3978,7 +3983,7 @@ class FinalUniversalScheduler:
                             for period in ps:
                                 teachers = self._get_teachers_for_subject(subject, class_group)
                                 teacher = teachers[0] if teachers else None
-                                room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
+                                room = None
                                 entry = self._create_entry(d, period, subject, teacher, room, class_group, is_practical=True)
                                 entry.is_extra_class = True
                                 subject_entries.append(entry)
@@ -4007,7 +4012,7 @@ class FinalUniversalScheduler:
                                 for d, period in available_any:
                                     teachers = self._get_teachers_for_subject(subject, class_group)
                                     teacher = teachers[0] if teachers else None
-                                    room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
+                                    room = None
                                     entry = self._create_entry(d, period, subject, teacher, room, class_group, is_practical=True)
                                     entry.is_extra_class = True
                                     subject_entries.append(entry)
@@ -4049,8 +4054,8 @@ class FinalUniversalScheduler:
                         teachers = self._get_teachers_for_subject(subject, class_group)
                         teacher = teachers[0] if teachers else None
                         
-                        # Pick any classroom if exists; otherwise None
-                        room = self.all_classrooms[0] if getattr(self, 'all_classrooms', None) else None
+                        # For extra classes, do not assign a room (leave blank)
+                        room = None
                         
                         # Create entry regardless of teacher/room presence
                         entry = self._create_entry(
