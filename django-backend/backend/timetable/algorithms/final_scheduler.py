@@ -200,6 +200,15 @@ class FinalUniversalScheduler:
             overall_compliance = self._generate_overall_compliance_report(all_entries)
             result['credit_hour_compliance'] = overall_compliance
 
+            # STEP 8: Schedule Extra Classes in leftover/blank slots
+            print(f"\n🔧 STEP 8: Scheduling Extra Classes in leftover slots...")
+            extra_classes_result = self._schedule_extra_classes(all_entries, expanded_class_groups)
+            if extra_classes_result.get('extra_classes_scheduled', 0) > 0:
+                print(f"   ✅ Scheduled {extra_classes_result['extra_classes_scheduled']} extra classes")
+                result['extra_classes_scheduled'] = extra_classes_result
+            else:
+                print("   ✅ No extra classes scheduled - no suitable slots found")
+
             return result
 
         except Exception as e:
@@ -1344,6 +1353,7 @@ class FinalUniversalScheduler:
             'start_time': entry.start_time.strftime('%H:%M'),
             'end_time': entry.end_time.strftime('%H:%M'),
             'is_practical': entry.is_practical,
+            'is_extra_class': entry.is_extra_class,
             'credits': entry.subject.credits
         }
 
@@ -3831,3 +3841,241 @@ class FinalUniversalScheduler:
         except Exception as e:
             print(f"       ⚠️ Thesis-Wednesday cleanup error for {class_group}: {e}")
             return entries
+
+    def _schedule_extra_classes(self, all_entries: List[TimetableEntry], class_groups: List[str]) -> Dict:
+        """
+        Schedule extra classes in leftover/blank slots after main classes are scheduled.
+        
+        Strategy:
+        1. Find all blank slots for each class group
+        2. Schedule ALL extra practical classes FIRST (3 consecutive blocks each)
+        3. Then schedule ALL extra theory classes (1 block each) in remaining slots
+        4. NO CONSTRAINTS - just find available slots and schedule them
+        
+        Returns:
+            Dict with scheduling results and statistics
+        """
+        try:
+            print(f"   🔍 Analyzing leftover slots for extra classes...")
+            
+            extra_classes_scheduled = 0
+            extra_practical_scheduled = 0
+            extra_theory_scheduled = 0
+            failed_schedules = 0
+            
+            # Track all scheduled slots to identify blank slots
+            scheduled_slots = {}
+            for entry in all_entries:
+                if entry.class_group not in scheduled_slots:
+                    scheduled_slots[entry.class_group] = set()
+                scheduled_slots[entry.class_group].add((entry.day, entry.period))
+            
+            # Process each class group
+            for class_group in class_groups:
+                print(f"     📋 Processing extra classes for {class_group}...")
+                
+                # Get subjects for this class group
+                subjects = self._get_subjects_for_class_group(class_group)
+                if not subjects:
+                    continue
+                
+                # Separate practical and theory subjects
+                practical_subjects = [s for s in subjects if self._is_practical_subject(s)]
+                theory_subjects = [s for s in subjects if not self._is_practical_subject(s)]
+                
+                print(f"       🧪 Found {len(practical_subjects)} practical subjects for extra classes")
+                print(f"       📚 Found {len(theory_subjects)} theory subjects for extra classes")
+                
+                # Find blank slots for this class group
+                blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
+                
+                if not blank_slots:
+                    print(f"       ⚠️ No blank slots found for {class_group}")
+                    continue
+                
+                print(f"       🔍 Found {len(blank_slots)} blank slots for {class_group}")
+                
+                # STEP 1: Schedule ALL extra practical classes FIRST (3 consecutive blocks each)
+                print(f"       🧪 STEP 1: Scheduling {len(practical_subjects)} extra practical classes...")
+                for subject in practical_subjects:
+                    print(f"         🔍 Looking for 3 consecutive slots for {subject.code}...")
+                    
+                    # Find 3 consecutive blank blocks
+                    consecutive_slots = self._find_consecutive_blocks(blank_slots, 3, scheduled_slots.get(class_group, set()))
+                    
+                    if consecutive_slots:
+                        day, start_period = consecutive_slots[0]
+                        print(f"         ✅ Found consecutive slots: {day} P{start_period}-{start_period+2}")
+                        
+                        # Create 3 consecutive entries for practical
+                        subject_entries = []
+                        for i in range(3):
+                            period = start_period + i
+                            
+                            # Find available teacher (NO CONSTRAINTS - just get any teacher)
+                            teachers = self._get_teachers_for_subject(subject, class_group)
+                            teacher = teachers[0] if teachers else None  # Just take first available
+                            
+                            # Find available lab room (NO CONSTRAINTS - just get any lab)
+                            room = self._find_available_classroom(day, period, 1, class_group, subject)
+                            
+                            if teacher and room:
+                                # Create entry with * suffix
+                                entry = self._create_entry(
+                                    day, period, subject, teacher, room, class_group, is_practical=True
+                                )
+                                
+                                # Mark this as an extra class
+                                entry.is_extra_class = True
+                                
+                                subject_entries.append(entry)
+                                
+                                # Mark slots as occupied
+                                if class_group not in scheduled_slots:
+                                    scheduled_slots[class_group] = set()
+                                scheduled_slots[class_group].add((day, period))
+                                
+                                print(f"           ✅ Scheduled {subject.code}* on {day} P{period} with {teacher.name} in {room.name}")
+                            else:
+                                print(f"           ⚠️ Could not schedule {subject.code}* - missing teacher or room")
+                                break
+                        
+                        if len(subject_entries) == 3:
+                            all_entries.extend(subject_entries)
+                            extra_classes_scheduled += 3
+                            extra_practical_scheduled += 3
+                            print(f"         ✅ Successfully scheduled all 3 blocks for {subject.code}*")
+                        else:
+                            print(f"         ❌ Failed to schedule all 3 blocks for {subject.code}*")
+                            failed_schedules += 1
+                    else:
+                        print(f"         ❌ No consecutive slots found for {subject.code}*")
+                        failed_schedules += 1
+                
+                # STEP 2: Schedule ALL extra theory classes (1 block each) in remaining slots
+                print(f"       📚 STEP 2: Scheduling {len(theory_subjects)} extra theory classes...")
+                
+                # Re-find blank slots after practical scheduling
+                updated_blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
+                print(f"         🔍 After practical scheduling: {len(updated_blank_slots)} blank slots remaining")
+                
+                for subject in theory_subjects:
+                    print(f"         🔍 Looking for slot for {subject.code}...")
+                    
+                    # Find any available blank slot
+                    available_slot = None
+                    for day, period in updated_blank_slots:
+                        if (day, period) not in scheduled_slots.get(class_group, set()):
+                            available_slot = (day, period)
+                            break
+                    
+                    if available_slot:
+                        day, period = available_slot
+                        print(f"         ✅ Found slot: {day} P{period}")
+                        
+                        # Find available teacher (NO CONSTRAINTS - just get any teacher)
+                        teachers = self._get_teachers_for_subject(subject, class_group)
+                        teacher = teachers[0] if teachers else None  # Just take first available
+                        
+                        # Find available regular room (NO CONSTRAINTS - just get any room)
+                        room = self._find_available_classroom(day, period, 1, class_group, subject)
+                        
+                        if teacher and room:
+                            # Create entry with * suffix
+                            entry = self._create_entry(
+                                day, period, subject, teacher, room, class_group, is_practical=False
+                            )
+                            
+                            # Mark this as an extra class
+                            entry.is_extra_class = True
+                            
+                            all_entries.append(entry)
+                            extra_classes_scheduled += 1
+                            extra_theory_scheduled += 1
+                            
+                            # Mark slot as occupied
+                            if class_group not in scheduled_slots:
+                                scheduled_slots[class_group] = set()
+                            scheduled_slots[class_group].add((day, period))
+                            
+                            print(f"           ✅ Scheduled {subject.code}* on {day} P{period} with {teacher.name} in {room.name}")
+                        else:
+                            print(f"           ❌ Could not schedule {subject.code}* - missing teacher or room")
+                            failed_schedules += 1
+                    else:
+                        print(f"         ❌ No available slots for {subject.code}*")
+                        failed_schedules += 1
+                
+                print(f"       📊 {class_group} Summary: {extra_practical_scheduled} practical + {extra_theory_scheduled} theory = {extra_classes_scheduled} total")
+            
+            # Save extra classes to database
+            if extra_classes_scheduled > 0:
+                saved_count = self._save_entries_to_database(all_entries)
+                print(f"   💾 Saved {saved_count} total entries (including extra classes) to database")
+            
+            result = {
+                'extra_classes_scheduled': extra_classes_scheduled,
+                'extra_practical_scheduled': extra_practical_scheduled,
+                'extra_theory_scheduled': extra_theory_scheduled,
+                'failed_schedules': failed_schedules,
+                'success': True
+            }
+            
+            print(f"   📊 Extra Classes Summary: {extra_practical_scheduled} practical + {extra_theory_scheduled} theory = {extra_classes_scheduled} total")
+            
+            return result
+            
+        except Exception as e:
+            print(f"   ❌ Error in extra class scheduling: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'extra_classes_scheduled': 0,
+                'extra_practical_scheduled': 0,
+                'extra_theory_scheduled': 0,
+                'failed_schedules': 0,
+                'success': False,
+                'error': str(e)
+            }
+    
+    def _find_blank_slots_for_class_group(self, class_group: str, scheduled_slots: set) -> List[Tuple[str, int]]:
+        """Find all blank slots for a specific class group."""
+        blank_slots = []
+        
+        for day in self.days:
+            for period in self.periods:
+                if (day, period) not in scheduled_slots:
+                    blank_slots.append((day, period))
+        
+        return blank_slots
+    
+    def _find_consecutive_blocks(self, blank_slots: List[Tuple[str, int]], count: int, 
+                                scheduled_slots: set) -> Optional[List[Tuple[str, int]]]:
+        """Find consecutive blank blocks for practical classes."""
+        # Group slots by day
+        slots_by_day = {}
+        for day, period in blank_slots:
+            if day not in slots_by_day:
+                slots_by_day[day] = []
+            slots_by_day[day].append(period)
+        
+        # Find consecutive periods on each day
+        for day, periods in slots_by_day.items():
+            periods.sort()
+            
+            for i in range(len(periods) - count + 1):
+                consecutive = periods[i:i+count]
+                
+                # Check if all periods are consecutive and available
+                if consecutive[-1] - consecutive[0] == count - 1:
+                    # Verify all slots are still available
+                    all_available = True
+                    for period in consecutive:
+                        if (day, period) in scheduled_slots:
+                            all_available = False
+                            break
+                    
+                    if all_available:
+                        return [(day, period) for period in consecutive]
+        
+        return None

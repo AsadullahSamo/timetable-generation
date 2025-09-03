@@ -139,7 +139,7 @@ class TimetableSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TimetableEntry
-        fields = ['day', 'period', 'subject', 'teacher', 'classroom', 'class_group', 'start_time', 'end_time', 'is_practical']
+        fields = ['day', 'period', 'subject', 'teacher', 'classroom', 'class_group', 'start_time', 'end_time', 'is_practical', 'is_extra_class']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -154,11 +154,18 @@ class TimetableSerializer(serializers.ModelSerializer):
             data['teacher'] = None  # Don't display teacher for Thesis
             data['teacher_display'] = ""  # Empty teacher display
         else:
-            # Format subject name with practical indicator
+            # Format subject name with practical indicator and extra class suffix
+            subject_name = str(data['subject'])
+            
+            # Add * suffix for extra classes
+            if instance.is_extra_class:
+                subject_name += "*"
+            
+            # Add practical indicator
             if data['is_practical']:
-                data['display_text'] = f"{data['subject']} (PR)"
+                data['display_text'] = f"{subject_name} (PR)"
             else:
-                data['display_text'] = str(data['subject'])
+                data['display_text'] = subject_name
 
             # Keep teacher display for non-Thesis subjects
             data['teacher_display'] = str(data['teacher']) if data['teacher'] else ""

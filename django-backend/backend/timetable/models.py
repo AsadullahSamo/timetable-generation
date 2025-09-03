@@ -279,6 +279,7 @@ class TimetableEntry(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
     is_practical = models.BooleanField(default=False)
+    is_extra_class = models.BooleanField(default=False, help_text="Indicates if this is an extra class (with * suffix)")
     schedule_config = models.ForeignKey(ScheduleConfig, on_delete=models.CASCADE, null=True, blank=True)
     semester = models.CharField(max_length=50, default="Fall 2024")
     academic_year = models.CharField(max_length=20, default="2024-2025")

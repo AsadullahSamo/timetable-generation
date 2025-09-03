@@ -772,6 +772,7 @@ class TimetableView(APIView):
                     start_time=entry['start_time'],
                     end_time=entry['end_time'],
                     is_practical='(PR)' in entry['subject'],
+                    is_extra_class=entry.get('is_extra_class', False),
                     schedule_config=config,
                     semester=config.semester,
                     academic_year=config.academic_year
@@ -993,11 +994,18 @@ class LatestTimetableView(APIView):
             # Format entries
             formatted_entries = []
             for entry in entries:
+                # Format subject name with practical indicator and extra class suffix
+                subject_name = entry.subject.name if entry.subject else ''
+                if entry.is_extra_class:
+                    subject_name += "*"
+                if entry.is_practical:
+                    subject_name += " (PR)"
+                
                 formatted_entries.append({
                     'id': entry.id,
                     'day': entry.day,
                     'period': entry.period,
-                    'subject': f"{entry.subject.name}{' (PR)' if entry.is_practical else ''}",
+                    'subject': subject_name,
                     'subject_code': entry.subject.code if entry.subject else '',  # Use actual subject code
                     'subject_short_name': entry.subject.subject_short_name if entry.subject and entry.subject.subject_short_name else '',
                     'teacher': entry.teacher.name if entry.teacher else '',
@@ -1006,6 +1014,7 @@ class LatestTimetableView(APIView):
                     'start_time': entry.start_time.strftime("%H:%M:%S"),
                     'end_time': entry.end_time.strftime("%H:%M:%S"),
                     'is_practical': entry.is_practical,
+                    'is_extra_class': entry.is_extra_class,
                     'credits': entry.subject.credits if entry.subject else 0
                 })
 

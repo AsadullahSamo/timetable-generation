@@ -636,6 +636,14 @@ const Timetable = () => {
           </div>
         )}
 
+        {/* Extra Classes Legend */}
+        <div className="mb-4 bg-yellow-900/20 border border-yellow-400/30 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-yellow-300">
+            <span className="text-yellow-400 font-bold">*</span>
+            <span className="text-sm">Extra Classes: Additional classes scheduled in leftover slots after main classes</span>
+          </div>
+        </div>
+
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
           <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-[1px] bg-gray-700 min-w-[1000px]">
             <div className="bg-gray-800 p-4 text-center sticky left-0 z-10"></div>
@@ -662,13 +670,15 @@ const Timetable = () => {
                   const entry = (timetableData.entries || []).find(
                     e => normalizeDay(e.day) === normalizeDay(day) && e.period === (index + 1)
                   );
-                  console.log(`Looking for entry: day=${day} (normalized: ${normalizeDay(day)}), period=${index + 1}, found:`, entry); // Debug log
+                  console.log(`Looking for entry: day=${day} (normalized: ${normalizeDay(day)}), period=${index + 1}, found:`, entry, 'is_extra_class:', entry?.is_extra_class); // Debug log
                   return (
                     <div
                       key={`${day}-${index}`}
                       className={`p-4 min-h-[80px] flex flex-col justify-center gap-1 ${
                         index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900'
-                      } ${editMode ? 'outline outline-1 outline-gray-700' : ''}`}
+                      } ${editMode ? 'outline outline-1 outline-gray-700' : ''} ${
+                        entry && entry.is_extra_class ? 'border-2 border-yellow-400 bg-yellow-900/20 shadow-lg shadow-yellow-400/20' : ''
+                      }`}
                       onDragOver={(e) => {
                         if (!editMode) return;
                         e.preventDefault();
@@ -713,7 +723,12 @@ const Timetable = () => {
                             draggable={editMode}
                             onDragStart={() => setDraggingEntry(entry)}
                           >
-                            {entry.subject_short_name || entry.subject_code || entry.subject}
+                            <div className="flex items-center gap-1">
+                              {(entry.subject_short_name || entry.subject_code || entry.subject)}
+                              {entry.is_extra_class && (
+                                <span className="text-yellow-400 font-bold text-lg" title="Extra Class">*</span>
+                              )}
+                            </div>
                           </div>
                           <div className="text-sm text-blue-400">{entry.teacher}</div>
                           <div className="text-xs text-emerald-400">{entry.classroom}</div>
