@@ -92,8 +92,8 @@ export default function Signup() {
           <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-accent-pink/10 rounded-full blur-[120px] animate-pulse"></div>
         </div>
 
-        <div className="relative z-10 w-full min-h-screen flex justify-center items-center p-4">
-          <div className="w-full max-w-2xl">
+        <div className="relative z-10 w-full min-h-screen flex justify-center items-center p-4 sm:p-6 lg:p-8">
+          <div className="w-full max-w-lg sm:max-w-xl lg:max-w-2xl">
             {/* Logo */}
             <div className="mb-8 text-center">
               <div className="relative h-16 w-16 mx-auto mb-4">
@@ -109,20 +109,20 @@ export default function Signup() {
             </div>
 
             {/* Signup Form */}
-            <div className="bg-surface/95 backdrop-blur-sm p-8 rounded-2xl border border-border shadow-soft">
-              <form onSubmit={handleSignUp} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-surface/95 backdrop-blur-sm p-6 sm:p-8 rounded-2xl border border-border shadow-soft">
+              <form onSubmit={handleSignUp} className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-secondary">First Name</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-secondary" />
+                        <User className="h-4 sm:h-5 w-4 sm:w-5 text-secondary" />
                       </div>
                       <input
                         type="text"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30 text-sm sm:text-base"
                         placeholder="Enter your first name"
                       />
                     </div>
@@ -132,13 +132,13 @@ export default function Signup() {
                     <label className="text-sm font-medium text-secondary">Last Name</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-secondary" />
+                        <User className="h-4 sm:h-5 w-4 sm:w-5 text-secondary" />
                       </div>
                       <input
                         type="text"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                        className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30 text-sm sm:text-base"
                         placeholder="Enter your last name"
                       />
                     </div>
@@ -149,13 +149,13 @@ export default function Signup() {
                   <label className="text-sm font-medium text-secondary">Username</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-secondary" />
+                      <User className="h-4 sm:h-5 w-4 sm:w-5 text-secondary" />
                     </div>
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30 text-sm sm:text-base"
                       placeholder="Choose a username"
                       required
                     />
@@ -166,59 +166,59 @@ export default function Signup() {
                   <label className="text-sm font-medium text-secondary">Email</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-secondary" />
+                      <Mail className="h-4 sm:h-5 w-4 sm:w-5 text-secondary" />
                     </div>
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
+                      className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30 text-sm sm:text-base"
                       placeholder="Enter your email"
                     />
                   </div>
                 </div>
 
-
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-secondary" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-secondary">Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-4 sm:h-5 w-4 sm:w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30 text-sm sm:text-base"
+                        placeholder="Enter your password"
+                      />
                     </div>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                      placeholder="Enter your password"
-                    />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-secondary">Confirm Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-secondary" />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-secondary">Confirm Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-4 sm:h-5 w-4 sm:w-5 text-secondary" />
+                      </div>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30 text-sm sm:text-base"
+                        placeholder="Confirm your password"
+                      />
                     </div>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-background/95 border border-border rounded-xl text-primary placeholder-secondary/70 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 focus:border-accent-cyan/30"
-                      placeholder="Confirm your password"
-                    />
                   </div>
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+                  className="w-full py-2.5 sm:py-3 px-4 bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end text-white font-medium rounded-xl flex items-center justify-center hover:opacity-90 hover:shadow-lg hover:shadow-accent-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group text-sm sm:text-base"
                 >
                   {loading ? (
-                    <div className="h-5 w-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                    <div className="h-4 sm:h-5 w-4 sm:w-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                   ) : (
                     <>
                       Create Account
@@ -228,13 +228,13 @@ export default function Signup() {
                 </button>
 
                 {errMsg && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-                    <p className="text-red-500 text-sm text-center font-medium">{errMsg}</p>
+                  <div className="p-3 sm:p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <p className="text-red-500 text-xs sm:text-sm text-center font-medium">{errMsg}</p>
                   </div>
                 )}
               </form>
 
-              <div className="mt-6 flex items-center justify-center space-x-2 text-sm">
+              <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-2 text-xs sm:text-sm">
                 <span className="text-secondary">Already have an account?</span>
                 <Link
                   href="/components/Login"

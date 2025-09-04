@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import Navbar from "./Navbar";
+import ResponsiveLayout from "./ResponsiveLayout";
+import ResponsiveCard from "./ResponsiveCard";
 import Link from "next/link";
 import BackButton from "./BackButton";
 import api from "../utils/api";
@@ -439,88 +440,85 @@ const DepartmentConfig = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-primary font-sans">
-      <Navbar number={6} />
+    <ResponsiveLayout>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
+          Department Configuration
+        </h1>
+        <p className="text-secondary/90">Set up your department's basic information and schedule</p>
+      </div>
 
-      <div className="flex-1 p-8 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
-            Department Configuration
-          </h1>
-          <p className="text-secondary/90">Set up your department's basic information and schedule</p>
+      {error && (
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <p className="text-red-500 text-sm font-medium">{error}</p>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-500 hover:text-red-600 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
+      )}
 
-        {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              <p className="text-red-500 text-sm font-medium">{error}</p>
+      {success && (
+        <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+              <div className="w-2 h-2 bg-white rounded-full"></div>
             </div>
+            <p className="text-green-500 text-sm font-medium">{success}</p>
+          </div>
+          <button
+            onClick={() => setSuccess('')}
+            className="text-green-500 hover:text-green-600 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Generation alerts (prereq/gen) */}
+      {(genSuccess || genError) && (
+        <div className={`p-4 rounded-xl mb-6 ${genError ? 'bg-red-500/10 border border-red-500/20' : 'bg-green-500/10 border border-green-500/20'}`}>
+          <div className="flex items-start gap-3">
+            {genError ? (
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 text-sm whitespace-pre-line {genError ? 'text-red-500' : 'text-green-500'}">
+              {genError || genSuccess}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Current Configurations Section */}
+      <ResponsiveCard className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-accent-cyan" />
+            Current Department Configurations
+          </h2>
+          <div className="relative">
             <button
-              onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-600 transition-colors"
+              type="button"
+              className="text-secondary hover:text-primary transition-colors"
+              onMouseEnter={() => setShowTooltip("current")}
+              onMouseLeave={() => setShowTooltip("")}
             >
-              <X className="h-4 w-4" />
+              <Info className="h-5 w-5" />
             </button>
-          </div>
-        )}
-
-        {success && (
-          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 bg-white rounded-full"></div>
+            {showTooltip === "current" && (
+              <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
+                View and manage your existing department configurations.
               </div>
-              <p className="text-green-500 text-sm font-medium">{success}</p>
-            </div>
-            <button
-              onClick={() => setSuccess('')}
-              className="text-green-500 hover:text-green-600 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            )}
           </div>
-        )}
-
-        {/* Generation alerts (prereq/gen) */}
-        {(genSuccess || genError) && (
-          <div className={`p-4 rounded-xl mb-6 ${genError ? 'bg-red-500/10 border border-red-500/20' : 'bg-green-500/10 border border-green-500/20'}`}>
-            <div className="flex items-start gap-3">
-              {genError ? (
-                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-              ) : (
-                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1 text-sm whitespace-pre-line {genError ? 'text-red-500' : 'text-green-500'}">
-                {genError || genSuccess}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Current Configurations Section */}
-        <section className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-accent-cyan" />
-              Current Department Configurations
-            </h2>
-            <div className="relative">
-              <button
-                type="button"
-                className="text-secondary hover:text-primary transition-colors"
-                onMouseEnter={() => setShowTooltip("current")}
-                onMouseLeave={() => setShowTooltip("")}
-              >
-                <Info className="h-5 w-5" />
-              </button>
-              {showTooltip === "current" && (
-                <div className="absolute right-0 top-full mt-2 p-3 bg-surface border border-border rounded-xl shadow-lg text-sm text-secondary w-64 z-50">
-                  View and manage your existing department configurations.
-                </div>
-              )}
-            </div>
-          </div>
+        </div>
 
           {loadingConfigs ? (
             <div className="flex items-center justify-center py-8">
@@ -578,7 +576,7 @@ const DepartmentConfig = () => {
               ))}
             </div>
           )}
-        </section>
+      </ResponsiveCard>
 
         {/* Configuration Form Section */}
         <section className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft mb-6">
@@ -911,10 +909,9 @@ const DepartmentConfig = () => {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Delete Confirmation Dialog */}
-      {showDeleteConfirm && (
+        {/* Delete Confirmation Dialog */}
+        {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-surface p-6 rounded-2xl border border-border shadow-lg max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
@@ -945,8 +942,8 @@ const DepartmentConfig = () => {
             </div>
           </div>
         </div>
-      )}
-    </div>
+        )}
+      </ResponsiveLayout>
   );
 };
 

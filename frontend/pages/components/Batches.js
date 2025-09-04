@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Head from "next/head";
-import Navbar from "./Navbar";
+import ResponsiveLayout from "./ResponsiveLayout";
+import ResponsiveCard from "./ResponsiveCard";
 import api from "../utils/api";
 import {
   GraduationCap,
@@ -219,15 +220,13 @@ const BatchManagement = () => {
         <title>Batch Management - Timetable System</title>
       </Head>
 
-      <div className="flex min-h-screen bg-background text-primary font-sans">
-        <Navbar number={1} />
-        <div className="flex-1 p-8 max-w-7xl">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
-              Batch Management
-            </h1>
-            <p className="text-secondary/90">Manage academic batches and semesters</p>
-          </div>
+      <ResponsiveLayout>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
+            Batch Management
+          </h1>
+          <p className="text-secondary/90">Manage academic batches and semesters</p>
+        </div>
 
           {error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center gap-2">
@@ -577,8 +576,7 @@ const BatchManagement = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
+      </ResponsiveLayout>
     </>
   );
 };

@@ -4,6 +4,8 @@ import api from "../utils/api";
 import Head from "next/head";
 import Link from "next/link";
 import BackButton from "./BackButton";
+import ResponsiveLayout from "./ResponsiveLayout";
+import Navbar from "./Navbar";
 import {
   User,
   Clock,
@@ -18,7 +20,6 @@ import {
   Calendar,
   AlertTriangle
 } from 'lucide-react';
-import Navbar from "./Navbar";
 
 const AddTeacher = () => {
   const router = useRouter();
@@ -333,18 +334,16 @@ const AddTeacher = () => {
       <Head>
         <title>{id ? "Edit Teacher" : "Add New Teacher"}</title>
       </Head>
-      <div className="flex min-h-screen bg-background text-primary font-sans">
-        <Navbar number={4} />
-        <div className="flex-1 p-8 max-w-7xl mx-auto">
-          <div className="mb-8">
-            <BackButton href="/components/Teachers" label="Back to Teachers" className="mb-4" />
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
-              {id ? "Edit Teacher" : "Add New Teacher"}
-            </h1>
-            <p className="text-secondary/90">
-              {id ? "Update teacher information and availability" : "Create a new teacher and set their availability"}
-            </p>
-          </div>
+      <ResponsiveLayout>
+        <div className="mb-8">
+          <BackButton href="/components/Teachers" label="Back to Teachers" className="mb-4" />
+          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
+            {id ? "Edit Teacher" : "Add New Teacher"}
+          </h1>
+          <p className="text-secondary/90">
+            {id ? "Update teacher information and availability" : "Create a new teacher and set their availability"}
+          </p>
+        </div>
 
           {error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center gap-2">
@@ -513,8 +512,7 @@ const AddTeacher = () => {
               </button>
             </div>
           </form>
-        </div>
-      </div>
+      </ResponsiveLayout>
     </>
   );
 };

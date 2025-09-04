@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Head from "next/head";
-import Navbar from "./Navbar";
+import ResponsiveLayout from "./ResponsiveLayout";
+import ResponsiveCard, { ResponsiveGrid } from "./ResponsiveCard";
+import ResponsiveTable, { ResponsiveTableRow, ResponsiveTableCell } from "./ResponsiveTable";
 import Link from "next/link";
 import BackButton from "./BackButton";
 import api from "../utils/api";
@@ -333,25 +335,31 @@ const SubjectConfig = () => {
         />
       </Head>
 
-      <div className="flex min-h-screen bg-background text-primary font-sans">
-        <Navbar number={2} />
-        <div className="flex-1 p-8 max-w-7xl">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
+      <ResponsiveLayout>
+        <div className="space-y-6 sm:space-y-8">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gradient-cyan-start to-gradient-pink-end mb-2">
               Subject Configuration
             </h1>
-            <p className="text-secondary/90">Add and manage subjects for your timetable</p>
+            <p className="text-secondary/90 text-sm sm:text-base">Add and manage subjects for your timetable</p>
           </div>
           
           {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              <p className="text-red-500 text-sm font-medium">{error}</p>
+            <div className="p-3 sm:p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 sm:mb-6 flex items-center gap-2">
+              <AlertCircle className="h-4 sm:h-5 w-4 sm:w-5 text-red-500 flex-shrink-0" />
+              <p className="text-red-500 text-xs sm:text-sm font-medium">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 sm:p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-4 sm:mb-6 flex items-center gap-2">
+              <CheckCircle2 className="h-4 sm:h-5 w-4 sm:w-5 text-green-500 flex-shrink-0" />
+              <p className="text-green-500 text-xs sm:text-sm font-medium">{success}</p>
             </div>
           )}
 
           {/* Stats Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <ResponsiveGrid cols={{ xs: 1, sm: 2, lg: 4 }} className="mb-6 sm:mb-8">
             <div className="bg-surface/95 backdrop-blur-sm p-6 rounded-2xl border border-border shadow-soft">
               <div className="flex items-center gap-3 mb-2">
                 <BookOpen className="h-5 w-5 text-accent-cyan" />
@@ -386,7 +394,7 @@ const SubjectConfig = () => {
                 <p className="text-xs text-secondary/70 mt-1">Duplicate codes found</p>
               )}
             </div>
-          </div>
+          </ResponsiveGrid>
 
           {/* Search Bar */}
           <div className="flex items-center gap-4 mb-6">
@@ -720,7 +728,6 @@ const SubjectConfig = () => {
             </Link>
           </div>
         </div>
-      </div>
 
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && (
@@ -803,6 +810,7 @@ const SubjectConfig = () => {
           </div>
         </div>
       )}
+      </ResponsiveLayout>
     </>
   );
 };

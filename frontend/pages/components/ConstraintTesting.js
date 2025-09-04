@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import Navbar from './Navbar';
+import ResponsiveLayout from './ResponsiveLayout';
+import ResponsiveCard from './ResponsiveCard';
 import BackButton from './BackButton';
 import api from '../utils/api';
 
@@ -360,71 +361,63 @@ const ConstraintTesting = () => {
 
   if (loading && !constraintData) {
     return (
-      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
-        <Navbar number={8} />
-        <div className="flex-1 p-8 max-w-7xl">
-          <div className="flex justify-center items-center h-full">
-            <div className="text-center text-purple-400 italic">
-              <i className="fas fa-spinner fa-spin text-4xl mb-4"></i>
-              <p>Loading constraint analysis...</p>
-            </div>
+      <ResponsiveLayout>
+        <div className="flex justify-center items-center h-full">
+          <div className="text-center text-purple-400 italic">
+            <i className="fas fa-spinner fa-spin text-4xl mb-4"></i>
+            <p>Loading constraint analysis...</p>
           </div>
         </div>
-      </div>
+      </ResponsiveLayout>
     );
   }
 
   if (error && !constraintData) {
     return (
-      <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
-        <Navbar number={8} />
-        <div className="flex-1 p-8 max-w-7xl">
-          <h1 className="text-3xl text-gray-50 mb-8">Constraint Testing</h1>
-          <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
-            {error}
-          </div>
-          <div className="mt-8">
-            <BackButton href="/components/Timetable" label="Back to Timetable" />
-          </div>
+      <ResponsiveLayout>
+        <h1 className="text-3xl text-gray-50 mb-8">Constraint Testing</h1>
+        <div className="bg-red-900/50 text-red-200 p-4 rounded-lg mb-6">
+          {error}
         </div>
-      </div>
+        <div className="mt-8">
+          <BackButton href="/components/Timetable" label="Back to Timetable" />
+        </div>
+      </ResponsiveLayout>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
-      <Navbar number={8} />
-      <div className="flex-1 p-8 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl text-gray-50 mb-4">Constraint Testing & Validation</h1>
-          <p className="text-gray-400 mb-6">
-            Comprehensive analysis of all timetable constraints. Click on any constraint to view detailed information.
-          </p>
-          
-          {constraintData && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className="text-2xl font-bold text-purple-400">{constraintData.total_entries}</div>
-                <div className="text-sm text-gray-400">Total Schedule Entries</div>
+    <ResponsiveLayout>
+      <div className="mb-8">
+        <h1 className="text-3xl text-gray-50 mb-4">Constraint Testing & Validation</h1>
+        <p className="text-gray-400 mb-6">
+          Comprehensive analysis of all timetable constraints. Click on any constraint to view detailed information.
+        </p>
+        
+        {constraintData && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <ResponsiveCard className="p-4">
+              <div className="text-2xl font-bold text-purple-400">{constraintData.total_entries}</div>
+              <div className="text-sm text-gray-400">Total Schedule Entries</div>
+            </ResponsiveCard>
+            <ResponsiveCard className="p-4">
+              <div className={`text-2xl font-bold ${constraintData.total_violations === 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {constraintData.total_violations}
               </div>
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className={`text-2xl font-bold ${constraintData.total_violations === 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {constraintData.total_violations}
-                </div>
-                <div className="text-sm text-gray-400">Total Violations</div>
+              <div className="text-sm text-gray-400">Total Violations</div>
+            </ResponsiveCard>
+            <ResponsiveCard className="p-4">
+              <div className={`text-2xl font-bold ${constraintData.overall_compliance ? 'text-green-400' : 'text-red-400'}`}>
+                {constraintData.overall_compliance ? '100%' : 'FAILED'}
               </div>
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className={`text-2xl font-bold ${constraintData.overall_compliance ? 'text-green-400' : 'text-red-400'}`}>
-                  {constraintData.overall_compliance ? '100%' : 'FAILED'}
-                </div>
-                <div className="text-sm text-gray-400">Overall Compliance</div>
-              </div>
-            </div>
-          )}
-        </div>
+              <div className="text-sm text-gray-400">Overall Compliance</div>
+            </ResponsiveCard>
+          </div>
+        )}
+      </div>
 
-        {/* Constraint Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      {/* Constraint Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {constraintTypes.map((constraint) => {
             const analysisData = constraintData?.constraint_analysis?.[constraint.id];
             const validationResult = constraintData?.validation_results?.constraint_results?.[constraint.name];
@@ -467,29 +460,29 @@ const ConstraintTesting = () => {
                 </div>
               </div>
             );
-          })}
-        </div>
+        })}
+      </div>
 
-        {/* Refresh Button */}
-        <div className="mb-8">
-          <button
-            onClick={fetchConstraintData}
-            disabled={loading}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <i className="fas fa-spinner fa-spin"></i>
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <i className="fas fa-sync-alt"></i>
-                Refresh Analysis
-              </>
-            )}
-          </button>
-        </div>
+      {/* Refresh Button */}
+      <div className="mb-8">
+        <button
+          onClick={fetchConstraintData}
+          disabled={loading}
+          className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {loading ? (
+            <>
+              <i className="fas fa-spinner fa-spin"></i>
+              Refreshing...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-sync-alt"></i>
+              Refresh Analysis
+            </>
+          )}
+        </button>
+      </div>
 
         {/* Detailed Analysis Modal/Panel */}
         {selectedConstraint && detailedAnalysis && (
@@ -519,12 +512,11 @@ const ConstraintTesting = () => {
           </div>
         )}
 
-        {/* Back Button */}
-        <div className="mt-8">
-          <BackButton href="/components/Timetable" label="Back to Timetable" />
-        </div>
+      {/* Back Button */}
+      <div className="mt-8">
+        <BackButton href="/components/Timetable" label="Back to Timetable" />
       </div>
-    </div>
+    </ResponsiveLayout>
   );
 };
 
