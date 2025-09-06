@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ResponsiveTable({ headers, children, className = "" }) {
+export default function ResponsiveTable({ headers = [], children, className = "" }) {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-full inline-block align-middle">
@@ -8,7 +8,7 @@ export default function ResponsiveTable({ headers, children, className = "" }) {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-surface">
               <tr>
-                {headers.map((header, index) => (
+                {headers && headers.length > 0 && headers.map((header, index) => (
                   <th
                     key={index}
                     className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider"

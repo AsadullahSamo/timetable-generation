@@ -6,7 +6,7 @@ import ResponsiveCard from './ResponsiveCard';
 import ResponsiveTable, { ResponsiveTableRow, ResponsiveTableCell } from './ResponsiveTable';
 import BackButton from './BackButton';
 import api from "../utils/api";
-import { generateTimetablePDF } from "../utils/pdfGenerator";
+import { generateTimetablePDF } from "../../utils/pdfGenerator";
 import { 
   Calendar, 
   Clock, 

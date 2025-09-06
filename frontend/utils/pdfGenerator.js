@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import api from './api';
+import api from '../pages/utils/api';
 
 export const generateTimetablePDF = async (timetableData, selectedClassGroup = null) => {
   try {

@@ -69,8 +69,7 @@ export default function Navbar({ isMobile, isOpen, onToggle }) {
         </div>
 
         {/* Mobile sidebar overlay */}
-        {isOpen && (
-          <div className="lg:hidden fixed inset-0 z-40 flex">
+        <div className={`lg:hidden fixed inset-0 z-40 flex transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
           {/* Backdrop */}
           <div 
             className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
@@ -151,7 +150,6 @@ export default function Navbar({ isMobile, isOpen, onToggle }) {
               </div>
             </div>
           </div>
-        )}
       </>
     );
   }
