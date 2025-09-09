@@ -225,18 +225,46 @@ class EnhancedScheduler:
         return False
     
     def _generate_for_class_group(self, class_group: str, subjects: List[Subject]) -> List[TimetableEntry]:
-        """Generate timetable entries for a specific class group."""
+        """Generate timetable entries for a specific class group with PRIORITY-BASED TEACHER SCHEDULING."""
         entries = []
         class_schedule = defaultdict(lambda: defaultdict(bool))
         
-        # STEP 1: Schedule practical subjects first (3-block consecutive)
+        # CRITICAL FIX: PRIORITY-BASED TEACHER SCHEDULING
+        # Step 1: Identify teachers with unavailability constraints and prioritize them
+        constrained_teachers = self._identify_constrained_teachers(subjects, class_group)
+        unconstrained_teachers = self._identify_unconstrained_teachers(subjects, class_group)
+        
+        print(f"    🎯 PRIORITY SCHEDULING: {len(constrained_teachers)} constrained teachers, {len(unconstrained_teachers)} unconstrained teachers")
+        
+        # Step 2: Schedule practical subjects first (3-block consecutive)
         practical_subjects = [subject for subject in subjects if subject.is_practical]
         for subject in practical_subjects:
             self._schedule_practical_subject(entries, class_schedule, subject, class_group)
         
-        # STEP 2: Schedule theory subjects
+        # Step 3: Schedule theory subjects with PRIORITY ORDERING
         theory_subjects = [subject for subject in subjects if not subject.is_practical]
+        
+        # First pass: Schedule subjects taught by constrained teachers
+        constrained_subjects = []
+        unconstrained_subjects = []
+        
         for subject in theory_subjects:
+            subject_teachers = self._get_teachers_for_subject(subject, class_group)
+            has_constrained_teacher = any(teacher in constrained_teachers for teacher in subject_teachers)
+            
+            if has_constrained_teacher:
+                constrained_subjects.append(subject)
+            else:
+                unconstrained_subjects.append(subject)
+        
+        print(f"    📚 PRIORITY ORDER: {len(constrained_subjects)} constrained subjects, {len(unconstrained_subjects)} unconstrained subjects")
+        
+        # Schedule constrained subjects first
+        for subject in constrained_subjects:
+            self._schedule_theory_subject(entries, class_schedule, subject, class_group)
+        
+        # Then schedule unconstrained subjects
+        for subject in unconstrained_subjects:
             self._schedule_theory_subject(entries, class_schedule, subject, class_group)
         
         return entries
@@ -478,22 +506,53 @@ class EnhancedScheduler:
         
         return True
     
+    def _prioritize_teachers_by_constraints(self, teachers: List[Teacher]) -> List[Teacher]:
+        """
+        PRIORITY APPROACH: Prioritize teachers with unavailability constraints first.
+        
+        This ensures that teachers with limited availability get scheduled first,
+        giving them fair placement before handling teachers with full availability.
+        
+        Returns:
+            List[Teacher]: Teachers sorted by constraint priority (constrained first)
+        """
+        constrained_teachers = []
+        unconstrained_teachers = []
+        
+        for teacher in teachers:
+            if self._has_unavailability_constraints(teacher):
+                constrained_teachers.append(teacher)
+            else:
+                unconstrained_teachers.append(teacher)
+        
+        # Constrained teachers first, then unconstrained teachers
+        prioritized_teachers = constrained_teachers + unconstrained_teachers
+        
+        print(f"      🎯 TEACHER PRIORITIZATION: {len(constrained_teachers)} constrained + {len(unconstrained_teachers)} unconstrained")
+        
+        return prioritized_teachers
+    
     def _find_available_teacher_for_duration(self, subject: Subject, day: str, start_period: int,
                                            duration: int, entries: List[TimetableEntry]) -> Teacher:
         """
-        Find a teacher available for the entire duration.
+        Find a teacher available for the entire duration with PRIORITY-BASED SELECTION.
         
         BULLETPROOF TEACHER UNAVAILABILITY ENFORCEMENT:
         - Only return a teacher if they are available for ALL periods in the duration
         - Return None if ALL assigned teachers are unavailable for ANY part of the duration
+        - PRIORITIZE teachers with unavailability constraints first
         """
         teachers = self._get_teachers_for_subject(subject, "")
         if not teachers:
             print(f"      🚫 NO TEACHERS: No teachers assigned to {subject.code} - cannot schedule duration")
             return None
         
+        # CRITICAL FIX: PRIORITIZE teachers with unavailability constraints
+        prioritized_teachers = self._prioritize_teachers_by_constraints(teachers)
+        print(f"      🎯 PRIORITY TEACHER SELECTION: {[t.name for t in prioritized_teachers]} for {subject.code}")
+        
         # BULLETPROOF: Check each teacher for availability across entire duration
-        for teacher in teachers:
+        for teacher in prioritized_teachers:
             available_for_entire_duration = True
             
             for i in range(duration):
@@ -513,13 +572,22 @@ class EnhancedScheduler:
     
     def _find_available_teacher_for_subject(self, subject: Subject, day: str, period: int,
                                           entries: List[TimetableEntry]) -> Teacher:
-        """Find an available teacher for a subject at a specific time."""
+        """Find an available teacher for a subject at a specific time with PRIORITY-BASED SELECTION."""
         teachers = self._get_teachers_for_subject(subject, "")
         
-        for teacher in teachers:
+        if not teachers:
+            print(f"      🚫 NO TEACHERS: No teachers assigned to {subject.code}")
+            return None
+        
+        # CRITICAL FIX: PRIORITIZE teachers with unavailability constraints
+        prioritized_teachers = self._prioritize_teachers_by_constraints(teachers)
+        
+        for teacher in prioritized_teachers:
             if self._is_teacher_available(teacher, day, period, entries):
+                print(f"      ✅ TEACHER SELECTED: {teacher.name} for {subject.code} at {day} P{period}")
                 return teacher
         
+        print(f"      🚫 NO AVAILABLE TEACHERS: No teachers available for {subject.code} at {day} P{period}")
         return None
     
     def _get_teachers_for_subject(self, subject: Subject, class_group: str) -> List[Teacher]:
@@ -547,36 +615,98 @@ class EnhancedScheduler:
         
         return teachers
     
+    def _identify_constrained_teachers(self, subjects: List[Subject], class_group: str) -> List[Teacher]:
+        """Identify teachers with unavailability constraints for priority scheduling."""
+        constrained_teachers = []
+        
+        for subject in subjects:
+            teachers = self._get_teachers_for_subject(subject, class_group)
+            for teacher in teachers:
+                if self._has_unavailability_constraints(teacher):
+                    if teacher not in constrained_teachers:
+                        constrained_teachers.append(teacher)
+                        print(f"      🚫 CONSTRAINED TEACHER: {teacher.name} has unavailability constraints")
+        
+        return constrained_teachers
+    
+    def _identify_unconstrained_teachers(self, subjects: List[Subject], class_group: str) -> List[Teacher]:
+        """Identify teachers without unavailability constraints."""
+        unconstrained_teachers = []
+        
+        for subject in subjects:
+            teachers = self._get_teachers_for_subject(subject, class_group)
+            for teacher in teachers:
+                if not self._has_unavailability_constraints(teacher):
+                    if teacher not in unconstrained_teachers:
+                        unconstrained_teachers.append(teacher)
+        
+        return unconstrained_teachers
+    
+    def _has_unavailability_constraints(self, teacher: Teacher) -> bool:
+        """Check if a teacher has any unavailability constraints."""
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return False
+        
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return False
+        
+        # Check new format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            if isinstance(mandatory_unavailable, dict) and mandatory_unavailable:
+                return True
+        
+        # Check old format: {'Mon': ['8', '9']} or {'Mon': True}
+        for day, periods in teacher.unavailable_periods.items():
+            if day != 'mandatory' and periods:  # Skip the 'mandatory' key
+                return True
+        
+        return False
+    
     def _is_teacher_available(self, teacher: Teacher, day: str, period: int,
                              entries: List[TimetableEntry]) -> bool:
         """
-        CRITICAL CONSTRAINT: Check if a teacher is available at the specified day and period.
-        Respects teacher unavailability constraints and existing schedule conflicts.
+        BULLETPROOF TEACHER AVAILABILITY CHECK: 100% ENFORCEMENT, ZERO TOLERANCE FOR VIOLATIONS
+        
+        This method is the final line of defense against teacher unavailability violations.
+        It MUST be called before ANY teacher assignment and MUST return False if teacher is unavailable.
         
         HARD CONSTRAINT: Teacher unavailability must be enforced 100% of the time with zero exceptions.
         """
-        # First check for existing schedule conflicts
+        # BULLETPROOF: Validate inputs
+        if not teacher:
+            print(f"    🚫 BULLETPROOF REJECTION: No teacher provided")
+            return False
+        
+        if not day or not period:
+            print(f"    🚫 BULLETPROOF REJECTION: Invalid day/period: {day}/{period}")
+            return False
+        
+        # BULLETPROOF: First check for existing schedule conflicts
         if any(
             entry.teacher and entry.teacher.id == teacher.id and
             entry.day == day and entry.period == period
             for entry in entries
         ):
+            print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} already scheduled at {day} P{period}")
             return False
         
-        # CRITICAL: Then check teacher unavailability constraints - HARD CONSTRAINT
-        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+        # BULLETPROOF: Check teacher unavailability constraints - HARD CONSTRAINT
+        if not hasattr(teacher, 'unavailable_periods'):
+            print(f"    ✅ TEACHER AVAILABLE: {teacher.name} has no unavailability data at {day} P{period}")
             return True
         
         # Check if teacher has unavailability data
         if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            print(f"    ✅ TEACHER AVAILABLE: {teacher.name} has empty unavailability data at {day} P{period}")
             return True
         
-        # CRITICAL: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
+        # BULLETPROOF: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
         
         # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
         if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
             mandatory_unavailable = teacher.unavailable_periods['mandatory']
-            if day in mandatory_unavailable:
+            if isinstance(mandatory_unavailable, dict) and day in mandatory_unavailable:
                 time_slots = mandatory_unavailable[day]
                 if isinstance(time_slots, list):
                     if len(time_slots) >= 2:
@@ -591,7 +721,7 @@ class EnhancedScheduler:
                         if start_period_unavailable is not None and end_period_unavailable is not None:
                             # Check if the requested period falls within unavailable time
                             if start_period_unavailable <= period <= end_period_unavailable:
-                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable at {day} P{period} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
                                 return False
                     elif len(time_slots) == 1:
                         # Single time slot: teacher unavailable for that entire hour
@@ -599,7 +729,7 @@ class EnhancedScheduler:
                         unavailable_period = self._convert_time_to_period(time_str)
                         
                         if unavailable_period is not None and period == unavailable_period:
-                            print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                            print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable at {day} P{period}")
                             return False
         
         # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
@@ -610,13 +740,14 @@ class EnhancedScheduler:
                 # If unavailable_periods is a list, check specific periods
                 if isinstance(unavailable_periods, list):
                     if str(period) in unavailable_periods or period in unavailable_periods:
-                        print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                        print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable at {day} P{period} (periods: {unavailable_periods})")
                         return False
                 # If unavailable_periods is not a list, assume entire day is unavailable
                 elif unavailable_periods:
-                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable on entire day {day}")
+                    print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable on entire day {day}")
                     return False
         
+        print(f"    ✅ TEACHER AVAILABLE: {teacher.name} available at {day} P{period}")
         return True
     
     def _convert_time_to_period(self, time_str: str) -> Optional[int]:

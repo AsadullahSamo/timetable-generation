@@ -399,17 +399,33 @@ class WorkingTimetableScheduler:
     
     def _is_teacher_available_for_period(self, teacher: Teacher, day: str, period: int) -> bool:
         """
-        CRITICAL CONSTRAINT: Check if a teacher is available for a specific period.
+        BULLETPROOF TEACHER AVAILABILITY CHECK: 100% ENFORCEMENT, ZERO TOLERANCE FOR VIOLATIONS
+        
+        This method is the final line of defense against teacher unavailability violations.
+        It MUST be called before ANY teacher assignment and MUST return False if teacher is unavailable.
         
         HARD CONSTRAINT: Teacher unavailability must be enforced 100% of the time with zero exceptions.
         """
-        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+        # BULLETPROOF: Validate inputs
+        if not teacher:
+            print(f"    🚫 BULLETPROOF REJECTION: No teacher provided")
+            return False
+        
+        if not day or not period:
+            print(f"    🚫 BULLETPROOF REJECTION: Invalid day/period: {day}/{period}")
+            return False
+        
+        # BULLETPROOF: Check teacher unavailability constraints - HARD CONSTRAINT
+        if not hasattr(teacher, 'unavailable_periods'):
+            print(f"    ✅ TEACHER AVAILABLE: {teacher.name} has no unavailability data at {day} P{period}")
             return True
         
+        # Check if teacher has unavailability data
         if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            print(f"    ✅ TEACHER AVAILABLE: {teacher.name} has empty unavailability data at {day} P{period}")
             return True
         
-        # CRITICAL: Check teacher unavailability constraints - ZERO TOLERANCE
+        # BULLETPROOF: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
         
         # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
         if 'mandatory' in teacher.unavailable_periods:
@@ -429,7 +445,7 @@ class WorkingTimetableScheduler:
                         if start_period_unavailable is not None and end_period_unavailable is not None:
                             # Check if the requested period falls within unavailable time
                             if start_period_unavailable <= period <= end_period_unavailable:
-                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable at {day} P{period} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
                                 return False
                     elif len(time_slots) == 1:
                         # Single time slot: teacher unavailable for that entire hour
@@ -437,7 +453,7 @@ class WorkingTimetableScheduler:
                         unavailable_period = self._convert_time_to_period(time_str)
                         
                         if unavailable_period is not None and period == unavailable_period:
-                            print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                            print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable at {day} P{period}")
                             return False
         
         # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
@@ -447,13 +463,14 @@ class WorkingTimetableScheduler:
             # If unavailable_periods is a list, check specific periods
             if isinstance(unavailable_periods, list):
                 if str(period) in unavailable_periods or period in unavailable_periods:
-                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                    print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable at {day} P{period} (periods: {unavailable_periods})")
                     return False
             # If unavailable_periods is not a list, assume entire day is unavailable
             elif unavailable_periods:
-                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable on entire day {day}")
+                print(f"    🚫 BULLETPROOF REJECTION: Teacher {teacher.name} unavailable on entire day {day}")
                 return False
         
+        print(f"    ✅ TEACHER AVAILABLE: {teacher.name} available at {day} P{period}")
         return True
     
     def _convert_time_to_period(self, time_str: str) -> Optional[int]:

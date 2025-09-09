@@ -607,6 +607,10 @@ class FinalUniversalScheduler:
                         else:
                             # Find new lab for this practical
                             classroom = self._find_available_classroom(day, start_period, 3, class_group, subject)
+                            # SAFETY: ensure only labs for practicals
+                            if classroom and not classroom.is_lab:
+                                print(f"     🚫 SAFETY: Rejected non-lab {classroom.name} for practical {subject.code}")
+                                classroom = None
                             if classroom:
                                 print(f"     🆕 New practical {subject.code} assigned to lab {classroom.name}")
 
@@ -1266,7 +1270,7 @@ class FinalUniversalScheduler:
         """
         if not class_group or not subject:
             # Fallback to basic allocation if missing information
-            return self._find_basic_available_classroom(day, start_period, duration)
+            return self._find_basic_available_classroom(day, start_period, duration, subject)
 
         # SIMPLIFIED: Get ALL entries (both in-memory and database) for accurate conflict detection
         current_entries = self._get_all_current_entries()
@@ -1283,10 +1287,18 @@ class FinalUniversalScheduler:
                 day, start_period, class_group, subject, current_entries
                 )
 
-    def _find_basic_available_classroom(self, day: str, start_period: int, duration: int) -> Optional[Classroom]:
-        """Basic classroom finding for fallback scenarios."""
-        # Sort classrooms by priority (labs first for practicals, regular rooms first for theory)
-        sorted_classrooms = sorted(self.all_classrooms, key=lambda c: (c.building_priority, c.name))
+    def _find_basic_available_classroom(self, day: str, start_period: int, duration: int, subject: Optional[Subject] = None) -> Optional[Classroom]:
+        """Basic classroom finding for fallback scenarios.
+        CRITICAL: If subject is practical, ONLY consider labs; never regular rooms.
+        """
+        # Decide candidate rooms based on subject type
+        if subject and hasattr(subject, 'is_practical') and subject.is_practical:
+            candidate_rooms = [room for room in self.all_classrooms if room.is_lab]
+        else:
+            candidate_rooms = [room for room in self.all_classrooms if not room.is_lab]
+
+        # Sort by building priority and name for stable behavior
+        sorted_classrooms = sorted(candidate_rooms, key=lambda c: (c.building_priority, c.name))
 
         for classroom in sorted_classrooms:
             available = True
@@ -1298,8 +1310,7 @@ class FinalUniversalScheduler:
             if available:
                 return classroom
 
-        # Fallback: return first available classroom even if not ideal
-        return sorted_classrooms[0] if sorted_classrooms else None
+        return None
 
     def _find_existing_lab_for_practical(self, subject: Subject, class_group: str) -> Optional[Classroom]:
         """
@@ -3639,43 +3650,50 @@ class FinalUniversalScheduler:
         
         # CRITICAL: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
         
-        # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}} or {'mandatory': {'Mon': ['8:00 AM']}}
+        # Handle the new time-based format: {'mandatory': {'Monday': ['8:00 AM - 9:00 AM']}} or {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
         if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
             mandatory_unavailable = teacher.unavailable_periods['mandatory']
-            if day in mandatory_unavailable:
-                time_slots = mandatory_unavailable[day]
+            
+            # Convert day name to match data format (Monday vs Mon)
+            day_mapping = {
+                'Mon': 'Monday', 'Tue': 'Tuesday', 'Wed': 'Wednesday', 
+                'Thu': 'Thursday', 'Fri': 'Friday', 'Sat': 'Saturday', 'Sun': 'Sunday'
+            }
+            full_day_name = day_mapping.get(day, day)
+            
+            if full_day_name in mandatory_unavailable:
+                time_slots = mandatory_unavailable[full_day_name]
                 if isinstance(time_slots, list):
-                    if len(time_slots) >= 2:
-                        # Two time slots: start and end time
-                        start_time_str = time_slots[0]  # e.g., '8:00 AM'
-                        end_time_str = time_slots[1]    # e.g., '9:00 AM'
-                        
-                        # Convert to period numbers
-                        start_period_unavailable = self._convert_time_to_period(start_time_str)
-                        end_period_unavailable = self._convert_time_to_period(end_time_str)
-                        
-                        if start_period_unavailable is not None and end_period_unavailable is not None:
-                            # Check if any part of the requested slot overlaps with unavailable time
-                            # A slot overlaps if: requested_start < unavailable_end AND requested_end > unavailable_start
-                            requested_start = start_period
-                            requested_end = start_period + duration - 1
+                    for time_slot in time_slots:
+                        if isinstance(time_slot, str) and ' - ' in time_slot:
+                            # Handle format: '8:00 AM - 9:00 AM'
+                            start_time_str, end_time_str = time_slot.split(' - ')
+                            start_time_str = start_time_str.strip()
+                            end_time_str = end_time_str.strip()
                             
-                            if requested_start <= end_period_unavailable and requested_end >= start_period_unavailable:
-                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
-                                return False
-                    elif len(time_slots) == 1:
-                        # Single time slot: teacher unavailable for that entire hour
-                        time_str = time_slots[0]  # e.g., '8:00 AM'
-                        unavailable_period = self._convert_time_to_period(time_str)
-                        
-                        if unavailable_period is not None:
-                            # Check if the requested slot overlaps with the unavailable period
-                            requested_start = start_period
-                            requested_end = start_period + duration - 1
+                            # Convert to period numbers
+                            start_period_unavailable = self._convert_time_to_period(start_time_str)
+                            end_period_unavailable = self._convert_time_to_period(end_time_str)
                             
-                            if requested_start <= unavailable_period <= requested_end:
-                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{unavailable_period} (requested: P{requested_start}-P{requested_end})")
-                                return False
+                            if start_period_unavailable is not None and end_period_unavailable is not None:
+                                # Check if any part of the requested slot overlaps with unavailable time
+                                requested_start = start_period
+                                requested_end = start_period + duration - 1
+                                
+                                if requested_start <= end_period_unavailable and requested_end >= start_period_unavailable:
+                                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                    return False
+                        elif isinstance(time_slot, str):
+                            # Handle single time: '8:00 AM'
+                            unavailable_period = self._convert_time_to_period(time_slot)
+                            
+                            if unavailable_period is not None:
+                                requested_start = start_period
+                                requested_end = start_period + duration - 1
+                                
+                                if requested_start <= unavailable_period <= requested_end:
+                                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{unavailable_period} (requested: P{requested_start}-P{requested_end})")
+                                    return False
         
         # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
         elif isinstance(teacher.unavailable_periods, dict):

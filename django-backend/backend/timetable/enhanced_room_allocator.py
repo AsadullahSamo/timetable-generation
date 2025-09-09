@@ -12,7 +12,7 @@ Implements the client's specific room allocation requirements:
 from typing import List, Dict, Optional, Tuple, Set
 from collections import defaultdict
 from django.db.models import Q
-from .models import Classroom, TimetableEntry, Batch, Subject
+from .models import Classroom, TimetableEntry, Batch, Subject, Teacher
 
 
 class EnhancedRoomAllocator:
@@ -139,10 +139,22 @@ class EnhancedRoomAllocator:
     def allocate_room_for_practical(self, day: str, start_period: int, section: str,
                                    subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
-        Allocate lab for practical session (3 consecutive blocks).
+        Allocate lab for practical session (3 consecutive blocks) with TEACHER AVAILABILITY CHECKING.
         ENFORCES: If both theory and practical classes are scheduled for a day, 
         all practical classes must be in same lab (all 3 consecutive blocks).
+        BULLETPROOF: Only allocates room if teacher is available for all 3 periods.
         """
+        # BULLETPROOF: First check if teacher is available for all 3 periods
+        teacher = self._get_teacher_for_subject(subject, section)
+        if not teacher:
+            print(f"    🚫 NO TEACHER: No teacher assigned to {subject.code} - cannot allocate room")
+            return None
+        
+        # BULLETPROOF: Check teacher availability for entire duration
+        if not self._is_teacher_available_for_duration(teacher, day, start_period, 3, entries):
+            print(f"    🚫 TEACHER UNAVAILABLE: Teacher {teacher.name} unavailable for {subject.code} duration on {day} P{start_period}-{start_period+2}")
+            return None
+        
         # First priority: Check if we already have a lab assigned for this section-subject combination
         assignment_key = (section, subject.code)
         if assignment_key in self.practical_lab_assignments:
@@ -197,10 +209,22 @@ class EnhancedRoomAllocator:
     def allocate_room_for_theory(self, day: str, period: int, section: str,
                                 subject: Subject, entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
-        Allocate room for theory class with section-specific preferences.
+        Allocate room for theory class with section-specific preferences and TEACHER AVAILABILITY CHECKING.
         ENFORCES: If only theory classes are scheduled for the entire day, 
         all classes for a section should be assigned in same room.
+        BULLETPROOF: Only allocates room if teacher is available for this period.
         """
+        # BULLETPROOF: First check if teacher is available for this period
+        teacher = self._get_teacher_for_subject(subject, section)
+        if not teacher:
+            print(f"    🚫 NO TEACHER: No teacher assigned to {subject.code} - cannot allocate room")
+            return None
+        
+        # BULLETPROOF: Check teacher availability for this period
+        if not self._is_teacher_available_bulletproof(teacher, day, period, entries):
+            print(f"    🚫 TEACHER UNAVAILABLE: Teacher {teacher.name} unavailable for {subject.code} on {day} P{period}")
+            return None
+        
         # First priority: Check if section already has a room assigned for this day
         if section in self.section_room_assignments and day in self.section_room_assignments[section]:
             assigned_room = self.section_room_assignments[section][day]
@@ -259,6 +283,177 @@ class EnhancedRoomAllocator:
             return selected_room
         
         return None
+    
+    def _get_teacher_for_subject(self, subject: Subject, section: str) -> Optional[Teacher]:
+        """Get teacher assigned to a subject for a section."""
+        from .models import TeacherSubjectAssignment, Batch
+        
+        # Extract batch name from section
+        batch_name = section.split('-')[0] if '-' in section else section
+        
+        # Get batch object
+        try:
+            batch = Batch.objects.get(name=batch_name)
+            
+            # Get assignments for this subject and batch
+            assignments = TeacherSubjectAssignment.objects.filter(
+                subject=subject,
+                batch=batch
+            )
+            
+            # Filter by section if specified
+            for assignment in assignments:
+                if not assignment.sections or section.split('-')[1] in assignment.sections:
+                    return assignment.teacher
+            
+            # Fallback: get any teacher for this subject
+            if assignments.exists():
+                return assignments.first().teacher
+                
+        except Batch.DoesNotExist:
+            pass
+        
+        return None
+    
+    def _is_teacher_available_for_duration(self, teacher: Teacher, day: str, start_period: int,
+                                         duration: int, entries: List[TimetableEntry]) -> bool:
+        """Check if teacher is available for the entire duration with BULLETPROOF checking."""
+        if not teacher:
+            return False
+        
+        # Check each period in the duration
+        for i in range(duration):
+            period = start_period + i
+            if not self._is_teacher_available_bulletproof(teacher, day, period, entries):
+                return False
+        
+        return True
+    
+    def _is_teacher_available_bulletproof(self, teacher: Teacher, day: str, period: int,
+                                        entries: List[TimetableEntry]) -> bool:
+        """
+        BULLETPROOF TEACHER AVAILABILITY CHECK: 100% ENFORCEMENT, ZERO TOLERANCE FOR VIOLATIONS
+        """
+        # BULLETPROOF: Validate inputs
+        if not teacher:
+            return False
+        
+        if not day or not period:
+            return False
+        
+        # BULLETPROOF: First check for existing schedule conflicts
+        if any(
+            entry.teacher and entry.teacher.id == teacher.id and
+            entry.day == day and entry.period == period
+            for entry in entries
+        ):
+            return False
+        
+        # BULLETPROOF: Check teacher unavailability constraints - HARD CONSTRAINT
+        if not hasattr(teacher, 'unavailable_periods'):
+            return True
+        
+        # Check if teacher has unavailability data
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return True
+        
+        # BULLETPROOF: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
+        
+        # Handle the new time-based format: {'mandatory': {'Monday': ['8:00 AM - 9:00 AM']}} or {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            
+            # Convert day name to match data format (Monday vs Mon)
+            day_mapping = {
+                'Mon': 'Monday', 'Tue': 'Tuesday', 'Wed': 'Wednesday', 
+                'Thu': 'Thursday', 'Fri': 'Friday', 'Sat': 'Saturday', 'Sun': 'Sunday'
+            }
+            full_day_name = day_mapping.get(day, day)
+            
+            if full_day_name in mandatory_unavailable:
+                time_slots = mandatory_unavailable[full_day_name]
+                if isinstance(time_slots, list):
+                    for time_slot in time_slots:
+                        if isinstance(time_slot, str) and ' - ' in time_slot:
+                            # Handle format: '8:00 AM - 9:00 AM'
+                            start_time_str, end_time_str = time_slot.split(' - ')
+                            start_time_str = start_time_str.strip()
+                            end_time_str = end_time_str.strip()
+                            
+                            # Convert to period numbers
+                            start_period_unavailable = self._convert_time_to_period(start_time_str)
+                            end_period_unavailable = self._convert_time_to_period(end_time_str)
+                            
+                            if start_period_unavailable is not None and end_period_unavailable is not None:
+                                # Check if the requested period falls within unavailable time
+                                if start_period_unavailable <= period <= end_period_unavailable:
+                                    return False
+                        elif isinstance(time_slot, str):
+                            # Handle single time: '8:00 AM'
+                            unavailable_period = self._convert_time_to_period(time_slot)
+                            
+                            if unavailable_period is not None and period == unavailable_period:
+                                return False
+        
+        # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
+        elif isinstance(teacher.unavailable_periods, dict):
+            if day in teacher.unavailable_periods:
+                unavailable_periods = teacher.unavailable_periods[day]
+                
+                # If unavailable_periods is a list, check specific periods
+                if isinstance(unavailable_periods, list):
+                    if str(period) in unavailable_periods or period in unavailable_periods:
+                        return False
+                # If unavailable_periods is not a list, assume entire day is unavailable
+                elif unavailable_periods:
+                    return False
+        
+        return True
+    
+    def _convert_time_to_period(self, time_str: str) -> Optional[int]:
+        """
+        Convert time string (e.g., '8:00 AM') to period number based on schedule config.
+        Returns None if conversion fails.
+        """
+        try:
+            from datetime import datetime
+            from .models import ScheduleConfig
+            
+            # Parse the time string
+            if 'AM' in time_str or 'PM' in time_str:
+                # Format: '8:00 AM' or '9:00 PM'
+                time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+            else:
+                # Format: '8:00' or '09:00'
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+            
+            # Get the start time from config
+            config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
+            if not config:
+                return None
+                
+            config_start_time = config.start_time
+            if isinstance(config_start_time, str):
+                config_start_time = datetime.strptime(config_start_time, '%H:%M:%S').time()
+            
+            # Calculate which period this time falls into
+            class_duration = config.class_duration
+            
+            # Calculate minutes since start of day
+            start_minutes = config_start_time.hour * 60 + config_start_time.minute
+            time_minutes = time_obj.hour * 60 + time_obj.minute
+            
+            # Calculate period number (1-based)
+            period = ((time_minutes - start_minutes) // class_duration) + 1
+            
+            # Ensure period is within valid range
+            if 1 <= period <= len(config.periods):
+                return period
+            else:
+                return None
+                
+        except Exception as e:
+            return None
     
     def _is_lab_available_for_duration(self, lab: Classroom, day: str, start_period: int,
                                       duration: int, entries: List[TimetableEntry]) -> bool:

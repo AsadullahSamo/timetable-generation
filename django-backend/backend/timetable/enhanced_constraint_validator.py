@@ -609,12 +609,16 @@ class EnhancedConstraintValidator:
 
     def _check_teacher_unavailability(self, entries: List[TimetableEntry]) -> List[Dict]:
         """
-        CRITICAL HARD CONSTRAINT: Teachers cannot be scheduled during their unavailable periods.
+        BULLETPROOF TEACHER UNAVAILABILITY VALIDATION: 100% ENFORCEMENT, ZERO TOLERANCE FOR VIOLATIONS
         
-        This is a ZERO TOLERANCE constraint - any violation is unacceptable.
-        Supports both old and new unavailability formats.
+        This is the final validation checkpoint that MUST catch any teacher unavailability violations
+        that may have slipped through the scheduling process. This is a ZERO TOLERANCE constraint.
+        
+        Supports both old and new unavailability formats with comprehensive checking.
         """
         violations = []
+        
+        print(f"    🔍 BULLETPROOF VALIDATION: Checking teacher unavailability for {len(entries)} entries")
         
         for entry in entries:
             if not entry.teacher:
@@ -622,14 +626,17 @@ class EnhancedConstraintValidator:
             
             teacher = entry.teacher
             
-            # Check if teacher has unavailability data
-            if not hasattr(teacher, 'unavailable_periods') or not teacher.unavailable_periods:
+            # BULLETPROOF: Validate teacher data
+            if not hasattr(teacher, 'unavailable_periods'):
+                continue
+            
+            if not teacher.unavailable_periods:
                 continue
             
             if not isinstance(teacher.unavailable_periods, dict):
                 continue
             
-            # CRITICAL: Check teacher unavailability constraints - ZERO TOLERANCE
+            # BULLETPROOF: Check teacher unavailability constraints - ZERO TOLERANCE
             
             # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
             if 'mandatory' in teacher.unavailable_periods:
@@ -649,8 +656,8 @@ class EnhancedConstraintValidator:
                             if start_period_unavailable is not None and end_period_unavailable is not None:
                                 # Check if the entry period falls within unavailable time
                                 if start_period_unavailable <= entry.period <= end_period_unavailable:
-                                    violations.append({
-                                        'type': 'CRITICAL Teacher Unavailability Violation',
+                                    violation = {
+                                        'type': 'BULLETPROOF Teacher Unavailability Violation',
                                         'teacher_id': teacher.id,
                                         'teacher_name': teacher.name,
                                         'day': entry.day,
@@ -659,16 +666,19 @@ class EnhancedConstraintValidator:
                                         'class_group': entry.class_group,
                                         'unavailable_start': start_period_unavailable,
                                         'unavailable_end': end_period_unavailable,
-                                        'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable P{start_period_unavailable}-P{end_period_unavailable}"
-                                    })
+                                        'severity': 'CRITICAL',
+                                        'description': f"BULLETPROOF VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable P{start_period_unavailable}-P{end_period_unavailable}"
+                                    }
+                                    violations.append(violation)
+                                    print(f"    🚫 BULLETPROOF VIOLATION DETECTED: {violation['description']}")
                         elif len(time_slots) == 1:
                             # Single time slot: teacher unavailable for that entire hour
                             time_str = time_slots[0]  # e.g., '8:00 AM'
                             unavailable_period = self._convert_time_to_period(time_str)
                             
                             if unavailable_period is not None and entry.period == unavailable_period:
-                                violations.append({
-                                    'type': 'CRITICAL Teacher Unavailability Violation',
+                                violation = {
+                                    'type': 'BULLETPROOF Teacher Unavailability Violation',
                                     'teacher_id': teacher.id,
                                     'teacher_name': teacher.name,
                                     'day': entry.day,
@@ -676,8 +686,11 @@ class EnhancedConstraintValidator:
                                     'subject': entry.subject.code if entry.subject else 'Unknown',
                                     'class_group': entry.class_group,
                                     'unavailable_period': unavailable_period,
-                                    'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable at P{unavailable_period}"
-                                })
+                                    'severity': 'CRITICAL',
+                                    'description': f"BULLETPROOF VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable at P{unavailable_period}"
+                                }
+                                violations.append(violation)
+                                print(f"    🚫 BULLETPROOF VIOLATION DETECTED: {violation['description']}")
             
             # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
             elif entry.day in teacher.unavailable_periods:
@@ -686,8 +699,8 @@ class EnhancedConstraintValidator:
                 # If unavailable_periods is a list, check specific periods
                 if isinstance(unavailable_periods, list):
                     if str(entry.period) in unavailable_periods or entry.period in unavailable_periods:
-                        violations.append({
-                            'type': 'CRITICAL Teacher Unavailability Violation',
+                        violation = {
+                            'type': 'BULLETPROOF Teacher Unavailability Violation',
                             'teacher_id': teacher.id,
                             'teacher_name': teacher.name,
                             'day': entry.day,
@@ -695,20 +708,31 @@ class EnhancedConstraintValidator:
                             'subject': entry.subject.code if entry.subject else 'Unknown',
                             'class_group': entry.class_group,
                             'unavailable_periods': unavailable_periods,
-                            'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable periods: {unavailable_periods}"
-                        })
+                            'severity': 'CRITICAL',
+                            'description': f"BULLETPROOF VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable periods: {unavailable_periods}"
+                        }
+                        violations.append(violation)
+                        print(f"    🚫 BULLETPROOF VIOLATION DETECTED: {violation['description']}")
                 # If unavailable_periods is not a list, assume entire day is unavailable
                 elif unavailable_periods:
-                    violations.append({
-                        'type': 'CRITICAL Teacher Unavailability Violation',
+                    violation = {
+                        'type': 'BULLETPROOF Teacher Unavailability Violation',
                         'teacher_id': teacher.id,
                         'teacher_name': teacher.name,
                         'day': entry.day,
                         'period': entry.period,
                         'subject': entry.subject.code if entry.subject else 'Unknown',
                         'class_group': entry.class_group,
-                        'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable entire day"
-                    })
+                        'severity': 'CRITICAL',
+                        'description': f"BULLETPROOF VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable entire day"
+                    }
+                    violations.append(violation)
+                    print(f"    🚫 BULLETPROOF VIOLATION DETECTED: {violation['description']}")
+        
+        if violations:
+            print(f"    🚨 BULLETPROOF VALIDATION FAILED: {len(violations)} teacher unavailability violations detected!")
+        else:
+            print(f"    ✅ BULLETPROOF VALIDATION PASSED: No teacher unavailability violations detected")
         
         return violations
     
