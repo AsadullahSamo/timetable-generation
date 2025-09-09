@@ -43,6 +43,9 @@ const Classrooms = () => {
       const response = await api.get('/api/timetable/classrooms/');
       setClassrooms(response.data);
     } catch (error) {
+      if (error.response?.status === 401) {
+        return;
+      }
       setError('Failed to load classrooms');
       console.error('Error fetching classrooms:', error);
     } finally {

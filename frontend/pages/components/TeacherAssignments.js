@@ -64,6 +64,9 @@ const TeacherAssignments = () => {
       setSubjects(subjectsRes.data);
       setBatches(batchesRes.data);
     } catch (error) {
+      if (error.response?.status === 401) {
+        return;
+      }
       setError('Failed to fetch data: ' + error.message);
     } finally {
       setLoading(false);

@@ -41,11 +41,24 @@ api.interceptors.response.use(
 
           return api(originalRequest);
         } catch (refreshError) {
-          // Refresh failed, redirect to login
+          // Refresh failed, clear tokens and redirect to login
+          try {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+          } catch (_) {}
+          window.location.href = '/components/Login';
+          return Promise.reject(refreshError);
+        }
+      } else {
+        // No refresh token, clear tokens and redirect to login
+        try {
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          window.location.href = '/components/Login';
-        }
+          localStorage.removeItem('user');
+        } catch (_) {}
+        window.location.href = '/components/Login';
+        return Promise.reject(error);
       }
     }
 

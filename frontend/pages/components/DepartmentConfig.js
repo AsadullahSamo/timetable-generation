@@ -44,6 +44,9 @@ const DepartmentConfig = () => {
       const response = await api.get('/api/timetable/schedule-configs/');
       setExistingConfigs(response.data);
     } catch (error) {
+      if (error.response?.status === 401) {
+        return;
+      }
       console.error('Error fetching existing configs:', error);
       setError('Failed to load existing configurations');
     } finally {
@@ -62,6 +65,10 @@ const DepartmentConfig = () => {
       setBatches(batchesRes.data);
       setSubjects(subjectsRes.data);
     } catch (error) {
+      if (error.response?.status === 401) {
+        // Don't set error for 401, let the interceptor handle redirect
+        return;
+      }
       console.error('Error fetching data:', error);
       setError('Failed to fetch data');
     }

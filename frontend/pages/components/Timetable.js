@@ -100,6 +100,9 @@ const Timetable = () => {
         setTimetableData(data);
         setError("");
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         console.error("Timetable fetch error:", err);
         console.error("Error details:", {
           isAxiosError: err?.isAxiosError,
@@ -206,6 +209,9 @@ const Timetable = () => {
       setTimetableData(data);
       setLoading(false); // Clear loading state
     } catch (err) {
+      if (err.response?.status === 401) {
+        return;
+      }
       console.error("Regenerate timetable error:", err);
       
       // Handle Axios errors more robustly for regeneration
@@ -282,6 +288,9 @@ const Timetable = () => {
         setError("Failed to delete timetable");
       }
     } catch (err) {
+      if (err.response?.status === 401) {
+        return;
+      }
       setError("Failed to delete timetable");
       console.error("Delete timetable error:", err);
     } finally {
@@ -699,6 +708,9 @@ const Timetable = () => {
                           setTimetableData(latest.data);
                           setMessage({ type: 'success', text: 'Slot moved successfully' });
                         } catch (err) {
+                          if (err.response?.status === 401) {
+                            return;
+                          }
                           const msg = err.response?.data?.detail || 'Move failed due to constraints';
                           setMessage({ type: 'error', text: msg });
                         } finally {
@@ -761,6 +773,9 @@ const Timetable = () => {
                                       const safe = res.data?.safe_slots || []
                                       setSafeSlotsByEntry(prev => ({ ...prev, [entryId]: safe }))
                                     } catch (err) {
+                                      if (err.response?.status === 401) {
+                                        return;
+                                      }
                                       setSafeSlotsErrorFor(entry.id || `${entry.day}-${entry.period}`)
                                       setMessage({ type: 'error', text: 'Failed to fetch safe slots' })
                                       setTimeout(() => setMessage(null), 2200)
@@ -782,6 +797,9 @@ const Timetable = () => {
                                     }))
                                     setMessage({ type: 'success', text: 'Slot deleted' })
                                   } catch (err) {
+                                    if (err.response?.status === 401) {
+                                      return;
+                                    }
                                     const msg = err.response?.data?.detail || 'Delete failed'
                                     setMessage({ type: 'error', text: msg })
                                   } finally {
@@ -841,7 +859,10 @@ const Timetable = () => {
                                     setMoveUIForEntry(null)
                                           setMessage({ type: 'success', text: `Moved to ${s.day}, period ${s.period}` })
                                   } catch (err) {
-                                          const msg = err.response?.data?.detail || err.message || 'Move failed'
+                                    if (err.response?.status === 401) {
+                                      return;
+                                    }
+                                    const msg = err.response?.data?.detail || err.message || 'Move failed'
                                     setMessage({ type: 'error', text: msg })
                                   } finally {
                                     setTimeout(() => setMessage(null), 2200)

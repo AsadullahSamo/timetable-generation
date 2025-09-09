@@ -126,6 +126,9 @@ const TeachersConfig = () => {
           }
         }
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         setError("Failed to load data. Please try again.");
       } finally {
         setLoading(false);

@@ -77,6 +77,9 @@ const SubjectConfig = () => {
         const { data } = await api.get("/api/timetable/subjects/");
         setSubjects(data);
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         setError("Failed to load subjects. Please try again.");
       } finally {
         setLoading(false);
@@ -88,6 +91,9 @@ const SubjectConfig = () => {
         const { data } = await api.get("/api/timetable/batches/");
         setBatches(data);
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         console.error("Batches fetch error:", err);
         // Fallback to hardcoded batches if API fails
         setBatches([
@@ -104,6 +110,9 @@ const SubjectConfig = () => {
         const { data } = await api.get("/api/timetable/teachers/");
         setTeachers(data);
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         console.error("Teachers fetch error:", err);
       }
     };

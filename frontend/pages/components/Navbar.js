@@ -29,13 +29,12 @@ export default function Navbar({ isMobile, isOpen, onToggle }) {
   const currentPath = router.pathname;
 
   const handleLogout = () => {
-    // Clear authentication tokens
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    
-    // Redirect to login
-    router.push('/components/Login');
+    try {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+    } catch (_) {}
+    router.replace('/components/Login');
   };
 
   // Mobile menu button

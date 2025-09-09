@@ -54,6 +54,9 @@ const BatchManagement = () => {
       setBatches(data);
       setError("");
     } catch (err) {
+      if (err.response?.status === 401) {
+        return;
+      }
       setError("Failed to load batches");
       console.error("Batches fetch error:", err);
     } finally {

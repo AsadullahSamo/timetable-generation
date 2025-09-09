@@ -106,6 +106,9 @@ const ConstraintTesting = () => {
       const response = await api.get('/api/timetable/constraint-testing/');
       setConstraintData(response.data);
     } catch (err) {
+      if (err.response?.status === 401) {
+        return;
+      }
       setError(err.response?.data?.error || 'Failed to fetch constraint data');
       console.error('Constraint testing error:', err);
     } finally {

@@ -104,6 +104,9 @@ const AddTeacher = () => {
           setError("No timetable configuration found. Please complete Department Configuration first.");
         }
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         setError("Failed to load configuration.");
       } finally {
         setConfigLoading(false);
@@ -138,6 +141,9 @@ const AddTeacher = () => {
         }
         setAvailabilityState(newState);
       } catch (err) {
+        if (err.response?.status === 401) {
+          return;
+        }
         setError("Failed to load teacher data.");
       }
     };
