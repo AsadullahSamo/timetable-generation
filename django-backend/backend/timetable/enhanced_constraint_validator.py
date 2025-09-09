@@ -608,25 +608,157 @@ class EnhancedConstraintValidator:
         return violations
 
     def _check_teacher_unavailability(self, entries: List[TimetableEntry]) -> List[Dict]:
-        """Hard constraint: teachers cannot be scheduled during their unavailable periods."""
+        """
+        CRITICAL HARD CONSTRAINT: Teachers cannot be scheduled during their unavailable periods.
+        
+        This is a ZERO TOLERANCE constraint - any violation is unacceptable.
+        Supports both old and new unavailability formats.
+        """
         violations = []
-        # Map day abbreviations
-        def day_key(day: str) -> str:
-            return (day or '').upper()[:3]
-        for e in entries:
-            if not getattr(e, 'teacher', None):
+        
+        for entry in entries:
+            if not entry.teacher:
                 continue
-            unavailable = getattr(e.teacher, 'unavailable_periods', {}) or {}
-            blocked = set(unavailable.get(day_key(e.day), []) or [])
-            if e.period in blocked:
-                violations.append({
-                    'type': 'Teacher Unavailability Violation',
-                    'teacher': e.teacher.name if e.teacher else 'Unknown',
-                    'day': e.day,
-                    'period': e.period,
-                    'description': f"{e.teacher.name if e.teacher else 'Teacher'} unavailable on {e.day} period {e.period}"
-                })
+            
+            teacher = entry.teacher
+            
+            # Check if teacher has unavailability data
+            if not hasattr(teacher, 'unavailable_periods') or not teacher.unavailable_periods:
+                continue
+            
+            if not isinstance(teacher.unavailable_periods, dict):
+                continue
+            
+            # CRITICAL: Check teacher unavailability constraints - ZERO TOLERANCE
+            
+            # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+            if 'mandatory' in teacher.unavailable_periods:
+                mandatory_unavailable = teacher.unavailable_periods['mandatory']
+                if isinstance(mandatory_unavailable, dict) and entry.day in mandatory_unavailable:
+                    time_slots = mandatory_unavailable[entry.day]
+                    if isinstance(time_slots, list):
+                        if len(time_slots) >= 2:
+                            # Two time slots: start and end time
+                            start_time_str = time_slots[0]  # e.g., '8:00 AM'
+                            end_time_str = time_slots[1]    # e.g., '9:00 AM'
+                            
+                            # Convert to period numbers
+                            start_period_unavailable = self._convert_time_to_period(start_time_str)
+                            end_period_unavailable = self._convert_time_to_period(end_time_str)
+                            
+                            if start_period_unavailable is not None and end_period_unavailable is not None:
+                                # Check if the entry period falls within unavailable time
+                                if start_period_unavailable <= entry.period <= end_period_unavailable:
+                                    violations.append({
+                                        'type': 'CRITICAL Teacher Unavailability Violation',
+                                        'teacher_id': teacher.id,
+                                        'teacher_name': teacher.name,
+                                        'day': entry.day,
+                                        'period': entry.period,
+                                        'subject': entry.subject.code if entry.subject else 'Unknown',
+                                        'class_group': entry.class_group,
+                                        'unavailable_start': start_period_unavailable,
+                                        'unavailable_end': end_period_unavailable,
+                                        'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable P{start_period_unavailable}-P{end_period_unavailable}"
+                                    })
+                        elif len(time_slots) == 1:
+                            # Single time slot: teacher unavailable for that entire hour
+                            time_str = time_slots[0]  # e.g., '8:00 AM'
+                            unavailable_period = self._convert_time_to_period(time_str)
+                            
+                            if unavailable_period is not None and entry.period == unavailable_period:
+                                violations.append({
+                                    'type': 'CRITICAL Teacher Unavailability Violation',
+                                    'teacher_id': teacher.id,
+                                    'teacher_name': teacher.name,
+                                    'day': entry.day,
+                                    'period': entry.period,
+                                    'subject': entry.subject.code if entry.subject else 'Unknown',
+                                    'class_group': entry.class_group,
+                                    'unavailable_period': unavailable_period,
+                                    'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable at P{unavailable_period}"
+                                })
+            
+            # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
+            elif entry.day in teacher.unavailable_periods:
+                unavailable_periods = teacher.unavailable_periods[entry.day]
+                
+                # If unavailable_periods is a list, check specific periods
+                if isinstance(unavailable_periods, list):
+                    if str(entry.period) in unavailable_periods or entry.period in unavailable_periods:
+                        violations.append({
+                            'type': 'CRITICAL Teacher Unavailability Violation',
+                            'teacher_id': teacher.id,
+                            'teacher_name': teacher.name,
+                            'day': entry.day,
+                            'period': entry.period,
+                            'subject': entry.subject.code if entry.subject else 'Unknown',
+                            'class_group': entry.class_group,
+                            'unavailable_periods': unavailable_periods,
+                            'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable periods: {unavailable_periods}"
+                        })
+                # If unavailable_periods is not a list, assume entire day is unavailable
+                elif unavailable_periods:
+                    violations.append({
+                        'type': 'CRITICAL Teacher Unavailability Violation',
+                        'teacher_id': teacher.id,
+                        'teacher_name': teacher.name,
+                        'day': entry.day,
+                        'period': entry.period,
+                        'subject': entry.subject.code if entry.subject else 'Unknown',
+                        'class_group': entry.class_group,
+                        'description': f"CRITICAL VIOLATION: Teacher {teacher.name} scheduled at {entry.day} P{entry.period} but unavailable entire day"
+                    })
+        
         return violations
+    
+    def _convert_time_to_period(self, time_str: str) -> Optional[int]:
+        """
+        Convert time string (e.g., '8:00 AM') to period number based on schedule config.
+        Returns None if conversion fails.
+        """
+        try:
+            from datetime import datetime
+            
+            # Parse the time string
+            if 'AM' in time_str or 'PM' in time_str:
+                # Format: '8:00 AM' or '9:00 PM'
+                time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+            else:
+                # Format: '8:00' or '09:00'
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+            
+            # Get the start time from config
+            config = ScheduleConfig.objects.filter(start_time__isnull=False).order_by('-id').first()
+            if not config:
+                return None
+                
+            config_start_time = config.start_time
+            if isinstance(config_start_time, str):
+                config_start_time = datetime.strptime(config_start_time, '%H:%M:%S').time()
+            
+            # Calculate which period this time falls into
+            class_duration = config.class_duration
+            
+            # Calculate minutes since start of day
+            start_minutes = config_start_time.hour * 60 + config_start_time.minute
+            time_minutes = time_obj.hour * 60 + time_obj.minute
+            
+            # Calculate period number (1-based)
+            period = ((time_minutes - start_minutes) // class_duration) + 1
+            
+            # Ensure period is within valid range
+            if 1 <= period <= len(config.periods):
+                return period
+            else:
+                if self.verbose:
+                    print(f"    ⚠️ Warning: Calculated period {period} for time {time_str} is out of range")
+                return None
+                
+        except Exception as e:
+            if self.verbose:
+                print(f"    ⚠️ Warning: Could not convert time '{time_str}' to period: {e}")
+            return None
     
     # ROOM ALLOCATION CONSTRAINTS
     

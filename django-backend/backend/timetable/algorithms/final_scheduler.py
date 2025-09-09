@@ -976,7 +976,10 @@ class FinalUniversalScheduler:
         return scheduled
 
     def _get_teachers_for_subject(self, subject: Subject, class_group: str = None) -> List[Teacher]:
-        """Get teachers for a subject with section awareness."""
+        """
+        Get teachers for a subject with section awareness.
+        PRIORITY APPROACH: Teachers with unavailability constraints are prioritized first.
+        """
         teachers = []
 
         # First try to get teachers from TeacherSubjectAssignment (section-aware)
@@ -1002,8 +1005,10 @@ class FinalUniversalScheduler:
                             section_teachers.append(assignment.teacher)
 
                     if section_teachers:
-                        print(f"     📋 Found section-aware teachers for {subject.code} in {class_group}: {[t.name for t in section_teachers]}")
-                        return section_teachers
+                        # PRIORITY APPROACH: Sort teachers by unavailability constraints (constrained first)
+                        prioritized_teachers = self._prioritize_teachers_by_constraints(section_teachers)
+                        print(f"     📋 Found section-aware teachers for {subject.code} in {class_group}: {[t.name for t in prioritized_teachers]} (prioritized by constraints)")
+                        return prioritized_teachers
 
                 except Batch.DoesNotExist:
                     print(f"     ⚠️  Batch {batch_name} not found, falling back to general assignment")
@@ -1013,8 +1018,10 @@ class FinalUniversalScheduler:
             assignments = TeacherSubjectAssignment.objects.filter(subject=subject)
             if assignments.exists():
                 teachers = [assignment.teacher for assignment in assignments]
-                print(f"     📋 Found general teachers for {subject.code}: {[t.name for t in teachers]}")
-                return teachers
+                # PRIORITY APPROACH: Sort teachers by unavailability constraints (constrained first)
+                prioritized_teachers = self._prioritize_teachers_by_constraints(teachers)
+                print(f"     📋 Found general teachers for {subject.code}: {[t.name for t in prioritized_teachers]} (prioritized by constraints)")
+                return prioritized_teachers
 
         except Exception as e:
             print(f"     ⚠️  Error getting section-aware teachers: {e}")
@@ -1024,17 +1031,88 @@ class FinalUniversalScheduler:
         try:
             teachers = list(subject.teacher_set.all())
             if teachers:
-                print(f"     📋 Using legacy teacher assignment for {subject.code}: {[t.name for t in teachers]}")
-                return teachers
+                # PRIORITY APPROACH: Sort teachers by unavailability constraints (constrained first)
+                prioritized_teachers = self._prioritize_teachers_by_constraints(teachers)
+                print(f"     📋 Using legacy teacher assignment for {subject.code}: {[t.name for t in prioritized_teachers]} (prioritized by constraints)")
+                return prioritized_teachers
         except:
             pass
 
         # Final fallback: return all teachers (let system decide)
         print(f"     ⚠️  No specific teachers found for {subject.code}, using fallback")
-        return self.all_teachers[:3]  # Limit to first 3 to avoid over-assignment
+        fallback_teachers = self.all_teachers[:3]  # Limit to first 3 to avoid over-assignment
+        # PRIORITY APPROACH: Even for fallback, prioritize constrained teachers
+        prioritized_fallback = self._prioritize_teachers_by_constraints(fallback_teachers)
+        return prioritized_fallback
+
+    def _prioritize_teachers_by_constraints(self, teachers: List[Teacher]) -> List[Teacher]:
+        """
+        PRIORITY APPROACH: Prioritize teachers with unavailability constraints first.
+        
+        This ensures that teachers with limited availability get scheduled first,
+        giving them fair placement before handling teachers with full availability.
+        
+        Returns:
+            List[Teacher]: Teachers sorted by constraint priority (constrained first)
+        """
+        if not teachers:
+            return teachers
+        
+        constrained_teachers = []
+        unconstrained_teachers = []
+        
+        for teacher in teachers:
+            has_constraints = self._teacher_has_unavailability_constraints(teacher)
+            if has_constraints:
+                constrained_teachers.append(teacher)
+                print(f"         🎯 PRIORITY: Teacher {teacher.name} has unavailability constraints - scheduling first")
+            else:
+                unconstrained_teachers.append(teacher)
+        
+        # Return constrained teachers first, then unconstrained
+        prioritized_list = constrained_teachers + unconstrained_teachers
+        
+        if constrained_teachers:
+            print(f"         📊 PRIORITY ORDERING: {len(constrained_teachers)} constrained teachers first, then {len(unconstrained_teachers)} unconstrained")
+        
+        return prioritized_list
+    
+    def _teacher_has_unavailability_constraints(self, teacher: Teacher) -> bool:
+        """
+        Check if a teacher has any unavailability constraints.
+        
+        Returns:
+            bool: True if teacher has unavailability constraints, False otherwise
+        """
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return False
+        
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return False
+        
+        # Check for new format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            if isinstance(mandatory_unavailable, dict) and mandatory_unavailable:
+                # Has some unavailability constraints
+                return True
+        
+        # Check for old format: {'Mon': ['8', '9']} or {'Mon': True}
+        for day, periods in teacher.unavailable_periods.items():
+            if day != 'mandatory' and periods:  # Skip 'mandatory' key and check for actual constraints
+                return True
+        
+        return False
 
     def _can_schedule_block(self, class_schedule: dict, day: str, start_period: int, duration: int, class_group: str, subject: Subject = None) -> bool:
-        """Check if block can be scheduled."""
+        """
+        Check if block can be scheduled.
+        
+        BULLETPROOF TEACHER UNAVAILABILITY ENFORCEMENT:
+        - If ANY assigned teacher is unavailable for ANY part of the block, REJECT scheduling
+        - If ALL assigned teachers are unavailable, REJECT scheduling
+        - Only allow scheduling if AT LEAST ONE assigned teacher is available for the ENTIRE block
+        """
         # STRICT CONSTRAINT: For ANY batch with Thesis subjects, ONLY allow Thesis blocks on Wednesday
         if day.lower().startswith('wed'):
             # Check if this batch has Thesis subjects using the dedicated method
@@ -1046,22 +1124,37 @@ class FinalUniversalScheduler:
                 print(f"         🚫 STRICT: Preventing ANY block scheduling on Wednesday for {class_group} - reserved for Thesis only")
                 return False
 
-        # CRITICAL CONSTRAINT: TEACHER UNAVAILABILITY CHECK FOR BLOCKS
-        # If we have a subject, check if ANY assigned teacher is unavailable for ANY part of the block
+        # BULLETPROOF CONSTRAINT: TEACHER UNAVAILABILITY CHECK FOR BLOCKS
         if subject:
             teachers = self._get_teachers_for_subject(subject, class_group)
             if teachers:
-                # Check if ANY assigned teacher is unavailable for ANY part of the block
-                # If ANY assigned teacher is unavailable for ANY period, we cannot schedule this block
+                # BULLETPROOF: Check if ANY teacher is available for the ENTIRE block
+                any_teacher_available = False
+                
                 for teacher in teachers:
+                    teacher_available_for_entire_block = True
+                    
+                    # Check if this teacher is available for ALL periods in the block
                     for i in range(duration):
                         period = start_period + i
                         if not self._is_teacher_available(teacher, day, period, 1):
+                            teacher_available_for_entire_block = False
                             print(f"         🚫 TEACHER UNAVAILABILITY: Teacher {teacher.name} unavailable for {subject.code} block on {day} P{period}")
-                            return False
+                            break
+                    
+                    if teacher_available_for_entire_block:
+                        any_teacher_available = True
+                        print(f"         ✅ TEACHER AVAILABILITY: Teacher {teacher.name} available for entire {subject.code} block on {day} P{start_period}-{start_period+duration-1}")
+                        break  # Found at least one available teacher
                 
-                # If we reach here, at least one assigned teacher is available for the entire block
-                print(f"         ✅ TEACHER AVAILABILITY: At least one teacher available for {subject.code} block on {day} P{start_period}-{start_period+duration-1}")
+                # BULLETPROOF: If NO teacher is available for the entire block, REJECT scheduling
+                if not any_teacher_available:
+                    print(f"         🚫 BULLETPROOF REJECTION: NO teacher available for entire {subject.code} block on {day} P{start_period}-{start_period+duration-1}")
+                    return False
+            else:
+                # No teachers assigned to this subject - cannot schedule
+                print(f"         🚫 NO TEACHERS: No teachers assigned to {subject.code} - cannot schedule block")
+                return False
 
         for i in range(duration):
             period = start_period + i
@@ -1072,25 +1165,40 @@ class FinalUniversalScheduler:
         return True
 
     def _can_schedule_single(self, class_schedule: dict, day: str, period: int, class_group: str, subject: Subject = None, all_entries: List = None) -> bool:
-        """Check if single period can be scheduled."""
+        """
+        Check if single period can be scheduled.
+        
+        BULLETPROOF TEACHER UNAVAILABILITY ENFORCEMENT:
+        - If ALL assigned teachers are unavailable, REJECT scheduling
+        - Only allow scheduling if AT LEAST ONE assigned teacher is available
+        """
         # Basic availability check
         if (day, period) in class_schedule:
             return False
 
-        # CRITICAL CONSTRAINT: TEACHER UNAVAILABILITY CHECK
-        # If we have a subject, check if ANY assigned teacher is unavailable at this time
+        # BULLETPROOF CONSTRAINT: TEACHER UNAVAILABILITY CHECK
         if subject:
             teachers = self._get_teachers_for_subject(subject, class_group)
             if teachers:
-                # Check if ANY assigned teacher is unavailable at this time
-                # If ANY assigned teacher is unavailable, we cannot schedule this subject
-                for teacher in teachers:
-                    if not self._is_teacher_available(teacher, day, period, 1):
-                        print(f"         🚫 TEACHER UNAVAILABILITY: Teacher {teacher.name} unavailable for {subject.code} on {day} P{period}")
-                        return False
+                # BULLETPROOF: Check if ANY teacher is available for this period
+                any_teacher_available = False
                 
-                # If we reach here, at least one assigned teacher is available
-                print(f"         ✅ TEACHER AVAILABILITY: At least one teacher available for {subject.code} on {day} P{period}")
+                for teacher in teachers:
+                    if self._is_teacher_available(teacher, day, period, 1):
+                        any_teacher_available = True
+                        print(f"         ✅ TEACHER AVAILABILITY: Teacher {teacher.name} available for {subject.code} on {day} P{period}")
+                        break  # Found at least one available teacher
+                    else:
+                        print(f"         🚫 TEACHER UNAVAILABILITY: Teacher {teacher.name} unavailable for {subject.code} on {day} P{period}")
+                
+                # BULLETPROOF: If NO teacher is available, REJECT scheduling
+                if not any_teacher_available:
+                    print(f"         🚫 BULLETPROOF REJECTION: NO teacher available for {subject.code} on {day} P{period}")
+                    return False
+            else:
+                # No teachers assigned to this subject - cannot schedule
+                print(f"         🚫 NO TEACHERS: No teachers assigned to {subject.code} - cannot schedule")
+                return False
 
         # STRICT CONSTRAINT: For ANY batch with Thesis subjects, ONLY allow Thesis subjects on Wednesday
         if day.lower().startswith('wed'):
@@ -3510,8 +3618,10 @@ class FinalUniversalScheduler:
 
     def _is_teacher_available(self, teacher: Teacher, day: str, start_period: int, duration: int) -> bool:
         """
-        Check if a teacher is available for the given time slot.
+        CRITICAL CONSTRAINT: Check if a teacher is available for the given time slot.
         Respects both schedule conflicts and teacher unavailability constraints.
+        
+        HARD CONSTRAINT: Teacher unavailability must be enforced 100% of the time with zero exceptions.
         """
         # First check for existing schedule conflicts
         for i in range(duration):
@@ -3519,7 +3629,7 @@ class FinalUniversalScheduler:
             if (teacher.id, day, period) in self.global_teacher_schedule:
                 return False
         
-        # Then check teacher unavailability constraints
+        # CRITICAL: Then check teacher unavailability constraints - HARD CONSTRAINT
         if not teacher or not hasattr(teacher, 'unavailable_periods'):
             return True
         
@@ -3527,7 +3637,7 @@ class FinalUniversalScheduler:
         if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
             return True
         
-        # Check if this day is in teacher's unavailable periods
+        # CRITICAL: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
         
         # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}} or {'mandatory': {'Mon': ['8:00 AM']}}
         if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
@@ -3551,7 +3661,7 @@ class FinalUniversalScheduler:
                             requested_end = start_period + duration - 1
                             
                             if requested_start <= end_period_unavailable and requested_end >= start_period_unavailable:
-                                print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{start_period}-P{requested_end} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
                                 return False
                     elif len(time_slots) == 1:
                         # Single time slot: teacher unavailable for that entire hour
@@ -3564,22 +3674,22 @@ class FinalUniversalScheduler:
                             requested_end = start_period + duration - 1
                             
                             if requested_start <= unavailable_period <= requested_end:
-                                print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{unavailable_period} (requested: P{requested_start}-P{requested_end})")
+                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{unavailable_period} (requested: P{requested_start}-P{requested_end})")
                                 return False
-            
-            # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
-            elif isinstance(teacher.unavailable_periods, dict):
-                if day in teacher.unavailable_periods:
-                    unavailable_periods = teacher.unavailable_periods[day]
-                    if isinstance(unavailable_periods, list):
-                        for i in range(duration):
-                            period = start_period + i
-                            if str(period) in unavailable_periods:
-                                print(f"    🚫 Teacher {teacher.name} unavailable at {day} P{period}")
-                                return False
-                    elif unavailable_periods:
-                        print(f"    🚫 Teacher {teacher.name} unavailable on entire day {day}")
-                        return False
+        
+        # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
+        elif isinstance(teacher.unavailable_periods, dict):
+            if day in teacher.unavailable_periods:
+                unavailable_periods = teacher.unavailable_periods[day]
+                if isinstance(unavailable_periods, list):
+                    for i in range(duration):
+                        period = start_period + i
+                        if str(period) in unavailable_periods:
+                            print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                            return False
+                elif unavailable_periods:
+                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable on entire day {day}")
+                    return False
         
         return True
 

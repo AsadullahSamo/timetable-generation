@@ -452,11 +452,112 @@ class ConstraintEnforcedScheduler:
         return None
     
     def _is_teacher_available(self, teacher: Teacher, day: str, period: int) -> bool:
-        """Check if teacher is available for a specific time slot."""
+        """
+        CRITICAL CONSTRAINT: Check if teacher is available for a specific time slot.
+        
+        HARD CONSTRAINT: Teacher unavailability must be enforced 100% of the time with zero exceptions.
+        """
         # Check if teacher is already scheduled
         if period in self.global_teacher_schedule[teacher.id][day]:
             return False
+        
+        # CRITICAL: Check teacher unavailability constraints - HARD CONSTRAINT
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return True
+        
+        # Check if teacher has unavailability data
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return True
+        
+        # CRITICAL: Check if this day is in teacher's unavailable periods - ZERO TOLERANCE
+        
+        # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if isinstance(teacher.unavailable_periods, dict) and 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            if day in mandatory_unavailable:
+                time_slots = mandatory_unavailable[day]
+                if isinstance(time_slots, list):
+                    if len(time_slots) >= 2:
+                        # Two time slots: start and end time
+                        start_time_str = time_slots[0]  # e.g., '8:00 AM'
+                        end_time_str = time_slots[1]    # e.g., '9:00 AM'
+                        
+                        # Convert to period numbers
+                        start_period_unavailable = self._convert_time_to_period(start_time_str)
+                        end_period_unavailable = self._convert_time_to_period(end_time_str)
+                        
+                        if start_period_unavailable is not None and end_period_unavailable is not None:
+                            # Check if the requested period falls within unavailable time
+                            if start_period_unavailable <= period <= end_period_unavailable:
+                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                return False
+                    elif len(time_slots) == 1:
+                        # Single time slot: teacher unavailable for that entire hour
+                        time_str = time_slots[0]  # e.g., '8:00 AM'
+                        unavailable_period = self._convert_time_to_period(time_str)
+                        
+                        if unavailable_period is not None and period == unavailable_period:
+                            print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                            return False
+        
+        # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
+        elif isinstance(teacher.unavailable_periods, dict):
+            if day in teacher.unavailable_periods:
+                unavailable_periods = teacher.unavailable_periods[day]
+                
+                # If unavailable_periods is a list, check specific periods
+                if isinstance(unavailable_periods, list):
+                    if str(period) in unavailable_periods or period in unavailable_periods:
+                        print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                        return False
+                # If unavailable_periods is not a list, assume entire day is unavailable
+                elif unavailable_periods:
+                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable on entire day {day}")
+                    return False
+        
         return True
+    
+    def _convert_time_to_period(self, time_str: str) -> Optional[int]:
+        """
+        Convert time string (e.g., '8:00 AM') to period number based on schedule config.
+        Returns None if conversion fails.
+        """
+        try:
+            from datetime import datetime
+            
+            # Parse the time string
+            if 'AM' in time_str or 'PM' in time_str:
+                # Format: '8:00 AM' or '9:00 PM'
+                time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+            else:
+                # Format: '8:00' or '09:00'
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+            
+            # Get the start time from config
+            config_start_time = self.config.start_time
+            if isinstance(config_start_time, str):
+                config_start_time = datetime.strptime(config_start_time, '%H:%M:%S').time()
+            
+            # Calculate which period this time falls into
+            class_duration = self.config.class_duration
+            
+            # Calculate minutes since start of day
+            start_minutes = config_start_time.hour * 60 + config_start_time.minute
+            time_minutes = time_obj.hour * 60 + time_obj.minute
+            
+            # Calculate period number (1-based)
+            period = ((time_minutes - start_minutes) // class_duration) + 1
+            
+            # Ensure period is within valid range
+            if 1 <= period <= len(self.config.periods):
+                return period
+            else:
+                print(f"    ⚠️ Warning: Calculated period {period} for time {time_str} is out of range")
+                return None
+                
+        except Exception as e:
+            print(f"    ⚠️ Warning: Could not convert time '{time_str}' to period: {e}")
+            return None
     
     def _is_teacher_available_for_practical(self, teacher: Teacher, day: str, period: int,
                                           entries: List[TimetableEntry]) -> bool:

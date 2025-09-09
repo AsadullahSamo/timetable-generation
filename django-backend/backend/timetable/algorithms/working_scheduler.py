@@ -209,6 +209,24 @@ class WorkingTimetableScheduler:
         # Try to find 3 consecutive periods
         for day in self.days:
             for start_period in self.periods[:-2]:  # Need at least 3 periods
+                # BULLETPROOF: Check if ANY teacher is available for the ENTIRE 3-period block FIRST
+                any_teacher_available_for_block = False
+                for teacher in available_teachers:
+                    teacher_available_for_entire_block = True
+                    for i in range(3):
+                        period = start_period + i
+                        if not self._is_teacher_available_for_period(teacher, day, period):
+                            teacher_available_for_entire_block = False
+                            break
+                    
+                    if teacher_available_for_entire_block:
+                        any_teacher_available_for_block = True
+                        break
+                
+                if not any_teacher_available_for_block:
+                    print(f"   🚫 BULLETPROOF REJECTION: NO teacher available for entire {subject.code} block on {day} P{start_period}-{start_period+2}")
+                    continue  # Skip this time slot entirely
+                
                 if self._can_schedule_block(day, start_period, 3, class_group):
                     # Find available teacher for this time
                     teacher = self._find_available_teacher(available_teachers, day, start_period, 3)
@@ -252,6 +270,17 @@ class WorkingTimetableScheduler:
             for period in self.periods:
                 if scheduled_periods >= target_periods:
                     break
+                
+                # BULLETPROOF: Check if ANY teacher is available for this period FIRST
+                any_teacher_available = False
+                for teacher in available_teachers:
+                    if self._is_teacher_available_for_period(teacher, day, period):
+                        any_teacher_available = True
+                        break
+                
+                if not any_teacher_available:
+                    print(f"   🚫 BULLETPROOF REJECTION: NO teacher available for {subject.code} on {day} P{period}")
+                    continue  # Skip this time slot entirely
                     
                 if self._can_schedule_single(day, period, class_group):
                     teacher = self._find_available_teacher(available_teachers, day, period, 1)
@@ -287,8 +316,15 @@ class WorkingTimetableScheduler:
     
     def _find_available_teacher(self, teachers: List[Teacher], day: str,
                               start_period: int, duration: int) -> Optional[Teacher]:
-        """Find a teacher available for the specified time slot."""
-        for teacher in teachers:
+        """
+        Find a teacher available for the specified time slot.
+        
+        CRITICAL CONSTRAINT: Teacher unavailability must be enforced 100% of the time with zero exceptions.
+        """
+        # PRIORITY APPROACH: Sort teachers by unavailability constraints (constrained first)
+        prioritized_teachers = self._prioritize_teachers_by_constraints(teachers)
+        
+        for teacher in prioritized_teachers:
             available = True
             for i in range(duration):
                 period = start_period + i
@@ -300,9 +336,162 @@ class WorkingTimetableScheduler:
                 if (teacher.id, day, period) in self.existing_teacher_schedule:
                     available = False
                     break
+                # CRITICAL: Check teacher unavailability constraints - HARD CONSTRAINT
+                if not self._is_teacher_available_for_period(teacher, day, period):
+                    available = False
+                    break
             if available:
                 return teacher
         return None
+    
+    def _prioritize_teachers_by_constraints(self, teachers: List[Teacher]) -> List[Teacher]:
+        """
+        PRIORITY APPROACH: Prioritize teachers with unavailability constraints first.
+        
+        This ensures that teachers with limited availability get scheduled first,
+        giving them fair placement before handling teachers with full availability.
+        
+        Returns:
+            List[Teacher]: Teachers sorted by constraint priority (constrained first)
+        """
+        if not teachers:
+            return teachers
+        
+        constrained_teachers = []
+        unconstrained_teachers = []
+        
+        for teacher in teachers:
+            has_constraints = self._teacher_has_unavailability_constraints(teacher)
+            if has_constraints:
+                constrained_teachers.append(teacher)
+            else:
+                unconstrained_teachers.append(teacher)
+        
+        # Return constrained teachers first, then unconstrained
+        return constrained_teachers + unconstrained_teachers
+    
+    def _teacher_has_unavailability_constraints(self, teacher: Teacher) -> bool:
+        """
+        Check if a teacher has any unavailability constraints.
+        
+        Returns:
+            bool: True if teacher has unavailability constraints, False otherwise
+        """
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return False
+        
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return False
+        
+        # Check for new format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            if isinstance(mandatory_unavailable, dict) and mandatory_unavailable:
+                # Has some unavailability constraints
+                return True
+        
+        # Check for old format: {'Mon': ['8', '9']} or {'Mon': True}
+        for day, periods in teacher.unavailable_periods.items():
+            if day != 'mandatory' and periods:  # Skip 'mandatory' key and check for actual constraints
+                return True
+        
+        return False
+    
+    def _is_teacher_available_for_period(self, teacher: Teacher, day: str, period: int) -> bool:
+        """
+        CRITICAL CONSTRAINT: Check if a teacher is available for a specific period.
+        
+        HARD CONSTRAINT: Teacher unavailability must be enforced 100% of the time with zero exceptions.
+        """
+        if not teacher or not hasattr(teacher, 'unavailable_periods'):
+            return True
+        
+        if not isinstance(teacher.unavailable_periods, dict) or not teacher.unavailable_periods:
+            return True
+        
+        # CRITICAL: Check teacher unavailability constraints - ZERO TOLERANCE
+        
+        # Handle the new time-based format: {'mandatory': {'Mon': ['8:00 AM', '9:00 AM']}}
+        if 'mandatory' in teacher.unavailable_periods:
+            mandatory_unavailable = teacher.unavailable_periods['mandatory']
+            if isinstance(mandatory_unavailable, dict) and day in mandatory_unavailable:
+                time_slots = mandatory_unavailable[day]
+                if isinstance(time_slots, list):
+                    if len(time_slots) >= 2:
+                        # Two time slots: start and end time
+                        start_time_str = time_slots[0]  # e.g., '8:00 AM'
+                        end_time_str = time_slots[1]    # e.g., '9:00 AM'
+                        
+                        # Convert to period numbers
+                        start_period_unavailable = self._convert_time_to_period(start_time_str)
+                        end_period_unavailable = self._convert_time_to_period(end_time_str)
+                        
+                        if start_period_unavailable is not None and end_period_unavailable is not None:
+                            # Check if the requested period falls within unavailable time
+                            if start_period_unavailable <= period <= end_period_unavailable:
+                                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period} (unavailable: P{start_period_unavailable}-P{end_period_unavailable})")
+                                return False
+                    elif len(time_slots) == 1:
+                        # Single time slot: teacher unavailable for that entire hour
+                        time_str = time_slots[0]  # e.g., '8:00 AM'
+                        unavailable_period = self._convert_time_to_period(time_str)
+                        
+                        if unavailable_period is not None and period == unavailable_period:
+                            print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                            return False
+        
+        # Handle the old format: {'Mon': ['8', '9']} or {'Mon': True}
+        elif day in teacher.unavailable_periods:
+            unavailable_periods = teacher.unavailable_periods[day]
+            
+            # If unavailable_periods is a list, check specific periods
+            if isinstance(unavailable_periods, list):
+                if str(period) in unavailable_periods or period in unavailable_periods:
+                    print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable at {day} P{period}")
+                    return False
+            # If unavailable_periods is not a list, assume entire day is unavailable
+            elif unavailable_periods:
+                print(f"    🚫 HARD CONSTRAINT VIOLATION PREVENTED: Teacher {teacher.name} unavailable on entire day {day}")
+                return False
+        
+        return True
+    
+    def _convert_time_to_period(self, time_str: str) -> Optional[int]:
+        """
+        Convert time string (e.g., '8:00 AM') to period number based on schedule config.
+        Returns None if conversion fails.
+        """
+        try:
+            from datetime import datetime
+            
+            # Parse the time string
+            if 'AM' in time_str or 'PM' in time_str:
+                # Format: '8:00 AM' or '9:00 PM'
+                time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+            else:
+                # Format: '8:00' or '09:00'
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+            
+            # Calculate which period this time falls into
+            class_duration = self.class_duration
+            
+            # Calculate minutes since start of day
+            start_minutes = self.start_time.hour * 60 + self.start_time.minute
+            time_minutes = time_obj.hour * 60 + time_obj.minute
+            
+            # Calculate period number (1-based)
+            period = ((time_minutes - start_minutes) // class_duration) + 1
+            
+            # Ensure period is within valid range
+            if 1 <= period <= len(self.periods):
+                return period
+            else:
+                print(f"    ⚠️ Warning: Calculated period {period} for time {time_str} is out of range")
+                return None
+                
+        except Exception as e:
+            print(f"    ⚠️ Warning: Could not convert time '{time_str}' to period: {e}")
+            return None
     
     def _find_available_classroom(self, day: str, start_period: int, duration: int) -> Optional[Classroom]:
         """Find a classroom available for the specified time slot."""
