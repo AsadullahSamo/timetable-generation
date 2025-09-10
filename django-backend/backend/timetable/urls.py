@@ -27,6 +27,7 @@ from .views import (
     ConstraintTestingView,
     ConstraintResolverView,
     DataManagementView,
+    ConsolidatedSchedulingView,
 )
 
 # router = DefaultRouter()
@@ -89,4 +90,7 @@ urlpatterns = [
     # Data management
     path('data-management/', DataManagementView.as_view(), name='data-management'),
     path('data-management/<str:action>/', DataManagementView.as_view(), name='data-management-action'),
+    
+    # CONSOLIDATED SCHEDULING API - NEW MASTER ENDPOINT
+    path('consolidated-scheduling/', ConsolidatedSchedulingView.as_view(), name='consolidated-scheduling'),
 ] + router.urls

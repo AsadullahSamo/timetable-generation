@@ -13,7 +13,9 @@ from .algorithms.working_scheduler import WorkingTimetableScheduler
 from .algorithms.final_scheduler import FinalUniversalScheduler
 from .algorithms.constraint_enforced_scheduler import ConstraintEnforcedScheduler
 from .constraint_manager import ConstraintManager
+from .scheduling_orchestrator import get_scheduling_orchestrator
 import logging
+from typing import Dict, Any
 from rest_framework.pagination import PageNumberPagination
 from django.core.paginator import Paginator
 from rest_framework import status
@@ -5044,4 +5046,140 @@ class DataManagementView(APIView):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ConsolidatedSchedulingView(APIView):
+    """
+    CONSOLIDATED SCHEDULING API
+    ===========================
+    Uses the new scheduling orchestrator for zero-violation timetable generation.
+    This is the NEW MASTER ENDPOINT that consolidates all scheduling logic.
+    """
+    
+    permission_classes = [AllowAny]  # Adjust as needed
+    
+    def post(self, request):
+        """
+        Generate timetable using the consolidated scheduling orchestrator.
+        Ensures ZERO constraint violations, especially same-lab rule for practicals.
+        """
+        try:
+            batch_ids = request.data.get('batch_ids', None)  # Optional: specific batches
+            verbose = request.data.get('verbose', True)  # Control logging output
+            
+            # Get the consolidated orchestrator
+            orchestrator = get_scheduling_orchestrator(verbose=verbose)
+            
+            # Generate complete timetable with zero violations
+            result = orchestrator.generate_complete_timetable(batch_ids=batch_ids)
+            
+            if result['success']:
+                return Response({
+                    'success': True,
+                    'message': 'CONSOLIDATED SCHEDULING COMPLETED SUCCESSFULLY',
+                    'data': {
+                        'entries_generated': result['entries_count'],
+                        'same_lab_violations_fixed': result['scheduling_stats']['same_lab_violations_fixed'],
+                        'room_conflicts_resolved': result['scheduling_stats']['room_conflicts_resolved'],
+                        'constraint_compliance': result['final_report']['constraint_compliance'],
+                        'same_lab_compliance_percentage': result['final_report']['same_lab_compliance'],
+                        'total_violations': result['final_report']['total_violations'],
+                        'scheduling_stats': result['scheduling_stats'],
+                        'validation_summary': result['validation_result'],
+                        'final_report': result['final_report']
+                    },
+                    'orchestrator_used': True,
+                    'consolidated_approach': True
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'CONSOLIDATED SCHEDULING FAILED',
+                    'error': result['message'],
+                    'error_details': result.get('error_details', 'No additional details'),
+                    'orchestrator_used': True
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            logger.error(f"Consolidated scheduling API error: {str(e)}")
+            return Response({
+                'success': False,
+                'message': 'CONSOLIDATED SCHEDULING API ERROR',
+                'error': str(e),
+                'orchestrator_used': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get(self, request):
+        """
+        Validate current schedule using consolidated constraint enforcement.
+        """
+        try:
+            verbose = request.query_params.get('verbose', 'true').lower() == 'true'
+            
+            # Get the orchestrator
+            orchestrator = get_scheduling_orchestrator(verbose=verbose)
+            
+            # Validate current schedule
+            validation_result = orchestrator.validate_current_schedule()
+            
+            return Response({
+                'success': True,
+                'message': 'SCHEDULE VALIDATION COMPLETED',
+                'data': {
+                    'overall_compliance': validation_result['overall_compliance'],
+                    'total_violations': validation_result['total_violations'],
+                    'constraint_details': validation_result.get('enhanced', {}),
+                    'same_lab_violations': self._count_same_lab_violations(validation_result),
+                },
+                'validation_timestamp': datetime.now().isoformat()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Schedule validation error: {str(e)}")
+            return Response({
+                'success': False,
+                'message': 'SCHEDULE VALIDATION FAILED',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def put(self, request):
+        """
+        Fix constraint violations in current schedule.
+        """
+        try:
+            verbose = request.data.get('verbose', True)
+            
+            # Get the orchestrator
+            orchestrator = get_scheduling_orchestrator(verbose=verbose)
+            
+            # Fix constraint violations
+            fix_result = orchestrator.fix_constraint_violations()
+            
+            return Response({
+                'success': fix_result['success'],
+                'message': 'CONSTRAINT VIOLATION FIXES APPLIED',
+                'data': {
+                    'fixes_applied': fix_result.get('actions', []),
+                    'total_fixes': len(fix_result.get('actions', [])),
+                },
+                'fix_timestamp': datetime.now().isoformat()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Constraint fix error: {str(e)}")
+            return Response({
+                'success': False,
+                'message': 'CONSTRAINT FIX FAILED',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _count_same_lab_violations(self, validation_result: Dict[str, Any]) -> int:
+        """Count same-lab rule violations from validation result."""
+        try:
+            enhanced_results = validation_result.get('enhanced', {})
+            violations_by_constraint = enhanced_results.get('violations_by_constraint', {})
+            same_lab_violations = violations_by_constraint.get('Same Lab Rule', [])
+            return len(same_lab_violations)
+        except:
+            return 0
 
