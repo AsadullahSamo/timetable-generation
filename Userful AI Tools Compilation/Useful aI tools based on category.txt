@@ -1,0 +1,13 @@
+Image Editing (Photoshop replacement): nanobanana (by google)
+Agentic AI: Augment, Warp, Cursor, Replit
+Research based: Perplexity AI
+character chatting: character.ai
+Voice: Elevenlabs
+Text to speech APIs: Whisper API (by openai), lemonfox whisper API
+Real-time chat: Intercom API
+text to Video: Google Veo 3
+text to Image: Leonardo AI
+Background remover: remove.bg
+Coding Tutorials: Brilliant.com
+API generation, documentation, testing and all API related functionality: Echo API
+Coding: Claude
