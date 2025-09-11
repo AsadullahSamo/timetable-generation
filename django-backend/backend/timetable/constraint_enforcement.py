@@ -65,9 +65,13 @@ class ConstraintEnforcer:
         }
 
     def _enforce_same_lab_for_all_practicals(self, entries: List[TimetableEntry]) -> Dict[str, Any]:
+        """
+        Ensures that ALL 3 consecutive blocks of a practical ALWAYS use the same lab.
+        """
         fixed = 0
         practical_groups = defaultdict(list)
 
+        # Group practical entries by class_group, subject, and day
         for e in entries:
             if e.subject and e.subject.is_practical:
                 practical_groups[(e.class_group, e.subject.code, e.day)].append(e)
@@ -76,35 +80,178 @@ class ConstraintEnforcer:
             if len(group) < 2:
                 continue
 
-            # Determine target lab (majority lab among the 3 entries)
-            labs = [ge.classroom for ge in group if ge.classroom]
+            # Determine target lab (majority lab among the entries)
+            labs = [ge.classroom for ge in group if ge.classroom and ge.classroom.is_lab]
             if not labs:
+                # No labs assigned yet - try to assign one
+                available_lab = self._find_available_lab_for_practical_group(group, entries)
+                if available_lab:
+                    for ge in group:
+                        if not ge.classroom or not ge.classroom.is_lab:
+                            ge.classroom = available_lab
+                            fixed += 1
                 continue
+
+            # Find the most used lab (target lab)
             from collections import Counter
-            lab_counter = Counter(lab.id for lab in labs if lab)
+            lab_counter = Counter(lab.id for lab in labs)
             target_lab_id, _ = lab_counter.most_common(1)[0]
             target_lab = Classroom.objects.get(id=target_lab_id)
 
-            # Move mismatched entries to target lab if available
+            # BULLETPROOF: Force all entries to use the target lab
             for ge in group:
-                if ge.classroom and ge.classroom.id != target_lab_id:
-                    # Ensure target lab free at this slot
-                    conflict = TimetableEntry.objects.filter(
-                        classroom=target_lab, day=ge.day, period=ge.period
-                    ).exclude(id=ge.id).exists()
-                    if not conflict:
+                if not ge.classroom or ge.classroom.id != target_lab_id:
+                    # Check for conflicts in both database AND current entries
+                    has_conflict = self._check_lab_conflict(target_lab, ge.day, ge.period, entries, exclude_entry=ge)
+                    
+                    if not has_conflict:
+                        # No conflict - safe to assign
                         ge.classroom = target_lab
-                        ge.save()
                         fixed += 1
+                    else:
+                        # FORCE lab availability by moving conflicting entries
+                        if self._force_lab_availability_bulletproof(target_lab, ge.day, ge.period, entries, exclude_entry=ge):
+                            ge.classroom = target_lab
+                            fixed += 1
+                        else:
+                            # Last resort: try to find alternative lab for entire group
+                            alternative_lab = self._find_alternative_lab_for_group(group, entries, exclude_lab=target_lab)
+                            if alternative_lab:
+                                # Move entire group to alternative lab
+                                for group_entry in group:
+                                    group_entry.classroom = alternative_lab
+                                    fixed += 1
+                                break
 
         if self.verbose:
-            print(f"   🔒 Enforced same-lab rule: fixed {fixed} assignments")
+            print(f"   🔒 BULLETPROOF: Enforced same-lab rule with {fixed} fixes")
 
         return {
-            'name': 'same_lab_enforcement',
+            'name': 'bulletproof_same_lab_enforcement',
             'fixed': fixed,
             'success': True
         }
+
+    def _check_lab_conflict(self, lab: Classroom, day: str, period: int, entries: List[TimetableEntry], exclude_entry: TimetableEntry = None) -> bool:
+        """Check for conflicts in both database and current entries."""
+        # Check database conflicts
+        db_conflict = TimetableEntry.objects.filter(
+            classroom=lab, day=day, period=period
+        ).exclude(id=exclude_entry.id if exclude_entry and hasattr(exclude_entry, 'id') else None).exists()
+        
+        if db_conflict:
+            return True
+        
+        # Check current entries conflicts
+        for entry in entries:
+            if (entry != exclude_entry and 
+                entry.classroom and entry.classroom.id == lab.id and
+                entry.day == day and entry.period == period):
+                return True
+        
+        return False
+
+    def _force_lab_availability_bulletproof(self, lab: Classroom, day: str, period: int, entries: List[TimetableEntry], exclude_entry: TimetableEntry = None) -> bool:
+        """BULLETPROOF: Force lab availability by moving conflicting entries."""
+        # Find conflicting entries in current entries
+        conflicting_entries = [
+            entry for entry in entries
+            if (entry != exclude_entry and 
+                entry.classroom and entry.classroom.id == lab.id and
+                entry.day == day and entry.period == period)
+        ]
+        
+        # Try to move each conflicting entry
+        for conflict_entry in conflicting_entries:
+            if conflict_entry.subject and conflict_entry.subject.is_practical:
+                # Practical entry - try to move to another lab
+                alternative_lab = self._find_alternative_lab_for_entry(conflict_entry, entries, exclude_lab=lab)
+                if alternative_lab:
+                    conflict_entry.classroom = alternative_lab
+                    if self.verbose:
+                        print(f"     🔄 Moved practical {conflict_entry.subject.code} to {alternative_lab.name}")
+                else:
+                    return False  # Cannot move practical
+            else:
+                # Theory entry - try to move to regular room
+                alternative_room = self._find_alternative_room_for_theory(conflict_entry, entries)
+                if alternative_room:
+                    conflict_entry.classroom = alternative_room
+                    if self.verbose:
+                        print(f"     🔄 Moved theory to {alternative_room.name}")
+                else:
+                    return False  # Cannot move theory
+        
+        return True
+
+    def _find_available_lab_for_practical_group(self, group: List[TimetableEntry], entries: List[TimetableEntry]) -> Classroom:
+        """Find an available lab that can accommodate all entries in the practical group."""
+        all_labs = list(Classroom.objects.filter(is_lab=True))
+        
+        for lab in all_labs:
+            can_accommodate_all = True
+            for entry in group:
+                if self._check_lab_conflict(lab, entry.day, entry.period, entries, exclude_entry=entry):
+                    can_accommodate_all = False
+                    break
+            
+            if can_accommodate_all:
+                return lab
+        
+        return None
+
+    def _find_alternative_lab_for_group(self, group: List[TimetableEntry], entries: List[TimetableEntry], exclude_lab: Classroom = None) -> Classroom:
+        """Find an alternative lab for an entire practical group."""
+        all_labs = list(Classroom.objects.filter(is_lab=True))
+        if exclude_lab:
+            all_labs = [lab for lab in all_labs if lab.id != exclude_lab.id]
+        
+        for lab in all_labs:
+            can_accommodate_all = True
+            for entry in group:
+                if self._check_lab_conflict(lab, entry.day, entry.period, entries, exclude_entry=entry):
+                    can_accommodate_all = False
+                    break
+            
+            if can_accommodate_all:
+                return lab
+        
+        return None
+
+    def _find_alternative_lab_for_entry(self, entry: TimetableEntry, entries: List[TimetableEntry], exclude_lab: Classroom = None) -> Classroom:
+        """Find an alternative lab for a single practical entry."""
+        all_labs = list(Classroom.objects.filter(is_lab=True))
+        if exclude_lab:
+            all_labs = [lab for lab in all_labs if lab.id != exclude_lab.id]
+        
+        for lab in all_labs:
+            if not self._check_lab_conflict(lab, entry.day, entry.period, entries, exclude_entry=entry):
+                return lab
+        
+        return None
+
+    def _find_alternative_room_for_theory(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> Classroom:
+        """Find an alternative regular room for a theory entry."""
+        regular_rooms = list(Classroom.objects.filter(is_lab=False))
+        
+        for room in regular_rooms:
+            # Check for conflicts
+            has_conflict = any(
+                e.classroom and e.classroom.id == room.id and
+                e.day == entry.day and e.period == entry.period and e != entry
+                for e in entries
+            )
+            
+            if not has_conflict:
+                # Also check database
+                db_conflict = TimetableEntry.objects.filter(
+                    classroom=room, day=entry.day, period=entry.period
+                ).exclude(id=entry.id if hasattr(entry, 'id') else None).exists()
+                
+                if not db_conflict:
+                    return room
+        
+        return None
 
     def _resolve_room_double_bookings(self, entries: List[TimetableEntry]) -> Dict[str, Any]:
         moved = 0

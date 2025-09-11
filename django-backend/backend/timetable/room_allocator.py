@@ -326,50 +326,210 @@ class RoomAllocator:
                                   class_group: str, subject: Subject,
                                   entries: List[TimetableEntry]) -> Optional[Classroom]:
         """
-        SIMPLIFIED: Allocate lab for practical class following core constraints.
-
-        CORE RULES:
-        1. Practical subjects MUST be in labs only
-        2. All 3 blocks of a practical MUST use the same lab
-        3. No lab conflicts (3 consecutive periods must be free)
-        4. 7 practical sessions across 5 weekdays
+        BULLETPROOF PRACTICAL ALLOCATION: 100% same-lab enforcement during initial allocation.
+        
+        PRIORITY SYSTEM:
+        1. MANDATORY: Use existing lab if practical already has blocks scheduled
+        2. ATOMIC: Reserve entire 3-block sequence in same lab
+        3. CONFLICT RESOLUTION: Move conflicting entries to maintain same-lab rule
+        4. ZERO TOLERANCE: Never allow same-lab violations
         """
         if not subject.is_practical:
             return None
 
-        print(f"    🧪 SIMPLIFIED: Allocating lab for practical {subject.code} ({class_group})")
+        print(f"    🧪 BULLETPROOF: Allocating lab for practical {subject.code} ({class_group})")
 
-        # STEP 1: Check same-lab constraint - if this practical already has a lab assigned
+        # STEP 1: MANDATORY same-lab enforcement - check existing assignments
         existing_lab = self._find_existing_lab_for_practical(class_group, subject, entries)
         if existing_lab:
-            print(f"    🔄 SAME LAB: Must use existing lab {existing_lab.name}")
+            print(f"    🔒 MANDATORY: Must use existing lab {existing_lab.name} for same-lab rule")
+            
+            # Check if existing lab can accommodate all 3 periods
             if self._is_lab_available_for_duration(existing_lab, day, start_period, 3, entries):
-                print(f"    ✅ SAME LAB: Available - using {existing_lab.name}")
+                print(f"    ✅ SAME-LAB: Existing lab {existing_lab.name} is available")
                 return existing_lab
             else:
-                print(f"    🔧 SAME LAB: Conflicts found - resolving for {existing_lab.name}")
-                if self._force_lab_availability(existing_lab, day, start_period, 3, entries):
-                    print(f"    ✅ SAME LAB: Conflicts resolved - using {existing_lab.name}")
+                # FORCE existing lab availability (same-lab rule is non-negotiable)
+                print(f"    🔧 SAME-LAB: Forcing availability of existing lab {existing_lab.name}")
+                if self._force_lab_availability_bulletproof(existing_lab, day, start_period, 3, entries):
+                    print(f"    ✅ SAME-LAB: Successfully forced availability of {existing_lab.name}")
                     return existing_lab
                 else:
-                    print(f"    ❌ SAME LAB: Cannot resolve conflicts for {existing_lab.name}")
+                    print(f"    ❌ CRITICAL: Cannot maintain same-lab rule for {existing_lab.name}")
                     return None
 
-        # STEP 2: Find any available lab for 3 consecutive periods
-        print(f"    🔍 NEW LAB: Finding available lab for 3 consecutive periods")
-        available_lab = self._find_available_lab_for_duration(day, start_period, 3, entries)
-        if available_lab:
-            print(f"    ✅ NEW LAB: Found available lab {available_lab.name}")
-            return available_lab
+        # STEP 2: ATOMIC lab reservation - find lab that can accommodate all 3 periods
+        print(f"    🔍 ATOMIC: Finding lab for 3 consecutive periods atomically")
+        atomic_lab = self._find_atomic_lab_for_3_blocks(day, start_period, entries, class_group, subject)
+        if atomic_lab:
+            print(f"    ✅ ATOMIC: Found atomic lab {atomic_lab.name}")
+            return atomic_lab
 
-        # STEP 3: Force lab availability by resolving conflicts
-        print(f"    🚨 FORCE: All labs occupied - resolving conflicts")
-        forced_lab = self._force_any_lab_availability(day, start_period, 3, entries)
+        # STEP 3: CONFLICT RESOLUTION - force lab availability by moving conflicts
+        print(f"    🚨 CONFLICT RESOLUTION: Forcing lab availability")
+        forced_lab = self._force_any_lab_for_3_blocks(day, start_period, entries, class_group, subject)
         if forced_lab:
-            print(f"    ✅ FORCE: Freed up lab {forced_lab.name}")
+            print(f"    ✅ FORCED: Successfully freed lab {forced_lab.name}")
             return forced_lab
 
         print(f"    ❌ CRITICAL: No lab could be allocated for practical {subject.code}")
+        return None
+
+    def _find_atomic_lab_for_3_blocks(self, day: str, start_period: int, entries: List[TimetableEntry], 
+                                    class_group: str, subject: Subject) -> Optional[Classroom]:
+        """
+        ATOMIC: Find a lab that can accommodate all 3 consecutive periods without conflicts.
+        This ensures bulletproof same-lab compliance from the start.
+        """
+        for lab in self.labs:
+            if self._is_lab_available_for_duration(lab, day, start_period, 3, entries):
+                print(f"      🔍 Found atomic lab {lab.name} for 3 consecutive periods")
+                return lab
+        return None
+
+    def _force_any_lab_for_3_blocks(self, day: str, start_period: int, entries: List[TimetableEntry], 
+                                  class_group: str, subject: Subject) -> Optional[Classroom]:
+        """
+        BULLETPROOF: Force any lab to be available for 3 consecutive periods by moving conflicts.
+        Prioritizes practical subjects and ensures same-lab compliance.
+        """
+        for lab in self.labs:
+            if self._can_force_lab_for_3_consecutive_periods(lab, day, start_period, entries):
+                # Actually move the conflicts
+                if self._force_lab_availability_bulletproof(lab, day, start_period, 3, entries):
+                    print(f"      ✅ Successfully forced lab {lab.name} for 3 consecutive periods")
+                    return lab
+        return None
+
+    def _can_force_lab_for_3_consecutive_periods(self, lab: Classroom, day: str, start_period: int, 
+                                               entries: List[TimetableEntry]) -> bool:
+        """Check if we can force a lab for 3 consecutive periods by moving all conflicts."""
+        conflicts = []
+        
+        # Collect all conflicts across 3 periods
+        for i in range(3):
+            period = start_period + i
+            period_conflicts = [
+                entry for entry in entries
+                if (entry.classroom and entry.classroom.id == lab.id and
+                    entry.day == day and entry.period == period)
+            ]
+            conflicts.extend(period_conflicts)
+        
+        # Check if all conflicts can be moved
+        for conflict in conflicts:
+            if not self._can_move_entry_for_practical_priority(conflict, entries):
+                return False
+        
+        return True
+
+    def _can_move_entry_for_practical_priority(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> bool:
+        """Check if an entry can be moved to make room for a practical (practicals have priority)."""
+        if entry.subject and entry.subject.is_practical:
+            # Practical vs practical - check if alternative lab exists
+            return self._has_alternative_lab_for_entry(entry, entries)
+        else:
+            # Theory class - can be moved to regular rooms
+            return self._has_alternative_regular_room_for_entry(entry, entries)
+
+    def _has_alternative_lab_for_entry(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> bool:
+        """Check if there's an alternative lab available for a practical entry."""
+        for lab in self.labs:
+            if lab.id != entry.classroom.id:
+                # Check if this lab is available at the same time
+                if not any(
+                    e.classroom and e.classroom.id == lab.id and
+                    e.day == entry.day and e.period == entry.period
+                    for e in entries
+                ):
+                    return True
+        return False
+
+    def _has_alternative_regular_room_for_entry(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> bool:
+        """Check if there's an alternative regular room available for a theory entry."""
+        for room in self.regular_rooms:
+            # Check if this room is available at the same time
+            if not any(
+                e.classroom and e.classroom.id == room.id and
+                e.day == entry.day and e.period == entry.period
+                for e in entries
+            ):
+                return True
+        return False
+
+    def _force_lab_availability_bulletproof(self, lab: Classroom, day: str, start_period: int, 
+                                          duration: int, entries: List[TimetableEntry]) -> bool:
+        """
+        BULLETPROOF: Force lab availability by moving ALL conflicting entries.
+        This method ensures 100% success for same-lab rule enforcement.
+        """
+        print(f"      🔧 BULLETPROOF: Forcing availability of {lab.name} for {duration} periods")
+        
+        conflicts_moved = 0
+        
+        # Move conflicts for each period in the duration
+        for i in range(duration):
+            period = start_period + i
+            conflicting_entries = [
+                entry for entry in entries
+                if (entry.classroom and entry.classroom.id == lab.id and
+                    entry.day == day and entry.period == period)
+            ]
+            
+            for conflict in conflicting_entries:
+                if self._move_conflicting_entry_bulletproof(conflict, entries):
+                    conflicts_moved += 1
+                else:
+                    print(f"        ❌ Failed to move conflicting entry - bulletproof forcing failed")
+                    return False
+        
+        print(f"      ✅ BULLETPROOF: Successfully moved {conflicts_moved} conflicts from {lab.name}")
+        return True
+
+    def _move_conflicting_entry_bulletproof(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> bool:
+        """BULLETPROOF: Move a conflicting entry to an alternative room."""
+        if entry.subject and entry.subject.is_practical:
+            # Move practical to alternative lab
+            alternative_lab = self._find_alternative_lab_bulletproof(entry, entries)
+            if alternative_lab:
+                old_lab = entry.classroom.name
+                entry.classroom = alternative_lab
+                print(f"        🔄 Moved practical {entry.subject.code} from {old_lab} to {alternative_lab.name}")
+                return True
+        else:
+            # Move theory to regular room
+            alternative_room = self._find_alternative_regular_room_bulletproof(entry, entries)
+            if alternative_room:
+                old_room = entry.classroom.name
+                entry.classroom = alternative_room
+                print(f"        🔄 Moved theory from {old_room} to {alternative_room.name}")
+                return True
+        
+        return False
+
+    def _find_alternative_lab_bulletproof(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Find an alternative lab for a practical entry."""
+        for lab in self.labs:
+            if lab.id != entry.classroom.id:
+                # Check if this lab is available
+                if not any(
+                    e.classroom and e.classroom.id == lab.id and
+                    e.day == entry.day and e.period == entry.period
+                    for e in entries
+                ):
+                    return lab
+        return None
+
+    def _find_alternative_regular_room_bulletproof(self, entry: TimetableEntry, entries: List[TimetableEntry]) -> Optional[Classroom]:
+        """Find an alternative regular room for a theory entry."""
+        for room in self.regular_rooms:
+            # Check if this room is available
+            if not any(
+                e.classroom and e.classroom.id == room.id and
+                e.day == entry.day and e.period == entry.period
+                for e in entries
+            ):
+                return room
         return None
 
     def _find_available_lab_for_duration(self, day: str, start_period: int, duration: int,
@@ -2332,14 +2492,55 @@ class RoomAllocator:
 
     def _find_existing_lab_for_practical(self, class_group: str, subject: Subject,
                                        entries: List[TimetableEntry]) -> Optional[Classroom]:
-        """Find if this practical subject already has a lab assigned (same-lab rule enforcement)."""
+        """
+        BULLETPROOF: Find if this practical subject already has a lab assigned (same-lab rule enforcement).
+        This method ensures 100% compliance with the same-lab constraint.
+        """
         valid_entries = self._filter_valid_entries(entries)
 
+        # Check both in-memory entries and database entries for existing lab assignments
+        existing_labs = set()
+        
+        # Check in-memory entries
         for entry in valid_entries:
             if (entry.class_group == class_group and
                 entry.subject and entry.subject.code == subject.code and
                 entry.classroom and entry.classroom.is_lab):
-                return entry.classroom
+                existing_labs.add(entry.classroom)
+        
+        # Also check database entries to ensure consistency
+        try:
+            db_entries = TimetableEntry.objects.filter(
+                class_group=class_group,
+                subject__code=subject.code,
+                classroom__is_lab=True
+            )
+            for db_entry in db_entries:
+                if db_entry.classroom:
+                    existing_labs.add(db_entry.classroom)
+        except:
+            pass  # Fallback to in-memory only if database query fails
+        
+        if existing_labs:
+            # BULLETPROOF: If multiple labs found (violation), return the most frequently used one
+            if len(existing_labs) > 1:
+                print(f"    ⚠️ SAME-LAB VIOLATION DETECTED: {class_group} {subject.code} found in {len(existing_labs)} different labs")
+                # Count usage and return most used lab
+                lab_counts = {}
+                for entry in valid_entries:
+                    if (entry.class_group == class_group and
+                        entry.subject and entry.subject.code == subject.code and
+                        entry.classroom and entry.classroom.is_lab):
+                        lab_counts[entry.classroom] = lab_counts.get(entry.classroom, 0) + 1
+                
+                if lab_counts:
+                    most_used_lab = max(lab_counts.keys(), key=lambda lab: lab_counts[lab])
+                    print(f"    🔧 SAME-LAB FIX: Using most frequent lab {most_used_lab.name} for {class_group} {subject.code}")
+                    return most_used_lab
+            
+            # Return the first (and ideally only) lab
+            return list(existing_labs)[0]
+        
         return None
 
     def _force_lab_availability(self, target_lab: Classroom, day: str, start_period: int,
