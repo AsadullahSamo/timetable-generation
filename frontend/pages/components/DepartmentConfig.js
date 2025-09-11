@@ -213,7 +213,7 @@ const DepartmentConfig = () => {
         const entriesCount = response.data.entries_count || 'multiple';
         setGenSuccess(`🎉 Timetable generated successfully! Created ${entriesCount} schedule entries. Redirecting to view timetable...`);
         setTimeout(() => {
-          router.push('/components/TimetableViewer');
+          router.push('/components/Timetable');
         }, 2000);
       } else {
         handleTimetableError(new Error('Failed to generate timetable'));
