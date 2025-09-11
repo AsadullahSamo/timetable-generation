@@ -56,6 +56,24 @@ const Timetable = () => {
     setMounted(true);
   }, []);
 
+  // Auto-select first class group when timetable data loads
+  useEffect(() => {
+    if (timetableData?.pagination?.class_groups && timetableData.pagination.class_groups.length > 0 && !selectedClassGroup) {
+      const sortedGroups = [...new Set(timetableData.pagination.class_groups)]
+        .sort((a, b) => {
+          // Sort sections properly (21SW-I, 21SW-II, 21SW-III, 22SW-I, etc.)
+          const [batchA, sectionA] = a.split('-');
+          const [batchB, sectionB] = b.split('-');
+          if (batchA !== batchB) return batchA.localeCompare(batchB);
+          return (sectionA || '').localeCompare(sectionB || '');
+        });
+      
+      if (sortedGroups.length > 0) {
+        setSelectedClassGroup(sortedGroups[0]);
+      }
+    }
+  }, [timetableData, selectedClassGroup]);
+
   // Retry function for failed requests
   const retryFetch = () => {
     setRetryCount(prev => prev + 1);
@@ -638,7 +656,7 @@ const Timetable = () => {
         <ResponsiveCard className="bg-yellow-900/20 border-yellow-400/30">
           <div className="flex items-center gap-2 text-yellow-300">
             <span className="text-yellow-400 font-bold text-lg">*</span>
-            <span className="text-xs sm:text-sm">Extra Classes: Additional classes scheduled in leftover slots after main classes</span>
+            <span className="text-xs sm:text-sm">Extra Classes: Extra classes scheduled in leftover slots after main classes</span>
           </div>
         </ResponsiveCard>
 
