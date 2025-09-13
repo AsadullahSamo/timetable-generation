@@ -5,7 +5,7 @@ const getApiBaseUrl = () => {
   // Check if we're in production (Vercel)
   if (process.env.NODE_ENV === 'production') {
     // Use environment variable for production API URL
-    return process.env.NEXT_PUBLIC_API_URL || 'https://your-render-app.onrender.com';
+    return process.env.NEXT_PUBLIC_API_URL || 'https://timetable-generation-tc7o.onrender.com';
   }
   // Use localhost for development
   return 'http://localhost:8000';
