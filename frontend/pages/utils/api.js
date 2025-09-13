@@ -1,7 +1,18 @@
 import axios from 'axios';
 
+// Environment-aware API base URL
+const getApiBaseUrl = () => {
+  // Check if we're in production (Vercel)
+  if (process.env.NODE_ENV === 'production') {
+    // Use environment variable for production API URL
+    return process.env.NEXT_PUBLIC_API_URL || 'https://your-render-app.onrender.com';
+  }
+  // Use localhost for development
+  return 'http://localhost:8000';
+};
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json'
   }
@@ -32,7 +43,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const response = await axios.post('http://localhost:8000/api/auth/refresh/', {
+          const response = await axios.post(`${getApiBaseUrl()}/api/auth/refresh/`, {
             refresh: refreshToken
           });
 

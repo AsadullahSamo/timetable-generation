@@ -5,5 +5,5 @@
      django-cors-headers==4.2.0
      python-dateutil==2.8.2
      django-celery-results==2.2.0
-     django-debug-toolbar
-     firebase-admin
+django-debug-toolbar
+gunicorn==21.2.0
