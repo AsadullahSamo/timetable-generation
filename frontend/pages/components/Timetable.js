@@ -656,7 +656,7 @@ const Timetable = () => {
         <ResponsiveCard className="bg-yellow-900/20 border-yellow-400/30">
           <div className="flex items-center gap-2 text-yellow-300">
             <span className="text-yellow-400 font-bold text-lg">*</span>
-            <span className="text-xs sm:text-sm">Extra Classes: Extra classes scheduled in leftover slots after main classes</span>
+            <span className="text-xs sm:text-sm">denote extra Classes</span>
           </div>
         </ResponsiveCard>
 
