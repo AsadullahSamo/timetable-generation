@@ -173,7 +173,8 @@ AUTH_USER_MODEL = 'users.User'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://localhost:3000",
-    "https://whimsical-tapioca-45ba52.netlify.app",  # Netlify frontend URL
+    "https://whimsical-tapioca-45ba52.netlify.app",  # Old Netlify frontend URL
+    "https://frontend-livid-five-15.vercel.app",     # Vercel frontend URL
 ]
 
 # Add production frontend URL when available
