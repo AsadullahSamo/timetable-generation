@@ -185,3 +185,50 @@ if FRONTEND_URL:
 # Allow all origins in development for easier testing
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+
+# AUTO-DETECT PRODUCTION AND APPLY MEMORY OPTIMIZATIONS
+# No environment variables needed - automatically detects Render
+import gc
+
+# Check if running on Render (automatic detection)
+IS_RENDER_PRODUCTION = (
+    not DEBUG and 
+    ('render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or
+     os.environ.get('RENDER_SERVICE_NAME') is not None)
+)
+
+if IS_RENDER_PRODUCTION:
+    print("🚀 Render production detected - applying memory optimizations automatically")
+    
+    # Python runtime optimizations for memory efficiency
+    gc.set_threshold(700, 10, 10)  # More aggressive GC
+    
+    # Django memory optimizations
+    DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024  # 25MB
+    FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10MB
+    
+    # Database optimization
+    DATABASES['default'].update({
+        'CONN_MAX_AGE': 120,  # Keep connections alive longer
+        'OPTIONS': {
+            'timeout': 30,
+        }
+    })
+    
+    # Remove debug components
+    INSTALLED_APPS = [app for app in INSTALLED_APPS if 'debug_toolbar' not in app]
+    MIDDLEWARE = [m for m in MIDDLEWARE if 'debug_toolbar' not in m]
+    
+    # Memory-optimized cache
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'timetable-cache',
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+                'CULL_FREQUENCY': 4,
+            }
+        }
+    }
+    
+    print("✅ Memory optimizations applied automatically")
