@@ -9,7 +9,7 @@ from celery.result import AsyncResult
 from datetime import datetime, timedelta
 from rest_framework.permissions import IsAuthenticated
 from .algorithms.advanced_scheduler import AdvancedTimetableScheduler
-from .algorithms.working_scheduler import WorkingTimetableScheduler
+# from .algorithms.working_scheduler import WorkingTimetableScheduler  # Module not found
 from .algorithms.final_scheduler import FinalUniversalScheduler
 from .algorithms.constraint_enforced_scheduler import ConstraintEnforcedScheduler
 from .constraint_manager import ConstraintManager
@@ -47,7 +47,7 @@ from .tasks import (
 )
 
 from .services.cross_semester_conflict_detector import CrossSemesterConflictDetector
-from .constraint_validator import ConstraintValidator
+# from .constraint_validator import ConstraintValidator  # Using enhanced version
 
 logger = logging.getLogger(__name__)
 
@@ -1161,7 +1161,8 @@ class ConstraintTestingView(APIView):
                 })
 
             # Initialize constraint validator
-            validator = ConstraintValidator()
+            from .enhanced_constraint_validator import EnhancedConstraintValidator
+            validator = EnhancedConstraintValidator()
 
             # Run comprehensive validation
             validation_results = validator.validate_all_constraints(list(entries))
@@ -2426,7 +2427,8 @@ class ConstraintResolverView(APIView):
                 })
 
             # Initialize constraint validator for side effect tracking
-            validator = ConstraintValidator()
+            from .enhanced_constraint_validator import EnhancedConstraintValidator
+            validator = EnhancedConstraintValidator()
 
             # Get initial state using the same analysis methods as constraint testing
             initial_analysis = self._get_specific_constraint_analysis(entries, constraint_type)
@@ -2870,7 +2872,7 @@ class ConstraintResolverView(APIView):
     def _resolve_subject_frequency(self, entries):
         """Intelligent Subject Frequency resolution that respects all other constraints"""
         from timetable.models import TeacherSubjectAssignment, Subject, TimetableEntry
-        from timetable.constraint_validator import ConstraintValidator
+        # from timetable.constraint_validator import ConstraintValidator  # Using enhanced version
         from collections import defaultdict
 
         changes_made = 0
@@ -2878,7 +2880,8 @@ class ConstraintResolverView(APIView):
 
         try:
             # Initialize constraint validator to check all constraints
-            validator = ConstraintValidator()
+            from timetable.enhanced_constraint_validator import EnhancedConstraintValidator
+            validator = EnhancedConstraintValidator()
 
             # STEP 1: Analyze current subject frequency violations
             print("🔍 Analyzing Subject Frequency violations...")

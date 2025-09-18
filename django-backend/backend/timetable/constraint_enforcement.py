@@ -9,8 +9,7 @@ from typing import List, Dict, Any
 from collections import defaultdict
 
 from .models import TimetableEntry, Classroom
-from .enhanced_constraint_validator import EnhancedConstraintValidator
-from .constraint_validator import ConstraintValidator
+from .enhanced_constraint_validator import EnhancedConstraintValidator as ConstraintValidator
 from .room_allocator import RoomAllocator
 
 
