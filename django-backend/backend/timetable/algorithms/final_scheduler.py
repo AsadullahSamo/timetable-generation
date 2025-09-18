@@ -596,14 +596,29 @@ class FinalUniversalScheduler:
 
                         if classroom:
                             # Schedule 3 consecutive periods in SAME lab
+                            scheduled_entries = []
                             for i in range(3):
                                 period = start_period + i
                                 entry = self._create_entry(day, period, subject, teacher, classroom, class_group, True)
                                 entries.append(entry)
+                                scheduled_entries.append(entry)
                                 class_schedule[(day, period)] = entry
                                 self._mark_global_schedule(teacher, classroom, day, period)
 
-                            print(f"     ✅ Scheduled {subject.code}: {day} P{start_period}-{start_period+2} in {classroom.name}")
+                            # BULLETPROOF VERIFICATION: Ensure all 3 blocks are in the same lab
+                            labs_used = set(entry.classroom.id for entry in scheduled_entries)
+                            if len(labs_used) == 1:
+                                print(f"     ✅ BULLETPROOF VERIFIED: Scheduled {subject.code}: {day} P{start_period}-{start_period+2} in {classroom.name} (same lab confirmed)")
+                            else:
+                                # This should never happen, but if it does, it's a critical error
+                                lab_names = [entry.classroom.name for entry in scheduled_entries]
+                                print(f"     ⚠️ BULLETPROOF ERROR: {subject.code} scheduled across multiple labs: {lab_names}")
+                                print(f"     🔧 BULLETPROOF FIX: Forcing all blocks to use {classroom.name}")
+                                for entry in scheduled_entries:
+                                    if entry.classroom.id != classroom.id:
+                                        old_lab = entry.classroom.name
+                                        entry.classroom = classroom
+                                        print(f"     🔧 BULLETPROOF FIX: Moved {entry.class_group} {entry.subject.code} from {old_lab} to {classroom.name}")
                             return
 
         print(f"     ❌ Could not schedule practical {subject.code}")
@@ -4044,26 +4059,51 @@ class FinalUniversalScheduler:
                 print(f"       🧪 Found {len(practical_subjects)} practical subjects for extra classes")
                 print(f"       📚 Found {len(theory_subjects)} theory subjects for extra classes")
                 
-                # Rule: For final year (with Thesis), do NOT schedule any extra on Wednesday
-                is_final_year = False
+                # STRICT BATCH-LEVEL THESIS CHECK: Only batches with actual thesis subjects can have Wednesday restrictions
+                has_thesis_subjects = False
                 try:
-                    is_final_year = self._is_final_year_with_thesis(class_group, subjects)
-                except Exception:
-                    is_final_year = False
+                    has_thesis_subjects = self._is_final_year_with_thesis(class_group, subjects)
+                    if has_thesis_subjects:
+                        print(f"       ✅ BATCH-LEVEL: {class_group} has thesis subjects - applying Wednesday restrictions")
+                    else:
+                        print(f"       ℹ️ BATCH-LEVEL: {class_group} has NO thesis subjects - no Wednesday restrictions needed")
+                except Exception as e:
+                    print(f"       ⚠️ Error checking thesis subjects for {class_group}: {e}")
+                    has_thesis_subjects = False
                 
                 def not_wednesday(slot):
                     d, _p = slot
                     return not str(d).lower().startswith('wed')
                 
-                # Exclude Thesis from extra classes for final-year students
-                if is_final_year:
+                # STRICT ENFORCEMENT: ONLY exclude Thesis subjects from extra classes if batch actually has thesis
+                # AND ONLY filter subjects that are actually thesis subjects
+                if has_thesis_subjects:
+                    # Filter out actual thesis subjects from extra scheduling
+                    original_practical = len(practical_subjects)
+                    original_theory = len(theory_subjects)
+                    
                     practical_subjects = [s for s in practical_subjects if not self._is_thesis_subject(s)]
                     theory_subjects = [s for s in theory_subjects if not self._is_thesis_subject(s)]
+                    
+                    filtered_practical = len(practical_subjects)
+                    filtered_theory = len(theory_subjects)
+                    
+                    print(f"       🎓 THESIS FILTER: Practical {original_practical}→{filtered_practical}, Theory {original_theory}→{filtered_theory}")
+                else:
+                    # For batches WITHOUT thesis, no need to filter anything
+                    print(f"       📚 NO THESIS FILTER: All {len(practical_subjects)} practical + {len(theory_subjects)} theory subjects available for extra classes")
 
                 # Find blank slots for this class group
                 blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
-                if is_final_year:
+                
+                # STRICT: Only filter out Wednesday slots if batch actually has thesis subjects
+                if has_thesis_subjects:
+                    original_blank_count = len(blank_slots)
                     blank_slots = [s for s in blank_slots if not_wednesday(s)]
+                    filtered_blank_count = len(blank_slots)
+                    print(f"       🚫 WEDNESDAY FILTER: {original_blank_count}→{filtered_blank_count} blank slots (excluding Wednesday for thesis batch)")
+                else:
+                    print(f"       ✅ NO WEDNESDAY FILTER: Using all {len(blank_slots)} blank slots including Wednesday (no thesis batch)")
                 
                 if not blank_slots:
                     print(f"       ⚠️ No blank slots found for {class_group}")
@@ -4129,9 +4169,15 @@ class FinalUniversalScheduler:
                 
                 # Re-find blank slots after practical scheduling
                 updated_blank_slots = self._find_blank_slots_for_class_group(class_group, scheduled_slots.get(class_group, set()))
-                if is_final_year:
+                
+                # STRICT: Only filter Wednesday slots if batch actually has thesis subjects
+                if has_thesis_subjects:
+                    pre_filter_count = len(updated_blank_slots)
                     updated_blank_slots = [s for s in updated_blank_slots if not_wednesday(s)]
-                print(f"         🔍 After practical scheduling: {len(updated_blank_slots)} blank slots remaining")
+                    post_filter_count = len(updated_blank_slots)
+                    print(f"         🚫 WEDNESDAY FILTER (theory): {pre_filter_count}→{post_filter_count} blank slots remaining")
+                else:
+                    print(f"         ✅ NO WEDNESDAY FILTER (theory): {len(updated_blank_slots)} blank slots remaining (including Wednesday)")
                 
                 for subject in theory_subjects:
                     print(f"         🔍 Looking for slot for {subject.code}...")

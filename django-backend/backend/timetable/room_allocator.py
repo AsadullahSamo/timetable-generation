@@ -560,18 +560,54 @@ class RoomAllocator:
         """
         SAME-LAB CONSTRAINT: Find if this practical already has a lab assigned.
         This ensures all 3 blocks of a practical use the SAME lab.
+        
+        BULLETPROOF LOGIC: Verify that existing lab assignment is consistent across all blocks.
         """
         all_entries = self._get_all_relevant_entries(entries)
 
         # Look for existing entries for this class_group and subject
+        existing_labs = set()
+        matching_entries = []
+        
         for entry in all_entries:
             if (entry.class_group == class_group and
                 entry.subject and entry.subject.code == subject.code and
                 entry.classroom and entry.classroom.name.startswith('Lab')):
-                print(f"    🔍 SAME-LAB: Found existing lab {entry.classroom.name} for {class_group} {subject.code}")
-                return entry.classroom
-
-        return None
+                existing_labs.add(entry.classroom)
+                matching_entries.append(entry)
+        
+        if not existing_labs:
+            return None
+        
+        # BULLETPROOF VERIFICATION: Ensure all blocks are in the same lab
+        if len(existing_labs) > 1:
+            # CRITICAL ERROR: Same practical is in multiple labs!
+            lab_names = [lab.name for lab in existing_labs]
+            print(f"    ⚠️ BULLETPROOF ERROR: {class_group} {subject.code} found in multiple labs: {lab_names}")
+            print(f"    🔧 BULLETPROOF FIX: Consolidating to first lab for same-lab consistency")
+            
+            # Force all blocks to use the same lab (first one found)
+            target_lab = list(existing_labs)[0]
+            for entry in matching_entries:
+                if entry.classroom.id != target_lab.id:
+                    old_lab = entry.classroom.name
+                    entry.classroom = target_lab
+                    print(f"    🔧 BULLETPROOF FIX: Moved {entry.class_group} {entry.subject.code} from {old_lab} to {target_lab.name}")
+        
+        # Return the consistent lab
+        consistent_lab = list(existing_labs)[0]
+        print(f"    🔍 SAME-LAB: Found existing lab {consistent_lab.name} for {class_group} {subject.code}")
+        
+        # BULLETPROOF VERIFICATION: Count how many periods this practical already has in this lab
+        periods_in_lab = len(matching_entries)
+        if periods_in_lab > 3:
+            print(f"    ⚠️ BULLETPROOF WARNING: {class_group} {subject.code} has {periods_in_lab} periods in {consistent_lab.name} (expected max 3)")
+        elif periods_in_lab < 3:
+            print(f"    📈 BULLETPROOF INFO: {class_group} {subject.code} has {periods_in_lab}/3 periods scheduled in {consistent_lab.name}")
+        else:
+            print(f"    ✅ BULLETPROOF VERIFIED: {class_group} {subject.code} has all 3 periods in {consistent_lab.name}")
+        
+        return consistent_lab
 
     def _force_lab_availability(self, lab: Classroom, day: str, start_period: int,
                                duration: int, entries: List[TimetableEntry]) -> bool:
