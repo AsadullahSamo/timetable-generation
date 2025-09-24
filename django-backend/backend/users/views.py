@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import User
 from django.contrib.auth.hashers import make_password
 from django.utils.crypto import get_random_string
@@ -56,13 +56,32 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         user = request.user
         return Response({
+            'id': user.id,
             'username': user.username,
             'email': user.email,
-            'role': getattr(user, 'role', 'TEACHER')  # Default role if not set
-        })
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'role': getattr(user, 'role', 'TEACHER')
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        try:
+            user = request.user
+            user_id = user.id
+            username = user.username
+            user.delete()
+            return Response({
+                'message': 'Account deleted successfully',
+                'id': user_id,
+                'username': username
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': f'Failed to delete account: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 class ForgotPasswordView(APIView):
     def post(self, request):

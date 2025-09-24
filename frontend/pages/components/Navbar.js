@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import api from '../utils/api';
 import {
   Settings,
   Users,
@@ -27,6 +28,11 @@ const menuItems = [
 export default function Navbar({ isMobile, isOpen, onToggle }) {
   const router = useRouter();
   const currentPath = router.pathname;
+  const [currentUser, setCurrentUser] = useState(null);
+  const displayName = currentUser?.first_name || currentUser?.username || 'Account';
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const handleLogout = () => {
     try {
@@ -36,6 +42,42 @@ export default function Navbar({ isMobile, isOpen, onToggle }) {
     } catch (_) {}
     router.replace('/components/Login');
   };
+
+  const handleDeleteAccount = () => {
+    setDeleteError('');
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      setDeleteLoading(true);
+      setDeleteError('');
+      await api.delete('/api/auth/profile/');
+      handleLogout();
+    } catch (e) {
+      console.error('Failed to delete account', e);
+      setDeleteError('Failed to delete account. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        setCurrentUser(JSON.parse(stored));
+      } else {
+        // Attempt to fetch if not in storage
+        api.get('/api/auth/profile/')
+          .then(res => {
+            setCurrentUser(res.data);
+            try { localStorage.setItem('user', JSON.stringify(res.data)); } catch(_) {}
+          })
+          .catch(() => {});
+      }
+    } catch (_) {}
+  }, []);
 
   // Mobile menu button
   if (isMobile) {
@@ -127,28 +169,44 @@ export default function Navbar({ isMobile, isOpen, onToggle }) {
                 </nav>
               </div>
 
-              {/* Logout Button */}
+              {/* Account / Logout */}
               <div className="flex-shrink-0 p-4 border-t border-border bg-surface">
-                <button
-                  onClick={() => {
-                    handleLogout();
-                    onToggle();
-                  }}
-                  className={`
-                    w-full flex items-center gap-3 px-4 py-3 rounded-xl text-secondary hover:text-red-400 hover:bg-red-500/10 
-                    transition-all duration-300 transform hover:scale-105 border border-transparent hover:border-red-500/20
-                    ${isOpen ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'}
-                  `}
-                  style={{
-                    transitionDelay: isOpen ? `${menuItems.length * 50}ms` : '0ms'
-                  }}
-                >
-                  <LogOut className="h-5 w-5 transition-transform duration-300 group-hover:rotate-12" />
-                  <span className="text-sm font-medium">Logout</span>
-                </button>
+                {currentUser && (
+                  <div className={`mb-3 px-4 py-2 rounded-lg border border-border text-sm text-secondary ${isOpen ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'}`}>
+                    <div className="font-medium text-primary">{displayName}</div>
+                    <div className="truncate">{currentUser.email}</div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      handleDeleteAccount();
+                    }}
+                    className="px-3 py-2 rounded-lg text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      onToggle();
+                    }}
+                    className="px-3 py-2 rounded-lg text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    Logout
+                  </button>
+                </div>
               </div>
             </div>
           </div>
+        <DeleteConfirmModal 
+          open={showDeleteConfirm}
+          onCancel={() => setShowDeleteConfirm(false)}
+          onConfirm={handleConfirmDelete}
+          loading={deleteLoading}
+          error={deleteError}
+        />
       </>
     );
   }
@@ -201,15 +259,69 @@ export default function Navbar({ isMobile, isOpen, onToggle }) {
         </nav>
       </div>
 
-      {/* Logout Button - Fixed at Bottom */}
+      {/* Account / Logout - Fixed at Bottom */}
       <div className="flex-shrink-0 p-4 border-t border-border bg-surface">
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all duration-300 transform hover:scale-105 border border-transparent hover:border-red-500/20 group"
-        >
-          <LogOut className="h-5 w-5 transition-transform duration-300 group-hover:rotate-12" />
-          <span className="text-sm font-medium">Logout</span>
-        </button>
+        {currentUser && (
+          <div className="mb-3 px-4 py-2 rounded-lg border border-border text-sm text-secondary">
+            <div className="font-medium text-primary">{displayName}</div>
+            <div className="truncate">{currentUser.email}</div>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleDeleteAccount}
+            className="px-3 py-2 rounded-lg text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
+          >
+            Delete
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-lg text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2 group"
+          >
+            <LogOut className="h-5 w-5 transition-transform duration-300 group-hover:rotate-12" />
+            Logout
+          </button>
+        </div>
+      </div>
+    <DeleteConfirmModal 
+      open={showDeleteConfirm}
+      onCancel={() => setShowDeleteConfirm(false)}
+      onConfirm={handleConfirmDelete}
+      loading={deleteLoading}
+      error={deleteError}
+      />
+      </div>
+  );
+}
+
+// Simple confirmation modal
+function DeleteConfirmModal({ open, onCancel, onConfirm, loading, error }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative w-[90%] max-w-sm rounded-xl border border-border bg-surface p-5 shadow-xl">
+        <div className="text-base font-semibold text-primary mb-1">Delete account?</div>
+        <p className="text-sm text-secondary mb-4">This action is permanent and cannot be undone.</p>
+        {error ? (
+          <div className="mb-3 text-sm text-red-400">{error}</div>
+        ) : null}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-3 py-2 rounded-lg text-secondary hover:text-primary hover:bg-surface/60 transition-all border border-border disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-3 py-2 rounded-lg text-white bg-red-500/90 hover:bg-red-500 transition-all disabled:opacity-60"
+          >
+            {loading ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
       </div>
     </div>
   );
