@@ -35,32 +35,32 @@ def populate_teachers():
     """Create all teachers"""
     print('=== CREATING TEACHERS ===')
     teachers_data = [
-        {'name': 'Dr. Areej Fatemah'},
-        {'name': 'Dr. Rabeea Jaffari'},
-        {'name': 'Dr. S. M. Shehram Shah'},
-        {'name': 'Dr. Sania Bhatti'},
-        {'name': 'Mr. Aqib Ali'},
-        {'name': 'Mr. Arsalan'},
-        {'name': 'Mr. Mansoor Bhaagat'},
-        {'name': 'Mr. Naveen Kumar'},
-        {'name': 'Mr. Salahuddin Saddar'},
-        {'name': 'Mr. Sarwar Ali'},
-        {'name': 'Mr. Umar Farooq'},
-        {'name': 'Ms. Aisha Esani'},
-        {'name': 'Ms. Dua Agha'},
-        {'name': 'Ms. Mariam Memon'},
-        {'name': 'Ms. Sana Faiz'},
-        {'name': 'Ms. Shafya Qadeer'},
-        {'name': 'Ms. Shazma Memon'},
-        {'name': 'Ms. Soonti Taj'},
-        {'name': 'Prof. Dr. Qasim Ali'},
-        {'name': 'Dr. Mohsin Memon'},
-        {'name': 'Mr. Mansoor'},
-        {'name': 'Ms. Amirta Dewani'},
-        {'name': 'Mr. Junaid Ahmed'},
-        {'name': 'Ms. Aleena'},
-        {'name': 'Ms. Hina Ali'},
-        {'name': 'Ms.Memona Sami'},
+        {'name': 'Dr. Olivia Smith'},
+        {'name': 'Dr. Liam Johnson'},
+        {'name': 'Dr. Ethan Brown'},
+        {'name': 'Dr. Ava Davis'},
+        {'name': 'Mr. Noah Wilson'},
+        {'name': 'Mr. Mason Taylor'},
+        {'name': 'Mr. Lucas Anderson'},
+        {'name': 'Mr. Henry Thomas'},
+        {'name': 'Mr. Jack Moore'},
+        {'name': 'Mr. Leo Martin'},
+        {'name': 'Mr. Isaac Lee'},
+        {'name': 'Ms. Emily Clark'},
+        {'name': 'Ms. Sophia Lewis'},
+        {'name': 'Ms. Mia Walker'},
+        {'name': 'Ms. Amelia Hall'},
+        {'name': 'Ms. Harper Young'},
+        {'name': 'Ms. Ella King'},
+        {'name': 'Ms. Zoe Wright'},
+        {'name': 'Prof. Dr. William Scott'},
+        {'name': 'Dr. James Green'},
+        {'name': 'Mr. Benjamin Adams'},
+        {'name': 'Ms. Aria Baker'},
+        {'name': 'Mr. Joseph Perez'},
+        {'name': 'Ms. Layla Turner'},
+        {'name': 'Ms. Hannah Phillips'},
+        {'name': 'Ms. Chloe Campbell'},
     ]
 
     for teacher_data in teachers_data:
@@ -86,7 +86,7 @@ def populate_batches():
             'semester_number': 8,
             'total_sections': 3,
             'academic_year': '2024-2025',
-            'class_advisor': 'Prof. Dr. Qasim Ali (Email: qasim.arain@faculty.muet.edu.pk)'
+            'class_advisor': 'Prof. Dr. William Scott (Email: qasim.arain@faculty.muet.edu.pk)'
         },
         {
             'name': '22SW',
@@ -94,7 +94,7 @@ def populate_batches():
             'semester_number': 6,
             'total_sections': 3,
             'academic_year': '2024-2025',
-            'class_advisor': 'Dr. S.M. Shehram Shah (Email: shehram.shah@faculty.muet.edu.pk)'
+            'class_advisor': 'Dr. Ethan Brown (Email: shehram.shah@faculty.muet.edu.pk)'
         },
         {
             'name': '23SW',
@@ -102,7 +102,7 @@ def populate_batches():
             'semester_number': 5,
             'total_sections': 3,
             'academic_year': '2024-2025',
-            'class_advisor': 'Ms. Mariam Memon (Email: mariam.memon@faculty.muet.edu.pk)'
+            'class_advisor': 'Ms. Mia Walker (Email: mariam.memon@faculty.muet.edu.pk)'
         },
         {
             'name': '24SW',
@@ -110,7 +110,7 @@ def populate_batches():
             'semester_number': 3,
             'total_sections': 3,
             'academic_year': '2024-2025',
-            'class_advisor': 'Mr. Naeem Ahmed (Email: naeem.mahoto@faculty.muet.edu.pk)'
+            'class_advisor': 'Mr. Daniel Rivera (Email: naeem.mahoto@faculty.muet.edu.pk)'
         }
     ]
     
@@ -294,42 +294,42 @@ def populate_teacher_assignments():
     # Teacher assignments with specific sections
     assignments_data = [
         # 21SW assignments
-        ('Dr. Sania Bhatti', 'SW224', '21SW', ['I', 'II']),
-        ('Mr. Umar Farooq', 'SW224', '21SW', ['III']),
-        ('Mr. Aqib Ali', 'SW426', '21SW', ['I', 'II', 'III']),
-        ('Mr. Aqib Ali', 'SW426_PR', '21SW', ['I', 'II', 'III']),
-        ('Dr. Rabeea Jaffari', 'SW425', '21SW', ['I', 'II', 'III']),
-        ('Ms. Sana Faiz', 'SW425_PR', '21SW', ['I', 'II', 'III']),
+        ('Dr. Ava Davis', 'SW224', '21SW', ['I', 'II']),
+        ('Mr. Isaac Lee', 'SW224', '21SW', ['III']),
+        ('Mr. Noah Wilson', 'SW426', '21SW', ['I', 'II', 'III']),
+        ('Mr. Noah Wilson', 'SW426_PR', '21SW', ['I', 'II', 'III']),
+        ('Dr. Liam Johnson', 'SW425', '21SW', ['I', 'II', 'III']),
+        ('Ms. Amelia Hall', 'SW425_PR', '21SW', ['I', 'II', 'III']),
         
         # 22SW assignments
-        ('Mr. Salahuddin Saddar', 'SW322', '22SW', ['I', 'II', 'III']),
-        ('Ms. Shazma Memon', 'ENG301', '22SW', ['I', 'II']),
-        ('Mr. Sarwar Ali', 'ENG301', '22SW', ['III']),
-        ('Ms. Shafya Qadeer', 'SW325', '22SW', ['I', 'II', 'III']),
-        ('Dr. Areej Fatemah', 'SW326', '22SW', ['I', 'II', 'III']),
-        ('Ms. Aisha Esani', 'SW326_PR', '22SW', ['I', 'II', 'III']),
-        ('Ms. Mariam Memon', 'SW327', '22SW', ['I', 'II', 'III']),
-        ('Mr. Umar Farooq', 'SW327_PR', '22SW', ['I', 'II', 'III']),
+        ('Mr. Jack Moore', 'SW322', '22SW', ['I', 'II', 'III']),
+        ('Ms. Zoe Wright', 'ENG301', '22SW', ['I', 'II']),
+        ('Mr. Leo Martin', 'ENG301', '22SW', ['III']),
+        ('Ms. Harper Young', 'SW325', '22SW', ['I', 'II', 'III']),
+        ('Dr. Olivia Smith', 'SW326', '22SW', ['I', 'II', 'III']),
+        ('Ms. Emily Clark', 'SW326_PR', '22SW', ['I', 'II', 'III']),
+        ('Ms. Mia Walker', 'SW327', '22SW', ['I', 'II', 'III']),
+        ('Mr. Isaac Lee', 'SW327_PR', '22SW', ['I', 'II', 'III']),
         
         # 23SW assignments
-        ('Mr. Naveen Kumar', 'SW318', '23SW', ['I', 'II', 'III']),
-        ('Prof. Dr. Qasim Ali', 'SW316', '23SW', ['I']),
-        ('Ms. Soonti Taj', 'SW316', '23SW', ['II', 'III']),
-        ('Dr. S. M. Shehram Shah', 'SW317', '23SW', ['I', 'II']),
-        ('Mr. Arsalan', 'SW317', '23SW', ['III']),
-        ('Mr. Mansoor Bhaagat', 'MTH317', '23SW', ['I', 'II', 'III']),
-        ('Ms. Dua Agha', 'SW315', '23SW', ['I', 'II', 'III']),
-        ('Ms. Dua Agha', 'SW315_PR', '23SW', ['I', 'II', 'III']),
+        ('Mr. Henry Thomas', 'SW318', '23SW', ['I', 'II', 'III']),
+        ('Prof. Dr. William Scott', 'SW316', '23SW', ['I']),
+        ('Ms. Ella King', 'SW316', '23SW', ['II', 'III']),
+        ('Dr. Ethan Brown', 'SW317', '23SW', ['I', 'II']),
+        ('Mr. Mason Taylor', 'SW317', '23SW', ['III']),
+        ('Mr. Lucas Anderson', 'MTH317', '23SW', ['I', 'II', 'III']),
+        ('Ms. Sophia Lewis', 'SW315', '23SW', ['I', 'II', 'III']),
+        ('Ms. Sophia Lewis', 'SW315_PR', '23SW', ['I', 'II', 'III']),
         
         # 24SW assignments
-        ('Ms. Aleena', 'SW215', '24SW', ['I', 'II', 'III']),
-        ('Ms. Hina Ali', 'SW215_PR', '24SW', ['I', 'II', 'III']),
-        ('Dr. Mohsin Memon', 'SW212', '24SW', ['I', 'II']),
-        ('Mr. Mansoor', 'SW212', '24SW', ['III']),
-        ('Mr. Naveen Kumar', 'SW212_PR', '24SW', ['I', 'II', 'III']),
-        ('Ms.Memona Sami', 'SW216', '24SW', ['I', 'II', 'III']),
-        ('Ms. Amirta Dewani', 'SW217', '24SW', ['I', 'II', 'III']),
-        ('Mr. Junaid Ahmed', 'SW211', '24SW', ['I', 'II', 'III']),
+        ('Ms. Layla Turner', 'SW215', '24SW', ['I', 'II', 'III']),
+        ('Ms. Hannah Phillips', 'SW215_PR', '24SW', ['I', 'II', 'III']),
+        ('Dr. James Green', 'SW212', '24SW', ['I', 'II']),
+        ('Mr. Benjamin Adams', 'SW212', '24SW', ['III']),
+        ('Mr. Henry Thomas', 'SW212_PR', '24SW', ['I', 'II', 'III']),
+        ('Ms. Chloe Campbell', 'SW216', '24SW', ['I', 'II', 'III']),
+        ('Ms. Aria Baker', 'SW217', '24SW', ['I', 'II', 'III']),
+        ('Mr. Joseph Perez', 'SW211', '24SW', ['I', 'II', 'III']),
     ]
     
     for teacher_name, subject_code, batch_name, sections in assignments_data:
